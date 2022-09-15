@@ -1,8 +1,0 @@
-{
-    "python.pythonPath": "c:\\Users\\marta\\anaconda3\\envs\\vscode0\\python.exe",
-    "python.linting.pylintArgs": [
-        "--errors-only",
-        "--generated-members=numpy.* ,torch.* ,cv2.* , cv.*"
-        ],
-    "python.condaPath": "C:\\Users\\marta\\anaconda3\\Scripts\\conda.exe"
-}
