@@ -30,7 +30,7 @@ import sys
 sys.path.append('.')
 from utils.initialization import Data, decode # pylint: disable=import-error
 from utils.clustering import Clustering
-from utils.anomaly_detection import StandaloneClusters, calculate_ad_accuracy
+from utils.anomaly_detection import AnomalyDetection, calculate_ad_accuracy
 from utils.miscellaneous import count_number, Corruption  
 from research import check_cluster_assignment, visualize_corrupted_bits
 
@@ -120,8 +120,8 @@ else:  # or run the computations on the original data
                 )
 
             # Check if the cluster is a standalone cluster
-            outliers = StandaloneClusters(data=data)
-            outliers.detect(
+            outliers = AnomalyDetection(data=data)
+            outliers.detect_standalone_clusters(
                 idx=idx_corr,
                 idx_vec=range(-1, np.max(idx_corr)+1),
                 X=X_corr,
