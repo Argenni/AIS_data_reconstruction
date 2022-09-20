@@ -29,6 +29,7 @@ class AnomalyDetection:
     _max_depth = 5
     _k = 5
     _conv_net = []
+    _outputs = 20
 
     def __init__(self, data, if_visualize=False, optimize=None):
         """
@@ -72,7 +73,6 @@ class AnomalyDetection:
         if optimize == 'max_depth': self.optimize_rf(data, parameter='max_depth')
         elif optimize == 'n_estimators': self.optimize_rf(data, parameter='n_estimators')
         elif optimize == 'k': self.optimize_knn(data)
-        self._conv_net = ConvNet()
     
 
     ### ---------------------------- Standalone clusters part ---------------------------------
@@ -421,6 +421,7 @@ class AnomalyDetection:
         """
         Train convolutional network for detecting anomalies in AIS data
         """
+        self._conv_net = ConvNet(outputs=self._outputs)
         # Check if the file with the training data exist
         if not os.path.exists('utils/anomaly_detection_files/convnet_inputs.h5'):
             # if not, create a corrupted dataset
@@ -431,7 +432,7 @@ class AnomalyDetection:
         x_train = variables[0]
         y_train = variables[1]
         # Define criterion and optimizer
-        criterion = torch.nn.BCELoss
+        criterion = torch.nn.BCELoss # binary cross entropy loss
         optimizer = torch.optim.Adam(
             params=self._conv_net.parameters(),
             lr=0.0005,
@@ -467,8 +468,9 @@ class ConvNet(torch.nn.Module):
     _stride = 1
     _outputs = 20
  
-    def __init__(self):
+    def __init__(self, outputs=20):
         super().__init__()
+        self._outputs = outputs
     
     def forward(self, X):
         # First layer
@@ -499,7 +501,7 @@ class ConvNet(torch.nn.Module):
             torch.nn.Linear(
                 in_features=self._outputs*self._channels/2, 
                 out_features=self._outputs),
-            torch.nn.functional.torch.softmax(self._outputs)
+            torch.nn.functional.torch.sigmoid(self._outputs)
         )
 
 
