@@ -28,7 +28,7 @@ import sys
 sys.path.append('.')
 from utils.initialization import Data
 from utils.clustering import Clustering, calculate_CC
-from utils.anomaly_detection import StandaloneClusters
+from utils.anomaly_detection import AnomalyDetection
 from utils.miscellaneous import count_number, visualize_trajectories, TimeWindow
 
 # ----------------------------!!! EDIT HERE !!! --------------------------------- 
@@ -91,29 +91,29 @@ visualize_trajectories(
 # ----------- Part 2 - Anomaly detection ------- 
 print("\n----------- Part 2 - Anomaly detection ---------- ")
 print(" Looking for anomalies - standalone clusters...")
-outliers_standalone = StandaloneClusters(
+outliers = AnomalyDetection(
     data=data,
     if_visualize=True,
     optimize=None # 'max_depth', 'n_estimators', 'k', None
     )
 # Conduct anomaly detection - search for standalone clusters
-outliers_standalone.detect(
+outliers.detect(
     idx=idx,
     idx_vec=range(-1, np.max(idx)+1),
     X=data.X,
     message_decoded=data.message_decoded,
     )
-print(" Anomalies found: " + str(np.sum(np.array(outliers_standalone.outliers, dtype=object)[:,0])))
+print(" Anomalies found: " + str(np.sum(np.array(outliers.outliers, dtype=object)[:,0])))
 visualize_trajectories(
     X=data.Xraw,
-    MMSI=np.array(outliers_standalone.outliers, dtype=object)[:,0].tolist(),
+    MMSI=np.array(outliers.outliers, dtype=object)[:,0].tolist(),
     MMSI_vec=[0,1],
     goal='anomaly_detection'
     )
 #input("Press Enter to exit...")
 np.savetxt(
     'output/output.txt',
-    np.array(outliers_standalone.outliers, dtype=object), 
+    np.array(outliers.outliers, dtype=object), 
     delimiter=',',
     fmt='%s',
     header="If_outlier, Correct_cluster_id, Damage_fields")

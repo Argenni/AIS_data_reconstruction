@@ -1,5 +1,7 @@
 # ----------- Library of functions used in anomaly detection phase of AIS message reconstruction ----------
 import numpy as np
+import torch
+torch.manual_seed(0)
 from sklearn.neighbors import KNeighborsClassifier 
 from sklearn.ensemble import RandomForestClassifier 
 from sklearn.model_selection import train_test_split
@@ -15,9 +17,9 @@ from utils.initialization import decode
 from utils.miscellaneous import Corruption
 
 
-class StandaloneClusters:
+class AnomalyDetection:
     """
-    Class that introduces anomaly detection by analysing standalone clusters
+    Class that introduces anomaly detection in AIS data
     """
     outliers = []  # list with anomaly detection information, shape = (num_messages, 3)
     #  (1. column - if a message is outlier, 2. column - proposed correct cluster, 3. column - possibly damaged fields)
@@ -26,6 +28,7 @@ class StandaloneClusters:
     _num_estimators = 15
     _max_depth = 5
     _k = 5
+    _conv_net = []
 
     def __init__(self, data, if_visualize=False, optimize=None):
         """
@@ -47,7 +50,13 @@ class StandaloneClusters:
             self._field_classifier = pickle.load(open('utils/anomaly_detection_files/field_classifier.h5', 'rb'))
         else:
             # otherwise train a classifier from scratch
-            self.train_field_classifier(data)
+            self._train_field_classifier(data)
+        if os.path.exists('utils/anomaly_detection_files/convnet.h5'):
+            # If there is a file with the trained convolutional network saved, load it
+            self._conv_net = pickle.load(open('utils/anomaly_detection_files/convnet.h5', 'rb'))
+        else:
+            # otherwise train a classifier from scratch
+            self._train_convnet(data)
         # Show some classifier parametres if allowed
         if if_visualize:
             # Calculate the accuracy of the classifier on the training data
@@ -63,8 +72,11 @@ class StandaloneClusters:
         if optimize == 'max_depth': self.optimize_rf(data, parameter='max_depth')
         elif optimize == 'n_estimators': self.optimize_rf(data, parameter='n_estimators')
         elif optimize == 'k': self.optimize_knn(data)
+        self._conv_net = ConvNet()
     
-    def train_field_classifier(self, data_original):
+
+    ### ---------------------------- Standalone clusters part ---------------------------------
+    def _train_field_classifier(self, data_original):
         """ 
         Train a random forest to classify which fields of AIS message to correct
         Argument: data_original - object of a Data class, containing all 3 datasets (train, val, test) with:
@@ -259,7 +271,7 @@ class StandaloneClusters:
             self._num_estimators = int(input("Choose the optimal n_estimators: "))
         if os.path.exists('utils/anomaly_detection_files/standalone_clusters_field_classifier.h5'):
             os.remove('utils/anomaly_detection_files/standalone_clusters_field_classifier.h5')
-        self.train_field_classifier(data_original)
+        self._train_field_classifier(data_original)
 
     def optimize_knn(self, data_original):
         """ 
@@ -317,7 +329,7 @@ class StandaloneClusters:
         # Save the optimal kvalue
         self._k = int(input("Choose the optimal k: "))
 
-    def detect(self, idx, idx_vec, X, message_decoded):
+    def detect_standalone_clusters(self, idx, idx_vec, X, message_decoded):
         """
         Run the entire anomaly detection based on searching for standalone clusters
         Arguments:
@@ -397,7 +409,100 @@ class StandaloneClusters:
             if pred: fields.append(field)
         return fields
 
+
+    ### -------------------------- Inside anomalies part ------------------------------------
+    def _create_convnet_dataset(self, data_original):
+        """
+        Create a dataset that a convolutional network can learn on 
+        by corrupting randomly chosen messages 
+        """
+
+    def _train_convnet(self, data_original):
+        """
+        Train convolutional network for detecting anomalies in AIS data
+        """
+        # Check if the file with the training data exist
+        if not os.path.exists('utils/anomaly_detection_files/convnet_inputs.h5'):
+            # if not, create a corrupted dataset
+            print("  Preparing for training a convolutional network...")
+            self._create_convnet_dataset(data_original=data_original)
+            print("  Complete.")
+        variables = pickle.load(open('utils/anomaly_detection_files/convnet_inputs.h5', 'rb'))
+        x_train = variables[0]
+        y_train = variables[1]
+        # Define criterion and optimizer
+        criterion = torch.nn.BCELoss
+        optimizer = torch.optim.Adam(
+            params=self._conv_net.parameters(),
+            lr=0.0005,
+            betas=(0.5, 0.999)
+        )
+        # Run actual optimization
+        loss_acc = 0.0
+        for epoch in range(10):
+            optimizer.zero_grad()
+            pred = self._conv_net(x_train)
+            loss = criterion(y_train, pred)
+            loss.backward()
+            optimizer.step()
+            loss_acc = loss_acc + loss
+            print("Epoch " + str(epoch) + ": loss " + str(round(loss_acc,3)))
+        print("  Complete.")
+        # Save the model
+        pickle.dump(self._conv_net, open('utils/anomaly_detection_files/convnet.h5', 'ab'))
+
+    def detect_inside(self):
+        """
+        Run the anomaly detection for messages inside proper clusters
+        """
+
     
+class ConvNet(torch.nn.Module):
+    """
+    Convolutional neural network for anomaly detection inside clusters
+    """
+    _channels = 4
+    _kernel_size = 3
+    _padding = 0
+    _stride = 1
+    _outputs = 20
+ 
+    def __init__(self):
+        super().__init__()
+    
+    def forward(self, X):
+        # First layer
+        X = torch.nn.Sequential(
+            torch.nn.Conv1d(
+                in_channels=1, 
+                out_channels=self._channels, 
+                kernel_size=self._kernel_size,
+                padding=self._padding,
+                stride=self._stride),
+            #torch.nn.MaxPool1d(kernel_size=2, stride=2),
+            torch.nn.functional.relu()
+        )
+        # Second layer
+        X = torch.nn.Sequential(
+            torch.nn.Conv1d(
+                in_channels=self._channels, 
+                out_channels=self._channels/2, 
+                kernel_size=self._kernel_size,
+                padding=self._padding,
+                stride=self._stride),
+            #torch.nn.MaxPool1d(kernel_size=2, stride=2),
+            torch.nn.functional.relu()
+        )
+        # Output layer
+        X = torch.flatten(X,1)
+        X = torch.nn.Sequential(
+            torch.nn.Linear(
+                in_features=self._outputs*self._channels/2, 
+                out_features=self._outputs),
+            torch.nn.functional.torch.softmax(self._outputs)
+        )
+
+
 def calculate_ad_accuracy(real, predictions):
     """
     Computes the accuracy of anomaly detecion phase
