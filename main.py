@@ -62,7 +62,6 @@ data.X_train, mu_train, sigma_train = data.normalize(data.Xraw_train)
 data.X_val, mu_val, sigma_val = data.normalize(data.Xraw_val)
 data.X, mu, sigma = data.normalize(data.Xraw)
 print(" Complete.")
-#input("Press Enter to continue...")
 
 
 # ----------- Part 1 - Clustering ----------------
@@ -85,7 +84,6 @@ visualize_trajectories(
     MMSI_vec=range(-1, np.max(idx)+1),
     goal='clustering'
 )
-#input("Press Enter to continue...")
 
 
 # ----------- Part 2 - Anomaly detection ------- 
@@ -110,7 +108,8 @@ visualize_trajectories(
     MMSI_vec=[0,1],
     goal='anomaly_detection'
     )
-#input("Press Enter to exit...")
+
+# Save results
 np.savetxt(
     'output/output.txt',
     np.array(outliers.outliers, dtype=object), 

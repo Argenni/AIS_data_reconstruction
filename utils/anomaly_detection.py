@@ -29,7 +29,7 @@ class AnomalyDetection:
     _max_depth = 5
     _k = 5
     _conv_net = []
-    _outputs = 20
+    _sample_length = 20
 
     def __init__(self, data, if_visualize=False, optimize=None):
         """
@@ -452,56 +452,91 @@ class AnomalyDetection:
         # Save the model
         pickle.dump(self._conv_net, open('utils/anomaly_detection_files/convnet.h5', 'ab'))
 
-    def detect_inside(self):
+    def detect_inside(self, idx, idx_vec, message_decoded):
         """
         Run the anomaly detection for messages inside proper clusters
         """
+        idx = copy.deepcopy(idx)
+        idx = np.array(idx)
+        for i in idx_vec:
+            # Extract messages from each cluster
+            messages_idx = np.where(idx==i)[0]
+            for field in self.fields:
+                # Extract the examined field values
+                waveform = message_decoded[idx==i,field]
+                # Analyse the waveform segment-wise
+                num_segments = np.ceil(waveform.shape[0]/self._sample_length)
+                for segment in range(num_segments):
+                    if segment == num_segments-1:
+                        # If there is less messages than sample_length, fill with the mean
+                        new_range = range(segment*self._sample_length, waveform.shape[0])
+                        batch = np.ones((self._sample_length,1))*np.mean(waveform)
+                        batch[range(len(new_range))] = waveform[new_range]
+                    else:
+                        new_range = range(segment*self._sample_length, (segment+1)*self._sample_length)
+                        batch = waveform[new_range]
+                    new_messages_idx = messages_idx[new_range]
+                    # Pass it to convolutional network and get prediction
+                    pred = np.round(self._conv_net(batch))
+                    outliers_indices = np.where(pred==1)[0] # outlier indices in a batch
+                    for outlier in outliers_indices:
+                        self.outliers[new_messages_idx[outlier]][0]=1
+                        self.outliers[new_messages_idx[outlier]][1]=i
+                        self.outliers[new_messages_idx[outlier]][2].append(field)
 
     
 class ConvNet(torch.nn.Module):
     """
     Convolutional neural network for anomaly detection inside clusters
     """
-    _channels = 4
+    _sample_length = 20
+    _max_channels = 4
     _kernel_size = 3
     _padding = 0
     _stride = 1
-    _outputs = 20
- 
-    def __init__(self, outputs=20):
+    
+    def __init__(self, sample_length=20, max_channels=4, kernel_size=3, padding=0, stride=1):
         super().__init__()
-        self._outputs = outputs
+        self._sample_length = sample_length
+        self._max_channels = max_channels
+        self._kernel_size = kernel_size
+        self._padding = padding
+        self._stride = stride
     
     def forward(self, X):
         # First layer
         X = torch.nn.Sequential(
             torch.nn.Conv1d(
                 in_channels=1, 
-                out_channels=self._channels, 
+                out_channels=self._max_channels/2, 
                 kernel_size=self._kernel_size,
                 padding=self._padding,
                 stride=self._stride),
-            #torch.nn.MaxPool1d(kernel_size=2, stride=2),
+            torch.nn.MaxPool1d(kernel_size=2, stride=2),
             torch.nn.functional.relu()
         )
+        layer1_output_size = (self._sample_length+2*self._padding-self._kernel_size)/self._stride+1 #after conv
+        layer1_output_size = (layer1_output_size-2)/2+1 #after maxpool
         # Second layer
         X = torch.nn.Sequential(
             torch.nn.Conv1d(
-                in_channels=self._channels, 
-                out_channels=self._channels/2, 
+                in_channels=self._max_channels/2, 
+                out_channels=self._max_channels, 
                 kernel_size=self._kernel_size,
                 padding=self._padding,
                 stride=self._stride),
-            #torch.nn.MaxPool1d(kernel_size=2, stride=2),
+            torch.nn.MaxPool1d(kernel_size=2, stride=1),
             torch.nn.functional.relu()
         )
+        layer2_output_size = (layer1_output_size+2*self._padding-self._kernel_size)/self._stride+1 #after conv
+        layer2_output_size = (layer2_output_size-2)/1+1 #after maxpool
         # Output layer
         X = torch.flatten(X,1)
         X = torch.nn.Sequential(
             torch.nn.Linear(
-                in_features=self._outputs*self._channels/2, 
-                out_features=self._outputs),
-            torch.nn.functional.torch.sigmoid(self._outputs)
+                in_features=layer2_output_size*self._max_channels, 
+                out_features=self._sample_length),
+            torch.nn.functional.torch.sigmoid(self._sample_length)
         )
 
 
