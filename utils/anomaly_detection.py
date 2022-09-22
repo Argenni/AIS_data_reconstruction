@@ -8,12 +8,13 @@ from sklearn.model_selection import train_test_split
 from scipy import signal
 import matplotlib.pyplot as plt
 plt.rcParams.update({'font.size': 16})
+import h5py
 import copy
 import pickle
 import os
 import sys
 sys.path.append(".")
-from utils.initialization import decode
+from utils.initialization import decode, Data
 from utils.miscellaneous import Corruption
 
 
@@ -70,15 +71,16 @@ class AnomalyDetection:
                 accuracy.append(np.mean(pred == y[i]))
             print(" Average accuracy on training data: " + str(round(np.mean(accuracy),4)))
         # Optimize hyperparametres if allowed
-        if optimize == 'max_depth': self.optimize_rf(data, parameter='max_depth')
-        elif optimize == 'n_estimators': self.optimize_rf(data, parameter='n_estimators')
-        elif optimize == 'k': self.optimize_knn(data)
+        if optimize == 'max_depth': self._optimize_rf(data, parameter='max_depth')
+        elif optimize == 'n_estimators': self._optimize_rf(data, parameter='n_estimators')
+        elif optimize == 'k': self._optimize_knn(data)
     
 
     ### ---------------------------- Standalone clusters part ---------------------------------
     def _train_field_classifier(self, data_original):
         """ 
         Train a random forest to classify which fields of AIS message to correct
+        and save it as pickle in utils/anomaly_detection_files/field_classifier.h5
         Argument: data_original - object of a Data class, containing all 3 datasets (train, val, test) with:
           X, Xraw, message_bits, message_decoded, MMSI
         """
@@ -107,8 +109,9 @@ class AnomalyDetection:
         
     def _create_field_classifier_dataset(self, data_original):
         """
-        Corrupt random messages, collect the corrupted fields and their differences
-        to create a dataset that a field classifier can learn on
+        Corrupt random messages, collect the corrupted fields and their differences to create a dataset 
+        that a field classifier can learn on and save it as pickle in 
+        utils/anomaly_detection_files/standalone_clusters_inputs.h5
         Argument: data - object of a Data class, containing all 3 datasets (train, val, test) with:
           X, Xraw, message_bits, message_decoded, MMSI 
         """
@@ -176,7 +179,6 @@ class AnomalyDetection:
         Computes the input data for field anomaly detection classifier
         (relative differencee between fields' standard deviation or wavelet transform with and without an outlier,
         the higher the difference, the more likely that field is corrupted)
-        For internal use only
         Arguments:
         - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape = (num_mesages, num_fields (14))
         - idx - list of indices of clusters assigned to each message, len = num_messages
@@ -204,7 +206,7 @@ class AnomalyDetection:
         X.append((np.abs(np.std(with_) - np.std(without)))/(np.std(with_)+1e-6))
         return X
     
-    def optimize_rf(self, data_original, parameter):
+    def _optimize_rf(self, data_original, parameter):
         """ 
         Choose optimal value of max_depth or n_estimators for a random forest classification
         Arguments: 
@@ -273,7 +275,7 @@ class AnomalyDetection:
             os.remove('utils/anomaly_detection_files/standalone_clusters_field_classifier.h5')
         self._train_field_classifier(data_original)
 
-    def optimize_knn(self, data_original):
+    def _optimize_knn(self, data_original):
         """ 
         Choose optimal value of k for k-NN classificator
         Argument: data_original - object of a Data class, containing all 3 datasets (train, val, test) with:
@@ -399,7 +401,7 @@ class AnomalyDetection:
         - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape = (num_mesages, num_fields (14))
         - idx - list of indices of clusters assigned to each message, len = num_messages
         - message_idx - integer scalar, index of a potential outlier to correct
-        Returns: 1d array of possibly dmaged fields
+        Returns: list of possibly damaged fields
         """
         fields = []
         for i, field in enumerate(self.fields):
@@ -411,17 +413,74 @@ class AnomalyDetection:
 
 
     ### -------------------------- Inside anomalies part ------------------------------------
-    def _create_convnet_dataset(self, data_original):
+    def _create_convnet_dataset(self):
         """
-        Create a dataset that a convolutional network can learn on 
-        by corrupting randomly chosen messages 
+        Create a dataset that a convolutional network can learn on by corrupting randomly chosen messages
+        and save it as pickle in utils/anomaly_detection_files/convnet_inputs.h5 
+        Argument: data_original - object of a Data class, containing all 3 datasets (train, val, test) with:
+          X, Xraw, message_bits, message_decoded, MMSI
         """
+        file = h5py.File(name='data/Baltic.h5', mode='r')
+        data1 = Data(file=file)
+        data1.split(train_percentage=50, val_percentage=25) # split into train, val and test set
+        file.close()
+        file = h5py.File(name='data/Gibraltar.h5', mode='r')
+        data2 = Data(file=file)
+        data2.split(train_percentage=50, val_percentage=25) # split into train, val and test set
+        file.close()
+        # Compose a dataset from train and val sets, keep test untouched
+        message_bits = np.concatenate((data1.message_bits_train, data1.message_bits_val, data2.message_bits_train, data2.message_bits_val), axis=0)
+        message_decoded = np.concatenate((data1.message_decoded_train, data1.message_decoded_val, data2.message_decoded_train, data2.message_decoded_val), axis=0)
+        MMSI = np.concatenate((data1.MMSI_train, data1.MMSI_val, data2.MMSI_train, data2.MMSI_val), axis=0)
+        field_bits = np.array([6, 8, 38, 42, 50, 60, 61, 89, 116, 128, 137, 143, 148])  # range of fields
+        samples = []
+        y = []
+        corruption = Corruption(message_bits,1)
+        for field in self.fields:  # Corrupt the specified field
+            for i in range(1000):
+                message_idx = np.random.randint(message_bits.shape[0])
+                # If there is at least one message from the past
+                if sum(MMSI == MMSI[message_idx])>19:
+                    # Choose a bit to corrupt (based on a range of the field)
+                    bit = np.random.randint(field_bits[field-1], field_bits[field]-1)
+                    # Corrupt that bit in a randomly chosen message
+                    message_bits_corr, message_idx = corruption.corrupt_bits(
+                        message_bits=message_bits,
+                        bit_idx=bit,
+                        message_idx=message_idx)
+                    message_decoded_corr = copy.deepcopy(message_decoded) 
+                    _, _, message_decoded_0 = decode(message_bits_corr[message_idx,:])  # decode from binary             
+                    message_decoded_corr[message_idx] = message_decoded_0
+                    # Create a sample - take _sample_length consecutive examples
+                    messages_idx = np.where(MMSI==MMSI[message_idx])[0]
+                    new_message_idx = np.where(messages_idx=message_idx)[0]
+                    new_message_decoded = message_decoded[messages_idx,:]
+                    start_idx = np.floor(new_message_decoded/self._sample_length)*self._sample_length
+                    stop_idx = start_idx + self._sample_length
+                    X = new_message_decoded[range(start_idx, stop_idx),:]
+                    samples.append(X)
+                    label = np.zeros((self._sample_length))
+                    label[np.mod(new_message_idx,self._sample_length)] = 1
+                    y.append(label) 
+                    # Add negative sample - no corruption
+                    X = message_decoded[range(start_idx, stop_idx),:]
+                    samples.append(X)
+                    # Create a ground truth vector y
+                    y.append(np.zeros((self._sample_length)))
+        # Divide everything into train and val sets
+        samples_train, samples_val, y_train, y_val = train_test_split(samples, y, test_size=0.25, shuffle=True)
+        # Save file with the inputs for the classifier
+        variables = [samples_train, y_train, samples_val, y_val]
+        pickle.dump(variables, open('utils/anomaly_detection_files/convnet_inputs.h5', 'ab'))
 
     def _train_convnet(self, data_original):
         """
         Train convolutional network for detecting anomalies in AIS data
+        and save it as pickle in utils/anomaly_detection_files/convnet.h5
+        Argument: data_original - object of a Data class, containing all 3 datasets (train, val, test) with:
+          X, Xraw, message_bits, message_decoded, MMSI
         """
-        self._conv_net = ConvNet(outputs=self._outputs)
+        self._conv_net = ConvNet()
         # Check if the file with the training data exist
         if not os.path.exists('utils/anomaly_detection_files/convnet_inputs.h5'):
             # if not, create a corrupted dataset
@@ -455,34 +514,42 @@ class AnomalyDetection:
     def detect_inside(self, idx, idx_vec, message_decoded):
         """
         Run the anomaly detection for messages inside proper clusters
+        Arguments:
+        - idx - list of number of cluster assigned to each AIS message, len = num_messages
+        - idx_vec - list of uniqe cluster numbers in a dataset
+        - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape = (num_mesages, num_fields (14))
         """
         idx = copy.deepcopy(idx)
         idx = np.array(idx)
         for i in idx_vec:
             # Extract messages from each cluster
             messages_idx = np.where(idx==i)[0]
-            for field in self.fields:
-                # Extract the examined field values
-                waveform = message_decoded[idx==i,field]
-                # Analyse the waveform segment-wise
-                num_segments = np.ceil(waveform.shape[0]/self._sample_length)
-                for segment in range(num_segments):
-                    if segment == num_segments-1:
-                        # If there is less messages than sample_length, fill with the mean
-                        new_range = range(segment*self._sample_length, waveform.shape[0])
-                        batch = np.ones((self._sample_length,1))*np.mean(waveform)
-                        batch[range(len(new_range))] = waveform[new_range]
-                    else:
-                        new_range = range(segment*self._sample_length, (segment+1)*self._sample_length)
-                        batch = waveform[new_range]
-                    new_messages_idx = messages_idx[new_range]
-                    # Pass it to convolutional network and get prediction
-                    pred = np.round(self._conv_net(batch))
-                    outliers_indices = np.where(pred==1)[0] # outlier indices in a batch
-                    for outlier in outliers_indices:
-                        self.outliers[new_messages_idx[outlier]][0]=1
-                        self.outliers[new_messages_idx[outlier]][1]=i
-                        self.outliers[new_messages_idx[outlier]][2].append(field)
+            if messages_idx.shape[0] > 2:
+                for field in self.fields:
+                    # Extract the examined field values
+                    waveform = message_decoded[idx==i,field]
+                    # Analyse the waveform segment-wise
+                    num_segments = np.ceil(waveform.shape[0]/self._sample_length)
+                    for segment in range(num_segments):
+                        if segment == num_segments-1:
+                            # If there is less messages than sample_length, fill with the mean
+                            new_range = range(segment*self._sample_length, waveform.shape[0])
+                            batch = np.ones((self._sample_length,1))*np.mean(waveform)
+                            batch[range(len(new_range))] = waveform[new_range]
+                        else:
+                            new_range = range(segment*self._sample_length, (segment+1)*self._sample_length)
+                            batch = waveform[new_range]
+                        new_messages_idx = messages_idx[new_range]
+                        # Pass it to convolutional network and get prediction
+                        pred = np.round(self._conv_net(batch))
+                        outliers_indices = np.where(pred==1)[0] # outlier indices in a batch
+                        for outlier in outliers_indices:
+                            self.outliers[new_messages_idx[outlier]][0]=1
+                            self.outliers[new_messages_idx[outlier]][1]=i
+                            if type(self.outliers[new_messages_idx[outlier]][2])==list:
+                                self.outliers[new_messages_idx[outlier]][2].append(field)
+                            else:
+                                self.outliers[new_messages_idx[outlier]][2] = [self.outliers[new_messages_idx[outlier]][2],field]
 
     
 class ConvNet(torch.nn.Module):
