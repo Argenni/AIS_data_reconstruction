@@ -101,6 +101,12 @@ outliers.detect(
     X=data.X,
     message_decoded=data.message_decoded,
     )
+# Conduct anomaly detection - search inside proper clusters
+outliers.detect_inside(
+    idx=idx, 
+    idx_vec=range(-1, np.max(idx)+1), 
+    message_decoded=data.message_decoded
+    )
 print(" Anomalies found: " + str(np.sum(np.array(outliers.outliers, dtype=object)[:,0])))
 visualize_trajectories(
     X=data.Xraw,

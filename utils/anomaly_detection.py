@@ -58,7 +58,7 @@ class AnomalyDetection:
             self._conv_net = pickle.load(open('utils/anomaly_detection_files/convnet.h5', 'rb'))
         else:
             # otherwise train a classifier from scratch
-            self._train_convnet(data)
+            self._train_convnet()
         # Show some classifier parametres if allowed
         if if_visualize:
             # Calculate the accuracy of the classifier on the training data
@@ -453,17 +453,20 @@ class AnomalyDetection:
                     message_decoded_corr[message_idx] = message_decoded_0
                     # Create a sample - take _sample_length consecutive examples
                     messages_idx = np.where(MMSI==MMSI[message_idx])[0]
-                    new_message_idx = np.where(messages_idx=message_idx)[0]
-                    new_message_decoded = message_decoded[messages_idx,:]
-                    start_idx = np.floor(new_message_decoded/self._sample_length)*self._sample_length
+                    new_message_idx = np.where(messages_idx==message_idx)[0]
+                    new_message_decoded = message_decoded_corr[messages_idx,field]
+                    start_idx = int(np.floor(new_message_idx/self._sample_length)*self._sample_length)
                     stop_idx = start_idx + self._sample_length
-                    X = new_message_decoded[range(start_idx, stop_idx),:]
+                    if stop_idx > messages_idx.shape[0]:
+                        stop_idx = messages_idx.shape[0]
+                        start_idx = stop_idx - self._sample_length
+                    X = new_message_decoded[range(start_idx, stop_idx)]
                     samples.append(X)
                     label = np.zeros((self._sample_length))
                     label[np.mod(new_message_idx,self._sample_length)] = 1
                     y.append(label) 
                     # Add negative sample - no corruption
-                    X = message_decoded[range(start_idx, stop_idx),:]
+                    X = message_decoded[range(start_idx, stop_idx),field]
                     samples.append(X)
                     # Create a ground truth vector y
                     y.append(np.zeros((self._sample_length)))
@@ -473,7 +476,7 @@ class AnomalyDetection:
         variables = [samples_train, y_train, samples_val, y_val]
         pickle.dump(variables, open('utils/anomaly_detection_files/convnet_inputs.h5', 'ab'))
 
-    def _train_convnet(self, data_original):
+    def _train_convnet(self):
         """
         Train convolutional network for detecting anomalies in AIS data
         and save it as pickle in utils/anomaly_detection_files/convnet.h5
@@ -485,7 +488,7 @@ class AnomalyDetection:
         if not os.path.exists('utils/anomaly_detection_files/convnet_inputs.h5'):
             # if not, create a corrupted dataset
             print("  Preparing for training a convolutional network...")
-            self._create_convnet_dataset(data_original=data_original)
+            self._create_convnet_dataset()
             print("  Complete.")
         variables = pickle.load(open('utils/anomaly_detection_files/convnet_inputs.h5', 'rb'))
         x_train = variables[0]
@@ -564,11 +567,13 @@ class ConvNet(torch.nn.Module):
     
     def __init__(self, sample_length=20, max_channels=4, kernel_size=3, padding=0, stride=1):
         super().__init__()
+        # Important variables
         self._sample_length = sample_length
         self._max_channels = max_channels
         self._kernel_size = kernel_size
         self._padding = padding
         self._stride = stride
+
     
     def forward(self, X):
         # First layer
@@ -580,7 +585,8 @@ class ConvNet(torch.nn.Module):
                 padding=self._padding,
                 stride=self._stride),
             torch.nn.MaxPool1d(kernel_size=2, stride=2),
-            torch.nn.functional.relu()
+            #torch.nn.functional.relu()
+            torch.nn.ReLU()
         )
         layer1_output_size = (self._sample_length+2*self._padding-self._kernel_size)/self._stride+1 #after conv
         layer1_output_size = (layer1_output_size-2)/2+1 #after maxpool
@@ -593,18 +599,18 @@ class ConvNet(torch.nn.Module):
                 padding=self._padding,
                 stride=self._stride),
             torch.nn.MaxPool1d(kernel_size=2, stride=1),
-            torch.nn.functional.relu()
+            torch.nn.ReLU()
         )
         layer2_output_size = (layer1_output_size+2*self._padding-self._kernel_size)/self._stride+1 #after conv
         layer2_output_size = (layer2_output_size-2)/1+1 #after maxpool
         # Output layer
-        X = torch.flatten(X,1)
-        X = torch.nn.Sequential(
-            torch.nn.Linear(
+        X = torch.nn.Flatten()
+        X = torch.nn.Linear(
                 in_features=layer2_output_size*self._max_channels, 
-                out_features=self._sample_length),
-            torch.nn.functional.torch.sigmoid(self._sample_length)
-        )
+                out_features=self._sample_length)
+        X = torch.nn.Sigmoid(self._sample_length)
+        return X
+        
 
 
 def calculate_ad_accuracy(real, predictions):
