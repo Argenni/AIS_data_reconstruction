@@ -1,4 +1,5 @@
 # ----------- Library of functions used in anomaly detection phase of AIS message reconstruction ----------
+from tokenize import Double
 import numpy as np
 import torch
 torch.manual_seed(0)
@@ -484,6 +485,7 @@ class AnomalyDetection:
           X, Xraw, message_bits, message_decoded, MMSI
         """
         self._conv_net = ConvNet()
+        self._conv_net = self._conv_net.float()
         # Check if the file with the training data exist
         if not os.path.exists('utils/anomaly_detection_files/convnet_inputs.h5'):
             # if not, create a corrupted dataset
@@ -494,7 +496,7 @@ class AnomalyDetection:
         x_train = variables[0]
         y_train = variables[1]
         # Define criterion and optimizer
-        criterion = torch.nn.BCELoss # binary cross entropy loss
+        criterion = torch.nn.MultiLabelSoftMarginLoss()
         optimizer = torch.optim.Adam(
             params=self._conv_net.parameters(),
             lr=0.0005,
@@ -505,11 +507,11 @@ class AnomalyDetection:
         for epoch in range(10):
             optimizer.zero_grad()
             pred = self._conv_net(x_train)
-            loss = criterion(y_train, pred)
+            loss = criterion(torch.round(pred), torch.tensor(y_train, dtype=torch.float))
             loss.backward()
             optimizer.step()
             loss_acc = loss_acc + loss
-            print("Epoch " + str(epoch) + ": loss " + str(round(loss_acc,3)))
+            print("Epoch " + str(epoch) + ": loss " + str(loss_acc.detach().numpy()))
         print("  Complete.")
         # Save the model
         pickle.dump(self._conv_net, open('utils/anomaly_detection_files/convnet.h5', 'ab'))
@@ -532,25 +534,26 @@ class AnomalyDetection:
                     # Extract the examined field values
                     waveform = message_decoded[idx==i,field]
                     # Analyse the waveform segment-wise
-                    num_segments = np.ceil(waveform.shape[0]/self._sample_length)
+                    num_segments = int(np.ceil(waveform.shape[0]/self._sample_length))
                     for segment in range(num_segments):
                         if segment == num_segments-1:
                             # If there is less messages than sample_length, fill with the mean
                             new_range = range(segment*self._sample_length, waveform.shape[0])
                             batch = np.ones((self._sample_length,1))*np.mean(waveform)
-                            batch[range(len(new_range))] = waveform[new_range]
+                            batch[range(len(new_range))] = waveform[new_range].reshape((-1,1))
                         else:
                             new_range = range(segment*self._sample_length, (segment+1)*self._sample_length)
                             batch = waveform[new_range]
                         new_messages_idx = messages_idx[new_range]
                         # Pass it to convolutional network and get prediction
-                        pred = np.round(self._conv_net(batch))
-                        outliers_indices = np.where(pred==1)[0] # outlier indices in a batch
+                        pred = np.round(self._conv_net(batch).detach().numpy())
+                        outliers_indices = np.where(pred[0][0:len(new_range)]==1)[0] # outlier indices in a batch
                         for outlier in outliers_indices:
                             self.outliers[new_messages_idx[outlier]][0]=1
                             self.outliers[new_messages_idx[outlier]][1]=i
                             if type(self.outliers[new_messages_idx[outlier]][2])==list:
-                                self.outliers[new_messages_idx[outlier]][2].append(field)
+                                if field not in self.outliers[new_messages_idx[outlier]][2]:
+                                    self.outliers[new_messages_idx[outlier]][2].append(field)
                             else:
                                 self.outliers[new_messages_idx[outlier]][2] = [self.outliers[new_messages_idx[outlier]][2],field]
 
@@ -573,27 +576,24 @@ class ConvNet(torch.nn.Module):
         self._kernel_size = kernel_size
         self._padding = padding
         self._stride = stride
-
-    
-    def forward(self, X):
-        # First layer
-        X = torch.nn.Sequential(
+        layer1_output_size = (self._sample_length+2*self._padding-self._kernel_size)/self._stride+1 #after conv
+        layer1_output_size = int((layer1_output_size-2)/2+1) #after maxpool
+        layer2_output_size = (layer1_output_size+2*self._padding-self._kernel_size)/self._stride+1 #after conv
+        layer2_output_size = int((layer2_output_size-2)/1+1) #after maxpool
+        # Neural network layers
+        self.layer1 = torch.nn.Sequential(
             torch.nn.Conv1d(
                 in_channels=1, 
-                out_channels=self._max_channels/2, 
+                out_channels=int(self._max_channels/2), 
                 kernel_size=self._kernel_size,
                 padding=self._padding,
                 stride=self._stride),
             torch.nn.MaxPool1d(kernel_size=2, stride=2),
-            #torch.nn.functional.relu()
             torch.nn.ReLU()
-        )
-        layer1_output_size = (self._sample_length+2*self._padding-self._kernel_size)/self._stride+1 #after conv
-        layer1_output_size = (layer1_output_size-2)/2+1 #after maxpool
-        # Second layer
-        X = torch.nn.Sequential(
+            )
+        self.layer2 = torch.nn.Sequential(
             torch.nn.Conv1d(
-                in_channels=self._max_channels/2, 
+                in_channels=int(self._max_channels/2), 
                 out_channels=self._max_channels, 
                 kernel_size=self._kernel_size,
                 padding=self._padding,
@@ -601,17 +601,22 @@ class ConvNet(torch.nn.Module):
             torch.nn.MaxPool1d(kernel_size=2, stride=1),
             torch.nn.ReLU()
         )
-        layer2_output_size = (layer1_output_size+2*self._padding-self._kernel_size)/self._stride+1 #after conv
-        layer2_output_size = (layer2_output_size-2)/1+1 #after maxpool
-        # Output layer
-        X = torch.nn.Flatten()
-        X = torch.nn.Linear(
-                in_features=layer2_output_size*self._max_channels, 
-                out_features=self._sample_length)
-        X = torch.nn.Sigmoid(self._sample_length)
+        self.output_layer = torch.nn.Sequential(
+            torch.nn.Flatten(),
+            torch.nn.Linear(
+                    in_features=layer2_output_size*self._max_channels, 
+                    out_features=self._sample_length),
+            torch.nn.Sigmoid()
+        )
+
+    def forward(self, X):
+        X = torch.tensor(X, dtype=torch.float)
+        X = torch.reshape(X, (-1, 1, self._sample_length))
+        X = self.layer1(X)
+        X = self.layer2(X)
+        X = self.output_layer(X)
         return X
         
-
 
 def calculate_ad_accuracy(real, predictions):
     """

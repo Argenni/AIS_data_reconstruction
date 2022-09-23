@@ -95,7 +95,7 @@ outliers = AnomalyDetection(
     optimize=None # 'max_depth', 'n_estimators', 'k', None
     )
 # Conduct anomaly detection - search for standalone clusters
-outliers.detect(
+outliers.detect_standalone_clusters(
     idx=idx,
     idx_vec=range(-1, np.max(idx)+1),
     X=data.X,
@@ -122,3 +122,4 @@ np.savetxt(
     delimiter=',',
     fmt='%s',
     header="If_outlier, Correct_cluster_id, Damage_fields")
+input("Press Enter to exit...")
