@@ -73,7 +73,7 @@ class AnomalyDetection:
             print(" Average accuracy of field classifier on trainset: " + str(round(np.mean(accuracy),4)))
             variables = pickle.load(open('utils/anomaly_detection_files/convnet_inputs.h5', 'rb'))
             samples = variables[0]
-            y = variables[1]
+            y = np.array(variables[1]).reshape(-1,1)
             pred = np.round(self._conv_net(samples).detach().numpy())
             accuracy = np.mean(pred == y)
             print(" Average accuracy of convnet on trainset: " + str(round(np.mean(accuracy),4)))
@@ -470,18 +470,17 @@ class AnomalyDetection:
                         stop_idx = messages_idx.shape[0]
                         start_idx = stop_idx - self._sample_length
                     X = new_message_decoded[range(start_idx, stop_idx)]
-                    samples.append(X)
-                    label = np.zeros((self._sample_length))
-                    label[np.mod(new_message_idx,self._sample_length)] = 1
-                    y.append(label) 
+                    samples.append(X/(np.max(X)+1e-6))
+                    # Create a ground truth vector y
+                    #label = np.zeros((self._sample_length))
+                    #label[np.mod(new_message_idx,self._sample_length)] = 1
+                    #y.append(label) 
+                    y.append(1)
                     # Add negative sample - no corruption
                     X = message_decoded_sample[range(start_idx, stop_idx)]
-                    samples.append(X)
-                    # Create a ground truth vector y
-                    y.append(np.zeros((self._sample_length)))
-        # Standarize
-        scaler = StandardScaler().fit(X)
-        X = scaler.transform(X)
+                    samples.append(X/(np.max(X)+1))
+                    #y.append(np.zeros((self._sample_length)))
+                    y.append(0)
         # Divide everything into train and val sets
         samples_train, samples_val, y_train, y_val = train_test_split(samples, y, test_size=0.25, shuffle=True)
         # Save file with the inputs for the classifier
@@ -511,7 +510,7 @@ class AnomalyDetection:
         #criterion = torch.nn.MultiLabelSoftMarginLoss(reduction='sum')
         optimizer = torch.optim.Adam(
             params=self._conv_net.parameters(),
-            lr=0.01,
+            lr=0.005,
             #betas=(0.5, 0.999)
         )
         # Run actual optimization
@@ -519,7 +518,7 @@ class AnomalyDetection:
         for epoch in range(500):
             optimizer.zero_grad()
             pred = self._conv_net(x_train)
-            loss = criterion(pred, torch.tensor(y_train, dtype=torch.float))
+            loss = criterion(pred, torch.tensor(y_train, dtype=torch.float).reshape((len(y_train),1)))
             loss.backward()
             optimizer.step()
             print("Epoch " + str(epoch) + ": loss " + str(loss.detach().numpy()))
@@ -554,22 +553,25 @@ class AnomalyDetection:
                             batch[range(len(new_range))] = waveform[new_range].reshape((-1,1))
                         else:
                             new_range = range(segment*self._sample_length, (segment+1)*self._sample_length)
-                            batch = waveform[new_range]
+                            batch = waveform[new_range].reshape((-1,1))
+                        batch = batch/(np.max(batch)+1e-6)
                         new_messages_idx = messages_idx[new_range]
                         # Pass it to convolutional network and get prediction
                         pred = np.round(self._conv_net(batch).detach().numpy())
-                        outliers_indices = np.where(pred[0][0:len(new_range)]==1)[0] # outlier indices in a batch
-                        for outlier in outliers_indices:
-                            self.outliers[new_messages_idx[outlier]][0]=1
-                            self.outliers[new_messages_idx[outlier]][1]=i
-                            if type(self.outliers[new_messages_idx[outlier]][2])==list:
-                                if field not in self.outliers[new_messages_idx[outlier]][2]:
-                                    self.outliers[new_messages_idx[outlier]][2].append(field)
-                            else:
-                                if self.outliers[new_messages_idx[outlier]][2]==0 and field!=0:
-                                    self.outliers[new_messages_idx[outlier]][2] = field
+                        if pred:
+                            cwt = abs(signal.cwt(batch.reshape((-1)), signal.morlet2, np.array([1,3])))
+                            outlier = np.argmax(cwt[0,:])
+                            if outlier < len(new_range):
+                                self.outliers[new_messages_idx[outlier]][0]=1
+                                self.outliers[new_messages_idx[outlier]][1]=i
+                                if type(self.outliers[new_messages_idx[outlier]][2])==list:
+                                    if field not in self.outliers[new_messages_idx[outlier]][2]:
+                                        self.outliers[new_messages_idx[outlier]][2].append(field)
                                 else:
-                                    self.outliers[new_messages_idx[outlier]][2] = [self.outliers[new_messages_idx[outlier]][2],field]
+                                    if self.outliers[new_messages_idx[outlier]][2]==0 and field!=0:
+                                        self.outliers[new_messages_idx[outlier]][2] = field
+                                    else:
+                                        self.outliers[new_messages_idx[outlier]][2] = [self.outliers[new_messages_idx[outlier]][2],field]
 
     
 class ConvNet(torch.nn.Module):
@@ -578,11 +580,11 @@ class ConvNet(torch.nn.Module):
     """
     _sample_length = 20
     _max_channels = 4
-    _kernel_size = 3
+    _kernel_size = 5
     _padding = 0
     _stride = 1
     
-    def __init__(self, sample_length=20, max_channels=4, kernel_size=3, padding=0, stride=1):
+    def __init__(self, sample_length=20, max_channels=4, kernel_size=5, padding=0, stride=1):
         super().__init__()
         # Important variables
         self._sample_length = sample_length
@@ -619,7 +621,7 @@ class ConvNet(torch.nn.Module):
             torch.nn.Flatten(),
             torch.nn.Linear(
                     in_features=layer2_output_size*self._max_channels, 
-                    out_features=self._sample_length),
+                    out_features=1),
             torch.nn.Sigmoid()
         )
 
