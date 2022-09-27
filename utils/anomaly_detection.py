@@ -1,11 +1,11 @@
 # ----------- Library of functions used in anomaly detection phase of AIS message reconstruction ----------
-from tokenize import Double
 import numpy as np
 import torch
 torch.manual_seed(0)
 from sklearn.neighbors import KNeighborsClassifier 
 from sklearn.ensemble import RandomForestClassifier 
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
 from scipy import signal
 import matplotlib.pyplot as plt
 plt.rcParams.update({'font.size': 16})
@@ -62,7 +62,7 @@ class AnomalyDetection:
             self._train_convnet()
         # Show some classifier parametres if allowed
         if if_visualize:
-            # Calculate the accuracy of the classifier on the training data
+            # Calculate the accuracy of the classifiers on the training data
             variables = pickle.load(open('utils/anomaly_detection_files/standalone_clusters_inputs.h5', 'rb'))
             differences = variables[0]
             y = variables[1]
@@ -70,7 +70,13 @@ class AnomalyDetection:
             for i in range(len(y)):
                 pred = self._field_classifier[i].predict(differences[i])
                 accuracy.append(np.mean(pred == y[i]))
-            print(" Average accuracy on training data: " + str(round(np.mean(accuracy),4)))
+            print(" Average accuracy of field classifier on trainset: " + str(round(np.mean(accuracy),4)))
+            variables = pickle.load(open('utils/anomaly_detection_files/convnet_inputs.h5', 'rb'))
+            samples = variables[0]
+            y = variables[1]
+            pred = np.round(self._conv_net(samples).detach().numpy())
+            accuracy = np.mean(pred == y)
+            print(" Average accuracy of convnet on trainset: " + str(round(np.mean(accuracy),4)))
         # Optimize hyperparametres if allowed
         if optimize == 'max_depth': self._optimize_rf(data, parameter='max_depth')
         elif optimize == 'n_estimators': self._optimize_rf(data, parameter='n_estimators')
@@ -450,12 +456,14 @@ class AnomalyDetection:
                         bit_idx=bit,
                         message_idx=message_idx)
                     message_decoded_corr = copy.deepcopy(message_decoded) 
+                    message_decoded_sample = copy.deepcopy(message_decoded) 
                     _, _, message_decoded_0 = decode(message_bits_corr[message_idx,:])  # decode from binary             
                     message_decoded_corr[message_idx] = message_decoded_0
                     # Create a sample - take _sample_length consecutive examples
                     messages_idx = np.where(MMSI==MMSI[message_idx])[0]
                     new_message_idx = np.where(messages_idx==message_idx)[0]
                     new_message_decoded = message_decoded_corr[messages_idx,field]
+                    message_decoded_sample = message_decoded_sample[messages_idx, field]
                     start_idx = int(np.floor(new_message_idx/self._sample_length)*self._sample_length)
                     stop_idx = start_idx + self._sample_length
                     if stop_idx > messages_idx.shape[0]:
@@ -467,10 +475,13 @@ class AnomalyDetection:
                     label[np.mod(new_message_idx,self._sample_length)] = 1
                     y.append(label) 
                     # Add negative sample - no corruption
-                    X = message_decoded[range(start_idx, stop_idx),field]
+                    X = message_decoded_sample[range(start_idx, stop_idx)]
                     samples.append(X)
                     # Create a ground truth vector y
                     y.append(np.zeros((self._sample_length)))
+        # Standarize
+        scaler = StandardScaler().fit(X)
+        X = scaler.transform(X)
         # Divide everything into train and val sets
         samples_train, samples_val, y_train, y_val = train_test_split(samples, y, test_size=0.25, shuffle=True)
         # Save file with the inputs for the classifier
@@ -496,22 +507,22 @@ class AnomalyDetection:
         x_train = variables[0]
         y_train = variables[1]
         # Define criterion and optimizer
-        criterion = torch.nn.MultiLabelSoftMarginLoss()
+        criterion = torch.nn.BCELoss()
+        #criterion = torch.nn.MultiLabelSoftMarginLoss(reduction='sum')
         optimizer = torch.optim.Adam(
             params=self._conv_net.parameters(),
-            lr=0.0005,
-            betas=(0.5, 0.999)
+            lr=0.01,
+            #betas=(0.5, 0.999)
         )
         # Run actual optimization
-        loss_acc = 0.0
-        for epoch in range(10):
+        self._conv_net.train()
+        for epoch in range(500):
             optimizer.zero_grad()
             pred = self._conv_net(x_train)
-            loss = criterion(torch.round(pred), torch.tensor(y_train, dtype=torch.float))
+            loss = criterion(pred, torch.tensor(y_train, dtype=torch.float))
             loss.backward()
             optimizer.step()
-            loss_acc = loss_acc + loss
-            print("Epoch " + str(epoch) + ": loss " + str(loss_acc.detach().numpy()))
+            print("Epoch " + str(epoch) + ": loss " + str(loss.detach().numpy()))
         print("  Complete.")
         # Save the model
         pickle.dump(self._conv_net, open('utils/anomaly_detection_files/convnet.h5', 'ab'))
@@ -555,7 +566,10 @@ class AnomalyDetection:
                                 if field not in self.outliers[new_messages_idx[outlier]][2]:
                                     self.outliers[new_messages_idx[outlier]][2].append(field)
                             else:
-                                self.outliers[new_messages_idx[outlier]][2] = [self.outliers[new_messages_idx[outlier]][2],field]
+                                if self.outliers[new_messages_idx[outlier]][2]==0 and field!=0:
+                                    self.outliers[new_messages_idx[outlier]][2] = field
+                                else:
+                                    self.outliers[new_messages_idx[outlier]][2] = [self.outliers[new_messages_idx[outlier]][2],field]
 
     
 class ConvNet(torch.nn.Module):
@@ -610,7 +624,7 @@ class ConvNet(torch.nn.Module):
         )
 
     def forward(self, X):
-        X = torch.tensor(X, dtype=torch.float)
+        X = torch.tensor(np.array(X), dtype=torch.float)
         X = torch.reshape(X, (-1, 1, self._sample_length))
         X = self.layer1(X)
         X = self.layer2(X)

@@ -88,7 +88,7 @@ visualize_trajectories(
 
 # ----------- Part 2 - Anomaly detection ------- 
 print("\n----------- Part 2 - Anomaly detection ---------- ")
-print(" Looking for anomalies - standalone clusters...")
+print(" Looking for anomalies...")
 outliers = AnomalyDetection(
     data=data,
     if_visualize=True,

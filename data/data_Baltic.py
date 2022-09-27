@@ -70,6 +70,15 @@ for i in data:
     message.append(0)
     message_decoded.append(message)
 
+# Sort by date
+concatenation = np.concatenate(
+    (np.array(timestamp).reshape(-1,1), np.array(MMSI).reshape(-1,1), np.array(message_decoded)), 
+    axis=1)
+concatenation = np.sort(concatenation, axis=0)
+timestamp = concatenation[:,0].tolist()
+MMSI = np.array(concatenation[:,1], dtype=int).tolist()
+message_decoded = np.array(concatenation[:,2:], dtype=float)
+
 message_bits = []  # get binary representation message_bits
 for message in message_decoded:
     message_bits.append(encode(message))
@@ -79,6 +88,7 @@ for message in message_bits:
     X_0, _, _ = decode(message)
     X.append(X_0)
 X = np.array(X)
+
 print("Complete.")    
 
 # Save file
