@@ -436,31 +436,43 @@ class AnomalyDetection:
         data2.split(train_percentage=50, val_percentage=25) # split into train, val and test set
         file.close()
         # Compose a dataset from train and val sets, keep test untouched
-        message_bits = np.concatenate((data1.message_bits_train, data1.message_bits_val, data2.message_bits_train, data2.message_bits_val), axis=0)
-        message_decoded = np.concatenate((data1.message_decoded_train, data1.message_decoded_val, data2.message_decoded_train, data2.message_decoded_val), axis=0)
-        MMSI = np.concatenate((data1.MMSI_train, data1.MMSI_val, data2.MMSI_train, data2.MMSI_val), axis=0)
+        message_bits = []
+        message_bits.append(np.concatenate((data1.message_bits_train, data2.message_bits_train), axis=0))
+        message_bits.append(np.concatenate((data1.message_bits_val, data2.message_bits_val), axis=0))
+        message_decoded = []
+        message_decoded.append(np.concatenate((data1.message_decoded_train, data2.message_decoded_train), axis=0))
+        message_decoded.append(np.concatenate((data1.message_decoded_val, data2.message_decoded_val), axis=0))
+        MMSI = []
+        MMSI.append(np.concatenate((data1.MMSI_train, data2.MMSI_train), axis=0))
+        MMSI.append(np.concatenate((data1.MMSI_val, data2.MMSI_val), axis=0))
         field_bits = np.array([6, 8, 38, 42, 50, 60, 61, 89, 116, 128, 137, 143, 148])  # range of fields
         samples = []
+        samples.append([]) # train
+        samples.append([]) # val
         y = []
-        corruption = Corruption(message_bits,1)
+        y.append([])
+        y.append([])
+        corruption = []
+        corruption.append(Corruption(message_bits[0],1))
+        corruption.append(Corruption(message_bits[1],1))
         for field in self.fields:  # Corrupt the specified field
-            for i in range(1000):
-                message_idx = np.random.randint(message_bits.shape[0])
+            for i in range(2000): # If i even add to train, if i odd to val
+                message_idx = np.random.randint(message_bits[i%2].shape[0])
                 # If there is at least one message from the past
-                if sum(MMSI == MMSI[message_idx])>19:
+                if sum(MMSI[i%2] == MMSI[i%2][message_idx])>19:
                     # Choose a bit to corrupt (based on a range of the field)
                     bit = np.random.randint(field_bits[field-1], field_bits[field]-1)
                     # Corrupt that bit in a randomly chosen message
-                    message_bits_corr, message_idx = corruption.corrupt_bits(
-                        message_bits=message_bits,
+                    message_bits_corr, message_idx = corruption[i%2].corrupt_bits(
+                        message_bits=message_bits[i%2],
                         bit_idx=bit,
                         message_idx=message_idx)
-                    message_decoded_corr = copy.deepcopy(message_decoded) 
-                    message_decoded_sample = copy.deepcopy(message_decoded) 
+                    message_decoded_corr = copy.deepcopy(message_decoded[i%2]) 
+                    message_decoded_sample = copy.deepcopy(message_decoded[i%2]) 
                     _, _, message_decoded_0 = decode(message_bits_corr[message_idx,:])  # decode from binary             
                     message_decoded_corr[message_idx] = message_decoded_0
                     # Create a sample - take _sample_length consecutive examples
-                    messages_idx = np.where(MMSI==MMSI[message_idx])[0]
+                    messages_idx = np.where(MMSI[i%2]==MMSI[i%2][message_idx])[0]
                     new_message_idx = np.where(messages_idx==message_idx)[0]
                     new_message_decoded = message_decoded_corr[messages_idx,field]
                     message_decoded_sample = message_decoded_sample[messages_idx, field]
@@ -470,21 +482,15 @@ class AnomalyDetection:
                         stop_idx = messages_idx.shape[0]
                         start_idx = stop_idx - self._sample_length
                     X = new_message_decoded[range(start_idx, stop_idx)]
-                    samples.append(X/(np.max(X)+1e-6))
+                    samples[i%2].append(X/(np.max(X)+1e-6))
                     # Create a ground truth vector y
-                    #label = np.zeros((self._sample_length))
-                    #label[np.mod(new_message_idx,self._sample_length)] = 1
-                    #y.append(label) 
-                    y.append(1)
+                    y[i%2].append(1)
                     # Add negative sample - no corruption
                     X = message_decoded_sample[range(start_idx, stop_idx)]
-                    samples.append(X/(np.max(X)+1))
-                    #y.append(np.zeros((self._sample_length)))
-                    y.append(0)
-        # Divide everything into train and val sets
-        samples_train, samples_val, y_train, y_val = train_test_split(samples, y, test_size=0.25, shuffle=True)
+                    samples[i%2].append(X/(np.max(X)+1))
+                    y[i%2].append(0)
         # Save file with the inputs for the classifier
-        variables = [samples_train, y_train, samples_val, y_val]
+        variables = [samples[0], y[0], samples[1], y[1]]
         pickle.dump(variables, open('utils/anomaly_detection_files/convnet_inputs.h5', 'ab'))
 
     def _train_convnet(self):
@@ -505,24 +511,43 @@ class AnomalyDetection:
         variables = pickle.load(open('utils/anomaly_detection_files/convnet_inputs.h5', 'rb'))
         x_train = variables[0]
         y_train = variables[1]
+        x_val = variables[2]
+        y_val = variables[3]
         # Define criterion and optimizer
         criterion = torch.nn.BCELoss()
-        #criterion = torch.nn.MultiLabelSoftMarginLoss(reduction='sum')
         optimizer = torch.optim.Adam(
             params=self._conv_net.parameters(),
-            lr=0.005,
+            lr=0.0025,
             #betas=(0.5, 0.999)
         )
         # Run actual optimization
-        self._conv_net.train()
-        for epoch in range(500):
+        loss_train = []
+        loss_val = []
+        for epoch in range(2000):
+            # Eval
+            self._conv_net.eval()
+            with torch.no_grad():
+                pred = self._conv_net(x_val)
+                loss = criterion(pred, torch.tensor(y_val, dtype=torch.float).reshape((len(y_val),1)))
+                loss_val.append(loss.detach().numpy())
+            # Train
+            self._conv_net.train()
             optimizer.zero_grad()
             pred = self._conv_net(x_train)
             loss = criterion(pred, torch.tensor(y_train, dtype=torch.float).reshape((len(y_train),1)))
             loss.backward()
             optimizer.step()
             print("Epoch " + str(epoch) + ": loss " + str(loss.detach().numpy()))
+            loss_train.append(loss.detach().numpy())
         print("  Complete.")
+        fig, ax = plt.subplots()
+        ax.plot(loss_train, color='k')
+        ax.plot(loss_val, color='r')
+        ax.set_title("Losses in each epoch")
+        ax.set_xlabel("Epoch")
+        ax.set_ylabel("Loss")
+        ax.legend(["Training loss", "Validation loss"])
+        fig.show()
         # Save the model
         pickle.dump(self._conv_net, open('utils/anomaly_detection_files/convnet.h5', 'ab'))
 
@@ -605,7 +630,8 @@ class ConvNet(torch.nn.Module):
                 padding=self._padding,
                 stride=self._stride),
             torch.nn.MaxPool1d(kernel_size=2, stride=2),
-            torch.nn.ReLU()
+            torch.nn.ReLU(),
+            torch.nn.Dropout(0.1)
             )
         self.layer2 = torch.nn.Sequential(
             torch.nn.Conv1d(
@@ -615,13 +641,15 @@ class ConvNet(torch.nn.Module):
                 padding=self._padding,
                 stride=self._stride),
             torch.nn.MaxPool1d(kernel_size=2, stride=1),
-            torch.nn.ReLU()
+            torch.nn.ReLU(),
+            torch.nn.Dropout(0.1)
         )
         self.output_layer = torch.nn.Sequential(
             torch.nn.Flatten(),
             torch.nn.Linear(
                     in_features=layer2_output_size*self._max_channels, 
                     out_features=1),
+            #torch.nn.Dropout(0.1),
             torch.nn.Sigmoid()
         )
 
