@@ -399,7 +399,8 @@ class AnomalyDetection:
         for i in indices: outliers[i] = 1
         knn = KNeighborsClassifier(n_neighbors=5)  # Find the closest 5 points to the outliers (except other outliers)
         knn.fit(X[outliers!=1,:], idx[outliers!= 1])  # the cluster that those points belong
-        return knn.predict(X[message_idx,:].reshape(1,-1))  # is potentially the right cluster for the outlier
+        pred = knn.predict(X[message_idx,:].reshape(1,-1))
+        return pred[0] # is potentially the right cluster for the outlier
 
     def _find_damaged_fields(self, message_decoded, idx, message_idx):
         """
@@ -420,6 +421,19 @@ class AnomalyDetection:
 
 
     ### -------------------------- Inside anomalies part ------------------------------------
+    def compute_cwt(self, waveform):
+        """
+        Compute wavelet transform for a given normalized waveform
+        Argument: waveform - list representing the waveform 
+        """
+        if waveform.shape[0]>2:
+            waveform = abs(waveform[1:waveform.shape[0]]-waveform[0:waveform.shape[0]-1]) # compute the derivative
+            waveform = waveform/(np.max(waveform)+1e-6) # normalize
+        else: 
+            waveform = np.zeros((19,1))
+        return abs(signal.cwt(waveform, signal.morlet2, np.array([1,3])))
+
+
     def _create_convnet_dataset(self):
         """
         Create a dataset that a convolutional network can learn on by corrupting randomly chosen messages
@@ -482,12 +496,12 @@ class AnomalyDetection:
                         stop_idx = messages_idx.shape[0]
                         start_idx = stop_idx - self._sample_length
                     X = new_message_decoded[range(start_idx, stop_idx)]
-                    samples[i%2].append(X/(np.max(X)+1e-6))
+                    samples[i%2].append(self.compute_cwt(X)[0,:])
                     # Create a ground truth vector y
                     y[i%2].append(1)
                     # Add negative sample - no corruption
                     X = message_decoded_sample[range(start_idx, stop_idx)]
-                    samples[i%2].append(X/(np.max(X)+1))
+                    samples[i%2].append(self.compute_cwt(X)[0,:])
                     y[i%2].append(0)
         # Save file with the inputs for the classifier
         variables = [samples[0], y[0], samples[1], y[1]]
@@ -569,22 +583,21 @@ class AnomalyDetection:
                     # Extract the examined field values
                     waveform = message_decoded[idx==i,field]
                     # Analyse the waveform segment-wise
-                    num_segments = int(np.ceil(waveform.shape[0]/self._sample_length))
-                    for segment in range(num_segments):
-                        if segment == num_segments-1:
+                    num_segments = int(np.ceil((waveform.shape[0]-self._sample_length)/(self._sample_length/2)))
+                    for segment in range(num_segments+1):
+                        if segment == num_segments:
                             # If there is less messages than sample_length, fill with the mean
-                            new_range = range(segment*self._sample_length, waveform.shape[0])
-                            batch = np.ones((self._sample_length,1))*np.mean(waveform)
-                            batch[range(len(new_range))] = waveform[new_range].reshape((-1,1))
+                            new_range = range(segment*int(self._sample_length/2), waveform.shape[0])
+                            batch = np.ones((self._sample_length))*np.mean(waveform)
+                            batch[range(len(new_range))] = waveform[new_range]
                         else:
-                            new_range = range(segment*self._sample_length, (segment+1)*self._sample_length)
-                            batch = waveform[new_range].reshape((-1,1))
-                        batch = batch/(np.max(batch)+1e-6)
+                            new_range = range(segment*int(self._sample_length/2), (segment+2)*int(self._sample_length/2))
+                            batch = waveform[new_range]
                         new_messages_idx = messages_idx[new_range]
+                        cwt = self.compute_cwt(batch)
                         # Pass it to convolutional network and get prediction
-                        pred = np.round(self._conv_net(batch).detach().numpy())
+                        pred = np.round(self._conv_net(cwt[0,:]).detach().numpy())
                         if pred:
-                            cwt = abs(signal.cwt(batch.reshape((-1)), signal.morlet2, np.array([1,3])))
                             outlier = np.argmax(cwt[0,:])
                             if outlier < len(new_range):
                                 self.outliers[new_messages_idx[outlier]][0]=1
@@ -593,10 +606,7 @@ class AnomalyDetection:
                                     if field not in self.outliers[new_messages_idx[outlier]][2]:
                                         self.outliers[new_messages_idx[outlier]][2].append(field)
                                 else:
-                                    if self.outliers[new_messages_idx[outlier]][2]==0 and field!=0:
-                                        self.outliers[new_messages_idx[outlier]][2] = field
-                                    else:
-                                        self.outliers[new_messages_idx[outlier]][2] = [self.outliers[new_messages_idx[outlier]][2],field]
+                                    self.outliers[new_messages_idx[outlier]][2] = [field]
 
     
 class ConvNet(torch.nn.Module):
@@ -605,7 +615,7 @@ class ConvNet(torch.nn.Module):
     """
     _sample_length = 20
     _max_channels = 4
-    _kernel_size = 5
+    _kernel_size = 3
     _padding = 0
     _stride = 1
     
@@ -617,7 +627,7 @@ class ConvNet(torch.nn.Module):
         self._kernel_size = kernel_size
         self._padding = padding
         self._stride = stride
-        layer1_output_size = (self._sample_length+2*self._padding-self._kernel_size)/self._stride+1 #after conv
+        layer1_output_size = (self._sample_length-1+2*self._padding-self._kernel_size)/self._stride+1 #after conv
         layer1_output_size = int((layer1_output_size-2)/2+1) #after maxpool
         layer2_output_size = (layer1_output_size+2*self._padding-self._kernel_size)/self._stride+1 #after conv
         layer2_output_size = int((layer2_output_size-2)/1+1) #after maxpool
@@ -655,7 +665,7 @@ class ConvNet(torch.nn.Module):
 
     def forward(self, X):
         X = torch.tensor(np.array(X), dtype=torch.float)
-        X = torch.reshape(X, (-1, 1, self._sample_length))
+        X = torch.reshape(X, (-1, 1, self._sample_length-1))
         X = self.layer1(X)
         X = self.layer2(X)
         X = self.output_layer(X)
@@ -671,6 +681,7 @@ def calculate_ad_accuracy(real, predictions):
     Returns: accuracies - dictionary containing the computed metrics:
     "jaccard", "hamming", "recall", "precision", "f1"
     """
+    if type(predictions)!=list: predictions = [predictions] 
     # Calculate Jaccard metric 
     jaccard = len(set(real).intersection(set(predictions)))/len(set(real).union(set(predictions)))
     # Calculate Hamming metric

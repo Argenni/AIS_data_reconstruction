@@ -4,15 +4,17 @@
 Artificially damages random bit of a randomly chosen AIS messages and check the performace
 of standalone clusters anomaly detection phase.
 Requires: Gdansk.h5 file with the following datasets (created by data_Gdansk.py):
- - message_bits - numpy array of AIS messages in binary form (1 column = 1 bit), shape = (num_mes33ages (805), num_bits (168))
- - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape = (num_mesages (805), num_fields (14))
+ - message_bits - numpy array of AIS messages in binary form (1 column = 1 bit), shape = (num_messages (805), num_bits (168))
+ - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape = (num_messages (805), num_fields (14))
  - X - numpy array, AIS feature vectors (w/o normalization), shape = (num_messages (805), num_features (115))
- - MMSI - list of MMSI identifier from each AIS message, len = num_messages (2805)
+ - MMSI - list of MMSI identifier from each AIS message, len = num_messages (805)
 Creates 01b_anomaly_detection_standalone_clusters_Gdansk_.h5 file, with OK_vec with:
 1. cluster assignment accuracy,
 2. fields to correct classification recall,
-3. fields to correct classification Jaccard score,
-4. fields to correct classification Hamming score. 
+3. fields to correct classification precision,
+4. fields to correct classification f1 score,
+5. fields to correct classification Jaccard score,
+6. fields to correct classification Hamming score. 
 """
 print("\n----------- AIS Anomaly detection - Standalone clusters accuracy part 2 --------- ")
 

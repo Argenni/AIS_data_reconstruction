@@ -2,11 +2,11 @@
 # ---------------------------------- Standalone clusters -------------------------------------------- 
 """
 Artificially damages each bit of a randomly chosen 20 AIS messages and check if the message is still
- assigned to the same #cluster as before, if not, if it forms a standalone cluster (conducts then 
+ assigned to the same cluster as before, if not, if it forms a standalone cluster (conducts then 
  a procedure to find a right cluster and damaged field to that message)
 Requires: Gdansk.h5 file with the following datasets (created by data_Gdansk.py):
- - message_bits - numpy array of AIS messages in binary form (1 column = 1 bit), shape = (num_mes33ages (805), num_bits (168))
- - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape = (num_mesages (805), num_fields (14))
+ - message_bits - numpy array of AIS messages in binary form (1 column = 1 bit), shape = (num_messages (805), num_bits (168))
+ - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape = (num_messages (805), num_fields (14))
  - X - numpy array, AIS feature vectors (w/o normalization), shape = (num_messages (805), num_features (115))
  - MMSI - list of MMSI identifier from each AIS message, len = num_messages (2805)
 Creates 01_anomaly_detection_standalone_clusters_Gdansk_.h5 file with OK_vec and baseline, shape = (4, 146), where:
