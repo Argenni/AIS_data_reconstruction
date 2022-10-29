@@ -1,4 +1,5 @@
 # ----------- Library of functions used in anomaly detection phase of AIS message reconstruction ----------
+import wave
 import numpy as np
 import torch
 torch.manual_seed(0)
@@ -77,6 +78,11 @@ class AnomalyDetection:
             pred = np.round(self._conv_net(samples).detach().numpy())
             accuracy = np.mean(pred == y)
             print(" Average accuracy of convnet on trainset: " + str(round(np.mean(accuracy),4)))
+            samples = variables[2]
+            y = np.array(variables[3]).reshape(-1,1)
+            pred = np.round(self._conv_net(samples).detach().numpy())
+            accuracy = np.mean(pred == y)
+            print(" Average accuracy of convnet on valset: " + str(round(np.mean(accuracy),4)))
         # Optimize hyperparametres if allowed
         if optimize == 'max_depth': self._optimize_rf(data, parameter='max_depth')
         elif optimize == 'n_estimators': self._optimize_rf(data, parameter='n_estimators')
@@ -426,12 +432,11 @@ class AnomalyDetection:
         Compute wavelet transform for a given normalized waveform
         Argument: waveform - list representing the waveform 
         """
+        cwt = np.zeros((self._sample_length))
         if waveform.shape[0]>2:
-            waveform = abs(waveform[1:waveform.shape[0]]-waveform[0:waveform.shape[0]-1]) # compute the derivative
-            waveform = waveform/(np.max(waveform)+1e-6) # normalize
-        else: 
-            waveform = np.zeros((19,1))
-        return abs(signal.cwt(waveform, signal.morlet2, np.array([1,3])))
+            cwt[1:waveform.shape[0]] = abs(waveform[1:waveform.shape[0]]-waveform[0:waveform.shape[0]-1]) # compute the derivative
+            cwt = cwt/(np.max(cwt)+1e-6) # normalize            
+        return abs(signal.cwt(cwt, signal.morlet2, np.array([1,3])))
 
 
     def _create_convnet_dataset(self):
@@ -473,7 +478,7 @@ class AnomalyDetection:
             for i in range(2000): # If i even add to train, if i odd to val
                 message_idx = np.random.randint(message_bits[i%2].shape[0])
                 # If there is at least one message from the past
-                if sum(MMSI[i%2] == MMSI[i%2][message_idx])>19:
+                if sum(MMSI[i%2] == MMSI[i%2][message_idx])>self._sample_length:
                     # Choose a bit to corrupt (based on a range of the field)
                     bit = np.random.randint(field_bits[field-1], field_bits[field]-1)
                     # Corrupt that bit in a randomly chosen message
@@ -598,7 +603,7 @@ class AnomalyDetection:
                         # Pass it to convolutional network and get prediction
                         pred = np.round(self._conv_net(cwt[0,:]).detach().numpy())
                         if pred:
-                            outlier = np.argmax(cwt[0,:])
+                            outlier = np.argmax(cwt[0,:])-1
                             if outlier < len(new_range):
                                 self.outliers[new_messages_idx[outlier]][0]=1
                                 self.outliers[new_messages_idx[outlier]][1]=i
@@ -615,7 +620,7 @@ class ConvNet(torch.nn.Module):
     """
     _sample_length = 20
     _max_channels = 4
-    _kernel_size = 3
+    _kernel_size = 5
     _padding = 0
     _stride = 1
     
@@ -627,7 +632,7 @@ class ConvNet(torch.nn.Module):
         self._kernel_size = kernel_size
         self._padding = padding
         self._stride = stride
-        layer1_output_size = (self._sample_length-1+2*self._padding-self._kernel_size)/self._stride+1 #after conv
+        layer1_output_size = (self._sample_length+2*self._padding-self._kernel_size)/self._stride+1 #after conv
         layer1_output_size = int((layer1_output_size-2)/2+1) #after maxpool
         layer2_output_size = (layer1_output_size+2*self._padding-self._kernel_size)/self._stride+1 #after conv
         layer2_output_size = int((layer2_output_size-2)/1+1) #after maxpool
@@ -665,7 +670,7 @@ class ConvNet(torch.nn.Module):
 
     def forward(self, X):
         X = torch.tensor(np.array(X), dtype=torch.float)
-        X = torch.reshape(X, (-1, 1, self._sample_length-1))
+        X = torch.reshape(X, (-1, 1, self._sample_length))
         X = self.layer1(X)
         X = self.layer2(X)
         X = self.output_layer(X)
