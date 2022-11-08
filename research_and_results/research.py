@@ -9,31 +9,6 @@ from utils.miscellaneous import count_number
 
 
 # ----------------------- For clustering phase ------------------------------
-def check_cluster_assignment(idx, idx_corr, message_idx):
-    """
-    Checks if the corrupted message is assigned together with other messages from its vessel
-    Arguments:
-    - idx - list of indices of clusters assigned to each message, len = num_messages,
-    - idx_corr - list of indices of clusters assigned to each message in a corrupted dataset, 
-        len = num_messages
-    - message_idx - integer scalar, index of a message that was corrupted
-    """
-    idx_before = idx[message_idx]
-    idx_now = idx_corr[message_idx]
-    # Find all messages originally clustered with the corrupted message
-    indices_original = np.where(idx == idx_before)
-    # Find a cluster that contains most of those messages after the corruption
-    percentage = []
-    _, idx_corr_vec = count_number(idx_corr)
-    for i in idx_corr_vec:  # for each cluster in corrupted data
-        indices_cluster = np.where(idx_corr == i)  # find messages from that cluster
-        intersection = set(indices_original[0]).intersection(indices_cluster[0])  # find messages both in original cluster and examined cluster
-        percentage.append(len(intersection)/len(indices_original[0]))  # calculate how many messages from the original cluster are in examined cluster
-    idx_preferable = idx_corr_vec[percentage.index(max(percentage))]  # the cluster with the biggest percentage is probably the right one
-    # Check if that cluster is the same as before
-    result = idx_now == idx_preferable
-    return result
-
 
 # ------------------- For anomaly detection phase ---------------------------
 def visualize_corrupted_bits(OK_vec_all, titles):

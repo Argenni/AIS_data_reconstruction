@@ -28,10 +28,9 @@ import os
 import sys
 sys.path.append('.')
 from utils.initialization import Data, decode # pylint: disable=import-error
-from utils.clustering import Clustering
+from utils.clustering import Clustering, check_cluster_assignment
 from utils.anomaly_detection import AnomalyDetection, calculate_ad_accuracy
 from utils.miscellaneous import count_number, Corruption
-from research import check_cluster_assignment 
 
 # ----------------------------!!! EDIT HERE !!! ---------------------------------  
 np.random.seed(1)  # For reproducibility
@@ -86,6 +85,7 @@ else:  # or run the computations on the original data
     # Artificially corrupt the dataset
     num_experiments = 100 # number of messages to randomly choose and corrupt
     num_metrics = 6 # number of quality metrics to compute
+    field_bits = np.array([6, 8, 38, 42, 50, 60, 61, 89, 116, 128, 137, 143, 148])  # range of fields
     bits = np.array(np.arange(8,60).tolist() + np.arange(61,137).tolist() + np.arange(143,145).tolist())
     for j in range(2): # iterate 2 times: for 1 and 2 bits corrupted
         corruption = Corruption(data.X,j+1)
@@ -116,7 +116,7 @@ else:  # or run the computations on the original data
                     idx_corr, K_corr = clustering.run_DBSCAN(X=X_corr,distance=distance)
                 # Check if the cluster is inside a proper cluster: if so, stop searching
                 if check_cluster_assignment(idx, idx_corr, message_idx):
-                    stop = len(idx_corr==idx_corr[message_idx])>2
+                    stop = sum(idx_corr==idx_corr[message_idx])>2
                 # if not, allow this message to be chosen again
                 corruption.indices_corrupted[message_idx] = stop
             
@@ -128,7 +128,6 @@ else:  # or run the computations on the original data
                     message_decoded=message_decoded_corr
                     )
             # Check which fields are damaged
-            field_bits = np.array([6, 8, 38, 42, 50, 60, 61, 89, 116, 128, 137, 143, 148])  # range of fields
             field = [sum(field_bits <= bit) for bit in np.sort(bit_idx)]
             accuracies = calculate_ad_accuracy(field, outliers.outliers[message_idx][2])
             OK_vec2[i,0] = outliers.outliers[message_idx][0] # accuracy
