@@ -4,12 +4,13 @@ import torch
 torch.manual_seed(0)
 
 
-class ConvNetReg(torch.nn.Module):
+class ConvNet(torch.nn.Module):
     """
     Convolutional neural network for anomaly detection inside clusters:
     decide whether given wavefrom is damaged or not
     """
     _sample_length = 20
+    _in_channels = 6
     _max_channels = 8
     _kernel_size = 5
     _padding = 0
@@ -30,7 +31,7 @@ class ConvNetReg(torch.nn.Module):
         # Neural network layers
         self.layer1 = torch.nn.Sequential(
             torch.nn.Conv1d(
-                in_channels=1, 
+                in_channels=self._in_channels, 
                 out_channels=int(self._max_channels/2), 
                 kernel_size=self._kernel_size,
                 padding=self._padding,
@@ -48,21 +49,26 @@ class ConvNetReg(torch.nn.Module):
                 stride=self._stride),
             torch.nn.MaxPool1d(kernel_size=2, stride=1),
             torch.nn.ReLU(),
-            torch.nn.Dropout(0.1)
+            torch.nn.Dropout(0.1),
+            torch.nn.Flatten()
         ) 
-        self.output_layer = torch.nn.Sequential(
-            torch.nn.Flatten(),
+        self.output_layer1 = torch.nn.Sequential(
             torch.nn.Linear(
                     in_features=layer2_output_size*self._max_channels, 
-                    #out_features=self._sample_length),
-                    out_features=1),
+                    out_features=self._in_channels),
+            torch.nn.Sigmoid() )
+        self.output_layer2 = torch.nn.Sequential(
+            torch.nn.Linear(
+                    in_features=layer2_output_size*self._max_channels, 
+                    out_features=self._sample_length),
             torch.nn.Sigmoid() )
 
     def forward(self, X):
         X = torch.tensor(np.array(X), dtype=torch.float)
-        X = torch.reshape(X, (-1, 1, self._sample_length))
+        X = torch.reshape(X, (-1, self._in_channels, self._sample_length))
         X = self.layer1(X)
         X = self.layer2(X)
-        X = self.output_layer(X)
-        return X
+        out1 = self.output_layer1(X)
+        out2 = self.output_layer2(X)
+        return out1, out2
         
