@@ -5,6 +5,7 @@ torch.manual_seed(0)
 from sklearn.neighbors import KNeighborsClassifier 
 from sklearn.ensemble import RandomForestClassifier 
 from sklearn.model_selection import train_test_split
+from sklearn.utils import shuffle
 from scipy import signal
 import matplotlib.pyplot as plt
 plt.rcParams.update({'font.size': 16})
@@ -74,18 +75,14 @@ class AnomalyDetection:
             print(" Average accuracy of field classifier on trainset: " + str(round(np.mean(accuracy),4)))
             variables = pickle.load(open('utils/anomaly_detection_files/convnet_inputs.h5', 'rb'))
             print(" Average accuracy of a convnet:")
-            y_field = np.array(variables[1][0])#.reshape(-1,1)
-            y_mess = np.array(variables[1][1])
-            pred_field, pred_mess = self._conv_net(variables[0])
-            pred_field = np.round(pred_field.detach().numpy())
-            pred_mess = np.round(pred_mess.detach().numpy())
-            print("  trainset " + str(round(np.mean(pred_field == y_field),4)) + str(round(np.mean(pred_mess == y_mess),4)))
-            y_field = np.array(variables[3][0])#.reshape(-1,1)
-            y_mess = np.array(variables[3][1])
-            pred_field, pred_mess = self._conv_net(variables[2])
-            pred_field = np.round(pred_field.detach().numpy())
-            pred_mess = np.round(pred_mess.detach().numpy())
-            print("  valset: " + str(round(np.mean(pred_field == y_field),4)) + str(round(np.mean(pred_mess == y_mess),4)))
+            y = np.array(variables[1]).reshape(-1,1)
+            pred = self._conv_net(variables[0])
+            pred = np.round(pred.detach().numpy())
+            print("  trainset " + str(round(np.mean(pred == y),4)) )
+            y = np.array(variables[3]).reshape(-1,1)
+            pred = self._conv_net(variables[2])
+            pred = np.round(pred.detach().numpy())
+            print("  valset: " + str(round(np.mean(pred== y),4)))
         # Optimize hyperparametres if allowed
         if optimize == 'max_depth': self._optimize_rf(data, parameter='max_depth')
         elif optimize == 'n_estimators': self._optimize_rf(data, parameter='n_estimators')
@@ -472,12 +469,9 @@ class AnomalyDetection:
         x = []
         x.append([])
         x.append([])
-        y_field = []
-        y_field.append([])
-        y_field.append([])
-        y_mess = []
-        y_mess.append([])
-        y_mess.append([])
+        y = []
+        y.append([])
+        y.append([])
         corruption = []
         corruption.append(Corruption(message_bits[0],1))
         corruption.append(Corruption(message_bits[1],1))
@@ -522,16 +516,23 @@ class AnomalyDetection:
                 cwt = [self.compute_cwt(X[:,f]) for f in range(len(self.inside_fields))]
                 x[i%2].append(cwt)
                 # Create a ground truth vectors y
-                sample_messages_idx = messages_idx[range(start_idx, stop_idx)]
-                sample_message_idx = np.where(sample_messages_idx==message_idx)[0]
-                vec_field = np.zeros((len(self.inside_fields)))
-                vec_field[self.inside_fields.index(field)]=1
-                y_field[i%2].append(vec_field)
-                vec_mess = np.zeros((self._sample_length))
-                vec_mess[sample_message_idx] = 1
-                y_mess[i%2].append(vec_mess)
+                y[i%2].append(1)
+                # Create a negative sample
+                new_message_decoded = message_decoded[i%2][messages_idx,:]
+                new_message_decoded = new_message_decoded[:,self.inside_fields]
+                X = new_message_decoded[range(start_idx, stop_idx),:]
+                cwt = [self.compute_cwt(X[:,f]) for f in range(len(self.inside_fields))]
+                x[i%2].append(cwt)
+                y[i%2].append(0)
+                #sample_messages_idx = messages_idx[range(start_idx, stop_idx)]
+                #sample_message_idx = np.where(sample_messages_idx==message_idx)[0]
+                #vec_field = np.zeros((len(self.inside_fields)))
+                #vec_field[self.inside_fields.index(field)]=1
+                #y_field[i%2].append(vec_field)
         # Save file with the inputs for the classifier
-        variables = [x[0], [y_field[0], y_mess[0]], x[1], [y_field[1], y_mess[1]]]
+        x_train, y_train = shuffle(x[0], y[0])
+        x_val, y_val = shuffle(x[1], y[1])
+        variables = [x_train, y_train, x_val, y_val]
         pickle.dump(variables, open('utils/anomaly_detection_files/convnet_inputs.h5', 'ab'))
 
     def _train_convnet(self):
@@ -555,8 +556,8 @@ class AnomalyDetection:
         x_val = variables[2]
         y_val = variables[3]
         # Set criterion and optimizer
-        criterion = torch.nn.BCELoss()
-        optimizer = torch.optim.Adam(params=self._conv_net.parameters(), lr=0.005)
+        criterion = torch.nn.MSELoss()
+        optimizer = torch.optim.Adam(params=self._conv_net.parameters(), lr=0.01)
         # Train CNN
         loss_train = []
         loss_val = []
@@ -564,18 +565,14 @@ class AnomalyDetection:
             # Eval
             self._conv_net.eval()
             with torch.no_grad():
-                pred_field, pred_mess = self._conv_net(x_val)
-                loss1 = criterion(pred_field, torch.tensor(y_val[0], dtype=torch.float).reshape((len(y_val[0]),-1)))
-                loss2 = criterion(pred_mess, torch.tensor(y_val[1], dtype=torch.float).reshape((len(y_val[1]),-1)))
-                loss = loss1 + loss2
+                pred = self._conv_net(x_val)
+                loss = criterion(pred, torch.tensor(y_val, dtype=torch.float).reshape((len(y_val),-1)))
                 loss_val.append(loss.detach().numpy())
             # Train
             self._conv_net.train()
             optimizer.zero_grad()
-            pred_field, pred_mess = self._conv_net(x_train)
-            loss1 = criterion(pred_field, torch.tensor(y_train[0], dtype=torch.float).reshape((len(y_train[0]),-1)))
-            loss2 = criterion(pred_mess, torch.tensor(y_train[1], dtype=torch.float).reshape((len(y_train[1]),-1)))
-            loss = loss1 + loss2
+            pred = self._conv_net(x_train)
+            loss = criterion(pred, torch.tensor(y_train, dtype=torch.float).reshape((len(y_train),-1)))
             loss.backward()
             optimizer.step()
             print("Epoch " + str(epoch) + ": loss " + str(loss.detach().numpy()))
