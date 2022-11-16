@@ -556,8 +556,8 @@ class AnomalyDetection:
         x_val = variables[2]
         y_val = variables[3]
         # Set criterion and optimizer
-        criterion = torch.nn.MSELoss()
-        optimizer = torch.optim.Adam(params=self._conv_net.parameters(), lr=0.01)
+        criterion = torch.nn.BCELoss()
+        optimizer = torch.optim.Adam(params=self._conv_net.parameters(), lr=0.005)
         # Train CNN
         loss_train = []
         loss_val = []
