@@ -35,7 +35,6 @@ class AnomalyDetection:
     _max_depth = 5
     _k = 5
     _conv_net = []
-    _sample_length = 20
 
     def __init__(self, data, if_visualize=False, optimize=None):
         """
@@ -427,18 +426,55 @@ class AnomalyDetection:
 
 
     ### -------------------------- Inside anomalies part ------------------------------------
-    def compute_cwt(self, waveform):
+    def compute_inside_sample(self, message_decoded, MMSI, message_idx):
         """
-        Compute wavelet transform for a given normalized waveform
-        Argument: waveform - 1-dim numpy array representing the waveform 
+        Compute 
+        Argument:
         """
-        cwt = np.zeros((self._sample_length))
-        start = self._sample_length-(waveform.shape[0]-1)
-        if waveform.shape[0]>2:
-            waveform = waveform[1:waveform.shape[0]]-waveform[0:waveform.shape[0]-1] # compute the derivative
-            waveform = waveform/(np.max(waveform)+1e-6) # normalize
-            cwt[start:self._sample_length] = abs(signal.cwt(waveform, signal.morlet2, np.array([1,3])))[0]       
-        return cwt
+        diff_fields = [7,8,9,10] # long, lat, cog, th
+        valued_fields = [4,5] # rot, sog
+        scales = {4:127, 5:102.2, 7:180, 8:90, 9:360, 10:360}
+        sample = np.zeros((14))
+        # Select 3 consecutive samples
+        messages_idx = np.where(np.array(MMSI)==MMSI[message_idx])[0]
+        new_message_idx = np.where(messages_idx==message_idx)[0]
+        if new_message_idx>0: previous_idx = messages_idx[new_message_idx-1]
+        else: previous_idx=-1
+        if new_message_idx<messages_idx.shape[0]-1: next_idx = messages_idx[new_message_idx+1]
+        else: next_idx=-1
+        if previous_idx!=-1 and next_idx!=-1:
+            X = np.zeros((3,message_decoded.shape[1]))
+            X[0,:] = message_decoded[previous_idx,:]
+            X[1,:] = message_decoded[message_idx,:]
+            X[2,:] = message_decoded[next_idx,:]
+            for field in diff_fields:
+                #Get the derivatives for some of the features
+                waveform = X[1:X.shape[0],field]-X[0:X.shape[0]-1,field]
+                waveform = abs(waveform/(scales[field]))
+                sample[diff_fields.index(field)*2:diff_fields.index(field)*2+2] = waveform
+            for field in valued_fields:
+                sample[8+valued_fields.index(field)*3:11+valued_fields.index(field)*3] = abs(X[:,field]/scales[field])
+            """
+            correlations = []
+            correlations.append( #Between rot and cog
+                np.corrcoef(value[0,:]+np.random.randn((self._sample_length))/1e12, 
+                            diff[2,:]+np.random.randn((self._sample_length))/1e12)[0,1])
+            correlations.append( #Between rot and th
+                np.corrcoef(value[0,:]+np.random.randn((self._sample_length))/1e12, 
+                            diff[3,:]+np.random.randn((self._sample_length))/1e12)[0,1])
+            correlations.append( #Between cog and th
+                np.corrcoef(diff[2,:]+np.random.randn((self._sample_length))/1e12, 
+                            diff[3,:]+np.random.randn((self._sample_length))/1e12)[0,1])
+            correlations.append( # Between long and sog 
+                np.corrcoef(diff[0,:]+np.random.randn((self._sample_length))/1e12, 
+                            value[1,:]+np.random.randn((self._sample_length))/1e12)[0,1])
+            correlations.append( # Between lat and sog 
+                np.corrcoef(diff[1,:]+np.random.randn((self._sample_length))/1e12, 
+                            value[1,:]+np.random.randn((self._sample_length))/1e12)[0,1])
+        return correlations
+        """
+        else: sample = np.zeros((14))
+        return sample
 
 
     def _create_convnet_dataset(self):
@@ -448,7 +484,7 @@ class AnomalyDetection:
         Argument: data_original - object of a Data class, containing all 3 datasets (train, val, test) with:
           X, Xraw, message_bits, message_decoded, MMSI
         """
-        file = h5py.File(name='data/Gdansk.h5', mode='r')
+        file = h5py.File(name='data/Baltic.h5', mode='r')
         data = Data(file=file)
         data.split(train_percentage=50, val_percentage=25) # split into train, val and test set
         file.close()
@@ -459,9 +495,6 @@ class AnomalyDetection:
         message_decoded = []
         message_decoded.append(data.message_decoded_train)
         message_decoded.append(data.message_decoded_val)
-        Xraw = []
-        Xraw.append(data.Xraw_train)
-        Xraw.append(data.Xraw_val)
         MMSI = []
         MMSI.append(data.MMSI_train)
         MMSI.append(data.MMSI_val)
@@ -475,54 +508,35 @@ class AnomalyDetection:
         corruption = []
         corruption.append(Corruption(message_bits[0],1))
         corruption.append(Corruption(message_bits[1],1))
-        clustering = Clustering() # First clustering
-        idx = []
-        idx.append(clustering.run_DBSCAN(X=data.normalize(Xraw[0])[0])[0])
-        idx.append(clustering.run_DBSCAN(X=data.normalize(Xraw[1])[0])[0])
-        for field in self.inside_fields:  # Corrupt the specified field
-            for i in range(1000): # If i even add to train, if i odd to val
-                stop = False
-                while not stop:
-                    message_idx = np.random.randint(message_bits[i%2].shape[0])
-                    # If there is at least one message from the past
-                    if len(np.where(np.array(MMSI[i%2]) == MMSI[i%2][message_idx])[0])>self._sample_length:
-                        # Choose a bit to corrupt (based on a range of the field)
-                        bit = np.random.randint(field_bits[field-1], field_bits[field]-1)
-                        # Corrupt that bit in a randomly chosen message
-                        message_bits_corr, _ = corruption[i%2].corrupt_bits(
-                            message_bits=message_bits[i%2],
-                            bit_idx=bit,
-                            message_idx=message_idx)
-                        message_decoded_corr = copy.deepcopy(message_decoded[i%2])
-                        X_corr = copy.deepcopy(Xraw[i%2])
-                        X_0, _, message_decoded_0 = decode(message_bits_corr[message_idx,:])  # decode from binary             
-                        message_decoded_corr[message_idx] = message_decoded_0
-                        X_corr[message_idx] = X_0
-                        # cluster again to find new cluster assignment
-                        idx_corr, _ = clustering.run_DBSCAN(X=data.normalize(X_corr)[0])
-                        # Check if the cluster is inside a proper cluster: if so, stop searching
-                        stop = check_cluster_assignment(idx[i%2], idx_corr, message_idx)
+        for i in [0,1]:  # Corrupt the specified field
+            for message_idx in range(message_bits[i].shape[0]): # If i even add to train, if i odd to val
+                # If there is at least one message from the past
+                if len(np.where(np.array(MMSI[i%2]) == MMSI[i%2][message_idx])[0])>3:
+                    # Choose a bit to corrupt (based on a range of the field)
+                    field = self.inside_fields[np.random.randint(len(self.inside_fields))]
+                    bit = np.random.randint(field_bits[field-1], field_bits[field]-1)
+                    # Corrupt that bit in a randomly chosen message
+                    message_bits_corr, _ = corruption[i%2].corrupt_bits(
+                        message_bits=message_bits[i%2],
+                        bit_idx=bit,
+                        message_idx=message_idx)
+                    message_decoded_corr = copy.deepcopy(message_decoded[i%2])
+                    _, _, message_decoded_0 = decode(message_bits_corr[message_idx,:])  # decode from binary             
+                    message_decoded_corr[message_idx] = message_decoded_0
                 # Create a sample - take _sample_length consecutive examples
-                messages_idx = np.where(np.array(MMSI[i%2])==MMSI[i%2][message_idx])[0]
-                new_message_idx = np.where(messages_idx==message_idx)[0]
-                new_message_decoded = message_decoded_corr[messages_idx,:]
-                new_message_decoded = new_message_decoded[:,self.inside_fields]
-                start_idx = int(np.floor(new_message_idx/self._sample_length)*self._sample_length)
-                stop_idx = start_idx + self._sample_length
-                if stop_idx > messages_idx.shape[0]:
-                    stop_idx = messages_idx.shape[0]
-                    start_idx = stop_idx - self._sample_length
-                X = new_message_decoded[range(start_idx, stop_idx),:]
-                cwt = [self.compute_cwt(X[:,f]) for f in range(len(self.inside_fields))]
-                x[i%2].append(cwt)
+                sample = self.compute_inside_sample(
+                    message_decoded=message_decoded_corr,
+                    MMSI=MMSI[i%2],
+                    message_idx=message_idx)
+                x[i%2].append(sample)
                 # Create a ground truth vectors y
                 y[i%2].append(1)
                 # Create a negative sample
-                new_message_decoded = message_decoded[i%2][messages_idx,:]
-                new_message_decoded = new_message_decoded[:,self.inside_fields]
-                X = new_message_decoded[range(start_idx, stop_idx),:]
-                cwt = [self.compute_cwt(X[:,f]) for f in range(len(self.inside_fields))]
-                x[i%2].append(cwt)
+                sample = self.compute_inside_sample(
+                    message_decoded=copy.deepcopy(message_decoded[i%2]),
+                    MMSI=MMSI[i%2],
+                    message_idx=message_idx)
+                x[i%2].append(sample)
                 y[i%2].append(0)
                 #sample_messages_idx = messages_idx[range(start_idx, stop_idx)]
                 #sample_message_idx = np.where(sample_messages_idx==message_idx)[0]
@@ -561,7 +575,7 @@ class AnomalyDetection:
         # Train CNN
         loss_train = []
         loss_val = []
-        for epoch in range(2000):
+        for epoch in range(1000):
             # Eval
             self._conv_net.eval()
             with torch.no_grad():
@@ -615,6 +629,7 @@ class AnomalyDetection:
                         new_range = range(segment*int(self._sample_length/2), (segment+2)*int(self._sample_length/2))
                     new_messages_idx = messages_idx[new_range]
                     batch = waveform[new_range,:]
+                    """
                     cwt = [self.compute_cwt(batch[:,field]) for field in self.inside_fields]
                     # Pass it to convolutional network and get prediction
                     pred_field, pred_mess = self._conv_net(cwt)
@@ -631,6 +646,7 @@ class AnomalyDetection:
                                 self.outliers[new_messages_idx[outlier]][2].append(field)
                         else:
                             self.outliers[new_messages_idx[outlier]][2] = [field]
+                    """
        
 
 def calculate_ad_accuracy(real, predictions):
