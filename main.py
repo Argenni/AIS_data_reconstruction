@@ -104,7 +104,6 @@ outliers.detect_standalone_clusters(
 # Conduct anomaly detection - search inside proper clusters
 outliers.detect_inside(
     idx=idx, 
-    idx_vec=range(-1, np.max(idx)+1), 
     message_decoded=data.message_decoded
     )
 print(" Anomalies found: " + str(np.sum(np.array(outliers.outliers, dtype=object)[:,0])))

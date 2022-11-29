@@ -86,12 +86,12 @@ else:  # or run the computations on the original data
     num_experiments = 100 # number of messages to randomly choose and corrupt
     num_metrics = 6 # number of quality metrics to compute
     field_bits = np.array([6, 8, 38, 42, 50, 60, 61, 89, 116, 128, 137, 143, 148])  # range of fields
-    bits = np.array(np.arange(8,60).tolist() + np.arange(61,137).tolist() + np.arange(143,145).tolist())
+    bits = np.array(np.arange(42,60).tolist() + np.arange(61,137).tolist() + np.arange(143,145).tolist())
     for j in range(2): # iterate 2 times: for 1 and 2 bits corrupted
         corruption = Corruption(data.X,j+1)
         OK_vec2 = np.zeros((num_experiments, num_metrics))
-        for i in range(num_experiments):  # For each of the randomly chosen AIS messages 
-            np.random.seed(1)
+        np.random.seed(1)
+        for i in range(num_experiments):  # For each of the randomly chosen AIS messages
             stop = False
             while not stop:
                 # corrupt its random bit
@@ -121,14 +121,15 @@ else:  # or run the computations on the original data
                 corruption.indices_corrupted[message_idx] = stop
             
             # Perform anomaly detection inside clusters
-                outliers = AnomalyDetection(data=data)
-                outliers.detect_inside(
-                    idx=idx_corr,
-                    idx_vec=range(-1, np.max(idx_corr)+1),
-                    message_decoded=message_decoded_corr
-                    )
+            outliers = AnomalyDetection(data=data)
+            outliers.detect_inside(
+                idx=idx_corr,
+                message_decoded=message_decoded_corr
+                )
             # Check which fields are damaged
             field = [sum(field_bits <= bit) for bit in np.sort(bit_idx)]
+            print(field)
+            print(outliers.outliers[message_idx][2])
             accuracies = calculate_ad_accuracy(field, outliers.outliers[message_idx][2])
             OK_vec2[i,0] = outliers.outliers[message_idx][0] # accuracy
             OK_vec2[i,1] = accuracies["recall"]
@@ -136,30 +137,6 @@ else:  # or run the computations on the original data
             OK_vec2[i,3] = accuracies["f1"]
             OK_vec2[i,4] = accuracies["jaccard"]
             OK_vec2[i,5] = accuracies["hamming"]
-
-            """
-            # Plot
-            if j==0 and field[0]==7: # when longitude field is damaged
-                fig, ax = plt.subplots(ncols=2, nrows=1)
-                # Plot corrupted fields message by message         
-                messages = np.zeros_like(corruption.indices_corrupted)
-                messages[message_idx] = 1
-                messages = messages[idx_corr==idx_corr[message_idx]]
-                messages = np.multiply(messages, message_decoded_corr[idx_corr==idx_corr[message_idx],field[0]])
-                messages[messages == 0] = None
-                ax[0].scatter(range(messages.shape[0]), message_decoded_corr[idx_corr==idx_corr[message_idx],field[0]])
-                ax[0].scatter(range(messages.shape[0]), messages, color='r')
-                ax[0].set_title("Damaged field: Longitude")
-                ax[0].set_xlabel("Number of a consecutive message")
-                ax[0].legend(["Original values", "Corrupted value"])
-                # Plot the result of a wavelet transform
-                waveform = message_decoded_corr[idx_corr==idx_corr[message_idx],7] 
-                cwt = compute_cwt(waveform)
-                ax[1].plot(cwt[0,:])
-                ax[1].set_title("Wavelet transform of a damaged field")
-                ax[1].set_xlabel("Time dimension")
-                fig.show()
-            """
         
         if j==0:
             OK_vec_1 = np.mean(OK_vec2, axis=0)*100

@@ -16,9 +16,8 @@ import os
 import sys
 sys.path.append(".")
 from utils.initialization import decode, Data
-from utils.clustering import Clustering, check_cluster_assignment
 from utils.miscellaneous import Corruption
-from utils.anomaly_detection_cnn import ConvNet
+from utils.neural_nets import NeuralNet
 
 
 
@@ -34,7 +33,7 @@ class AnomalyDetection:
     _num_estimators = 15
     _max_depth = 5
     _k = 5
-    _conv_net = []
+    _nn = []
 
     def __init__(self, data, if_visualize=False, optimize=None):
         """
@@ -57,12 +56,12 @@ class AnomalyDetection:
         else:
             # otherwise train a classifier from scratch
             self._train_field_classifier(data)
-        if os.path.exists('utils/anomaly_detection_files/convnet.h5'):
-            # If there is a file with the trained convolutional network saved, load it
-            self._conv_net = pickle.load(open('utils/anomaly_detection_files/convnet.h5', 'rb'))
+        if os.path.exists('utils/anomaly_detection_files/nn.h5'):
+            # If there is a file with the trained neural network saved, load it
+            self._nn = pickle.load(open('utils/anomaly_detection_files/nn.h5', 'rb'))
         else:
             # otherwise train a classifier from scratch
-            self._train_convnet()
+            self._train_nn()
         # Show some classifier parametres if allowed
         if if_visualize:
             # Calculate the accuracy of the classifiers on the training data
@@ -72,15 +71,20 @@ class AnomalyDetection:
                 pred = self._field_classifier[i].predict(variables[0][i])
                 accuracy.append(np.mean(pred == variables[1][i]))
             print(" Average accuracy of field classifier on trainset: " + str(round(np.mean(accuracy),4)))
-            variables = pickle.load(open('utils/anomaly_detection_files/convnet_inputs.h5', 'rb'))
-            print(" Average accuracy of a convnet:")
+            variables = pickle.load(open('utils/anomaly_detection_files/nn_inputs.h5', 'rb'))
+            print(" Average accuracy of a binary class. neural net:")
             y = np.array(variables[1]).reshape(-1,1)
-            pred = self._conv_net(variables[0])
-            pred = np.round(pred.detach().numpy())
+            pred = np.round(self._nn[0](variables[0]).detach().numpy())
             print("  trainset " + str(round(np.mean(pred == y),4)) )
             y = np.array(variables[3]).reshape(-1,1)
-            pred = self._conv_net(variables[2])
-            pred = np.round(pred.detach().numpy())
+            pred = np.round(self._nn[0](variables[2]).detach().numpy())
+            print("  valset: " + str(round(np.mean(pred== y),4)))
+            print(" Average accuracy of a multi-label class. neural net:")
+            y = np.array(variables[5])
+            pred = np.round(self._nn[1](variables[4]).detach().numpy())
+            print("  trainset " + str(round(np.mean(pred == y),4)) )
+            y = np.array(variables[7])
+            pred = np.round(self._nn[1](variables[6]).detach().numpy())
             print("  valset: " + str(round(np.mean(pred== y),4)))
         # Optimize hyperparametres if allowed
         if optimize == 'max_depth': self._optimize_rf(data, parameter='max_depth')
@@ -454,33 +458,13 @@ class AnomalyDetection:
                 sample[diff_fields.index(field)*2:diff_fields.index(field)*2+2] = waveform
             for field in valued_fields:
                 sample[8+valued_fields.index(field)*3:11+valued_fields.index(field)*3] = abs(X[:,field]/scales[field])
-            """
-            correlations = []
-            correlations.append( #Between rot and cog
-                np.corrcoef(value[0,:]+np.random.randn((self._sample_length))/1e12, 
-                            diff[2,:]+np.random.randn((self._sample_length))/1e12)[0,1])
-            correlations.append( #Between rot and th
-                np.corrcoef(value[0,:]+np.random.randn((self._sample_length))/1e12, 
-                            diff[3,:]+np.random.randn((self._sample_length))/1e12)[0,1])
-            correlations.append( #Between cog and th
-                np.corrcoef(diff[2,:]+np.random.randn((self._sample_length))/1e12, 
-                            diff[3,:]+np.random.randn((self._sample_length))/1e12)[0,1])
-            correlations.append( # Between long and sog 
-                np.corrcoef(diff[0,:]+np.random.randn((self._sample_length))/1e12, 
-                            value[1,:]+np.random.randn((self._sample_length))/1e12)[0,1])
-            correlations.append( # Between lat and sog 
-                np.corrcoef(diff[1,:]+np.random.randn((self._sample_length))/1e12, 
-                            value[1,:]+np.random.randn((self._sample_length))/1e12)[0,1])
-        return correlations
-        """
-        else: sample = np.zeros((14))
         return sample
 
 
-    def _create_convnet_dataset(self):
+    def _create_nn_dataset(self):
         """
-        Create a dataset that a convolutional network can learn on by corrupting randomly chosen messages
-        and save it as pickle in utils/anomaly_detection_files/convnet_inputs.h5 
+        Create a dataset that a neural network can learn on by corrupting randomly chosen messages
+        and save it as pickle in utils/anomaly_detection_files/nn_inputs.h5 
         Argument: data_original - object of a Data class, containing all 3 datasets (train, val, test) with:
           X, Xraw, message_bits, message_decoded, MMSI
         """
@@ -499,111 +483,130 @@ class AnomalyDetection:
         MMSI.append(data.MMSI_train)
         MMSI.append(data.MMSI_val)
         field_bits = np.array([6, 8, 38, 42, 50, 60, 61, 89, 116, 128, 137, 143, 148])  # range of fields
+        bits = np.array(np.arange(42,60).tolist() + np.arange(61,137).tolist())
         x = []
         x.append([])
         x.append([])
+        x[0].append([]) # x[0][0] train, binary
+        x[0].append([]) # x[0][1] train, multi-label
+        x[1].append([]) # x[1][0] val, binary
+        x[1].append([]) # x[1][1] val, multi-label
         y = []
         y.append([])
         y.append([])
+        y[0].append([])
+        y[0].append([])
+        y[1].append([])
+        y[1].append([])
         corruption = []
         corruption.append(Corruption(message_bits[0],1))
         corruption.append(Corruption(message_bits[1],1))
-        for i in [0,1]:  # Corrupt the specified field
-            for message_idx in range(message_bits[i].shape[0]): # If i even add to train, if i odd to val
+        for i in [0,1]: # If i==0 add to train, if i==1 to val
+            for message_idx in range(message_bits[i].shape[0]):
                 # If there is at least one message from the past
-                if len(np.where(np.array(MMSI[i%2]) == MMSI[i%2][message_idx])[0])>3:
+                if len(np.where(np.array(MMSI[i]) == MMSI[i][message_idx])[0])>2:
                     # Choose a bit to corrupt (based on a range of the field)
-                    field = self.inside_fields[np.random.randint(len(self.inside_fields))]
-                    bit = np.random.randint(field_bits[field-1], field_bits[field]-1)
-                    # Corrupt that bit in a randomly chosen message
-                    message_bits_corr, _ = corruption[i%2].corrupt_bits(
-                        message_bits=message_bits[i%2],
-                        bit_idx=bit,
+                    bit_idx = np.random.permutation(bits)[0:message_idx%2+1].tolist()
+                    fields = [sum(field_bits <= bit) for bit in np.sort(bit_idx)]
+                    # Corrupt that bit (or two bits if message_idx is odd)
+                    message_bits_corr, _ = corruption[i].corrupt_bits(
+                        message_bits=message_bits[i],
+                        bit_idx=bit_idx[0],
                         message_idx=message_idx)
-                    message_decoded_corr = copy.deepcopy(message_decoded[i%2])
+                    if message_idx%2: # For odd idx, corrupt another bit
+                        message_bits_corr, _ = corruption[i].corrupt_bits(
+                            message_bits=message_bits_corr,
+                            bit_idx=bit_idx[1],
+                            message_idx=message_idx)
+                    message_decoded_corr = copy.deepcopy(message_decoded[i])
                     _, _, message_decoded_0 = decode(message_bits_corr[message_idx,:])  # decode from binary             
                     message_decoded_corr[message_idx] = message_decoded_0
-                # Create a sample - take _sample_length consecutive examples
+                # Create a sample - take 3 consecutive examples
                 sample = self.compute_inside_sample(
                     message_decoded=message_decoded_corr,
-                    MMSI=MMSI[i%2],
+                    MMSI=MMSI[i],
                     message_idx=message_idx)
-                x[i%2].append(sample)
+                x[i][0].append(sample)
+                x[i][1].append(sample)
                 # Create a ground truth vectors y
-                y[i%2].append(1)
-                # Create a negative sample
+                y[i][0].append(1)
+                vec = np.zeros((len(self.inside_fields)))
+                for field in fields: vec[self.inside_fields.index(field)] = 1
+                y[i][1].append(vec)
+                # Create some negative (no corruption) samples
                 sample = self.compute_inside_sample(
-                    message_decoded=copy.deepcopy(message_decoded[i%2]),
-                    MMSI=MMSI[i%2],
+                    message_decoded=message_decoded[i],
+                    MMSI=MMSI[i],
                     message_idx=message_idx)
-                x[i%2].append(sample)
-                y[i%2].append(0)
-                #sample_messages_idx = messages_idx[range(start_idx, stop_idx)]
-                #sample_message_idx = np.where(sample_messages_idx==message_idx)[0]
-                #vec_field = np.zeros((len(self.inside_fields)))
-                #vec_field[self.inside_fields.index(field)]=1
-                #y_field[i%2].append(vec_field)
+                x[i][0].append(sample)
+                y[i][0].append(0)
         # Save file with the inputs for the classifier
-        x_train, y_train = shuffle(x[0], y[0])
-        x_val, y_val = shuffle(x[1], y[1])
-        variables = [x_train, y_train, x_val, y_val]
-        pickle.dump(variables, open('utils/anomaly_detection_files/convnet_inputs.h5', 'ab'))
+        x_train_b, y_train_b = shuffle(x[0][0], y[0][0])
+        x_val_b, y_val_b = shuffle(x[1][0], y[1][0])
+        x_train_m, y_train_m = shuffle(x[0][1], y[0][1])
+        x_val_m, y_val_m = shuffle(x[1][1], y[1][1])
+        variables = [x_train_b, y_train_b, x_val_b, y_val_b, x_train_m, y_train_m, x_val_m, y_val_m]
+        pickle.dump(variables, open('utils/anomaly_detection_files/nn_inputs.h5', 'ab'))
 
-    def _train_convnet(self):
+    def _train_nn(self):
         """
-        Train convolutional network for detecting anomalies in AIS data (which message is damaged)
-        and save it as pickle in utils/anomaly_detection_files/convnet.h5
+        Train neural network for detecting anomalies in AIS data (which message is damaged)
+        and save it as pickle in utils/anomaly_detection_files/nn.h5
         Argument: data_original - object of a Data class, containing all 3 datasets (train, val, test) with:
           X, Xraw, message_bits, message_decoded, MMSI
         """
-        self._conv_net = ConvNet()
-        self._conv_net = self._conv_net.float()
+        self._nn.append(NeuralNet(goal="binary"))
+        self._nn[0] = self._nn[0].float()
+        self._nn.append(NeuralNet(goal="multi_label"))
+        self._nn[1] = self._nn[1].float()
+        shape1 = [1,6]
         # Check if the file with the training data exist
-        if not os.path.exists('utils/anomaly_detection_files/convnet_inputs.h5'):
+        if not os.path.exists('utils/anomaly_detection_files/nn_inputs.h5'):
             # if not, create a corrupted dataset
-            print("  Preparing for training a convolutional network...")
-            self._create_convnet_dataset()
+            print("  Preparing for training a neural network...")
+            self._create_nn_dataset()
             print("  Complete.")
-        variables = pickle.load(open('utils/anomaly_detection_files/convnet_inputs.h5', 'rb'))
-        x_train = variables[0]
-        y_train = variables[1]
-        x_val = variables[2]
-        y_val = variables[3]
-        # Set criterion and optimizer
-        criterion = torch.nn.BCELoss()
-        optimizer = torch.optim.Adam(params=self._conv_net.parameters(), lr=0.005)
-        # Train CNN
-        loss_train = []
-        loss_val = []
-        for epoch in range(1000):
-            # Eval
-            self._conv_net.eval()
-            with torch.no_grad():
-                pred = self._conv_net(x_val)
-                loss = criterion(pred, torch.tensor(y_val, dtype=torch.float).reshape((len(y_val),-1)))
-                loss_val.append(loss.detach().numpy())
-            # Train
-            self._conv_net.train()
-            optimizer.zero_grad()
-            pred = self._conv_net(x_train)
-            loss = criterion(pred, torch.tensor(y_train, dtype=torch.float).reshape((len(y_train),-1)))
-            loss.backward()
-            optimizer.step()
-            print("Epoch " + str(epoch) + ": loss " + str(loss.detach().numpy()))
-            loss_train.append(loss.detach().numpy())
-        print("  Complete.")
-        fig, ax = plt.subplots()
-        ax.plot(loss_train, color='k')
-        ax.plot(loss_val, color='r')
-        ax.set_title("Losses in each epoch - CNN")
-        ax.set_xlabel("Epoch")
-        ax.set_ylabel("Loss")
-        ax.legend(["Training loss", "Validation loss"])
-        fig.show()
+        variables = pickle.load(open('utils/anomaly_detection_files/nn_inputs.h5', 'rb'))
+        for i in range(len(self._nn)):
+            x_train = variables[i*4+0]
+            y_train = variables[i*4+1]
+            x_val = variables[i*4+2]
+            y_val = variables[i*4+3]
+            # Set criterion and optimizer
+            criterion = torch.nn.BCELoss()
+            optimizer = torch.optim.Adam(params=self._nn[i].parameters(), lr=0.005)
+            # Train NN
+            loss_train = []
+            loss_val = []
+            for epoch in range(1000):
+                # Eval
+                self._nn[i].eval()
+                with torch.no_grad():
+                    pred = self._nn[i](x_val)
+                    loss = criterion(pred, torch.tensor(y_val, dtype=torch.float).reshape(-1,shape1[i]))
+                    loss_val.append(loss.detach().numpy())
+                # Train
+                self._nn[i].train()
+                optimizer.zero_grad()
+                pred = self._nn[i](x_train)
+                loss = criterion(pred, torch.tensor(y_train, dtype=torch.float).reshape(-1,shape1[i]))
+                loss.backward()
+                optimizer.step()
+                print("Epoch " + str(epoch) + ": loss " + str(loss.detach().numpy()))
+                loss_train.append(loss.detach().numpy())
+            print("  Complete.")
+            fig, ax = plt.subplots()
+            ax.plot(loss_train, color='k')
+            ax.plot(loss_val, color='r')
+            ax.set_title("Losses in each epoch - NN")
+            ax.set_xlabel("Epoch")
+            ax.set_ylabel("Loss")
+            ax.legend(["Training loss", "Validation loss"])
+            fig.show()
         # Save the model
-        pickle.dump(self._conv_net, open('utils/anomaly_detection_files/convnet.h5', 'ab'))
+        pickle.dump(self._nn, open('utils/anomaly_detection_files/nn.h5', 'ab'))
 
-    def detect_inside(self, idx, idx_vec, message_decoded):
+    def detect_inside(self, idx, message_decoded):
         """
         Run the anomaly detection for messages inside proper clusters
         Arguments:
@@ -611,82 +614,60 @@ class AnomalyDetection:
         - idx_vec - list of uniqe cluster numbers in a dataset
         - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape = (num_mesages, num_fields (14))
         """
-        idx = copy.deepcopy(idx)
-        idx = np.array(idx)
-        for i in idx_vec:
-            # Extract messages from each cluster
-            messages_idx = np.where(idx==i)[0]
-            if messages_idx.shape[0] > 2:
-                # Extract the examined field values
-                waveform = message_decoded[idx==i,:]
-                waveform = waveform[:,self.inside_fields]
-                # Analyse the waveform segment-wise
-                num_segments = int(np.ceil((waveform.shape[0]-self._sample_length)/(self._sample_length/2)))
-                for segment in range(num_segments+1):
-                    if segment == num_segments:
-                        new_range = range(segment*int(self._sample_length/2), waveform.shape[0])
-                    else:
-                        new_range = range(segment*int(self._sample_length/2), (segment+2)*int(self._sample_length/2))
-                    new_messages_idx = messages_idx[new_range]
-                    batch = waveform[new_range,:]
-                    """
-                    cwt = [self.compute_cwt(batch[:,field]) for field in self.inside_fields]
-                    # Pass it to convolutional network and get prediction
-                    pred_field, pred_mess = self._conv_net(cwt)
-                    pred_field = np.round(pred_field.detach().numpy())
-                    pred_mess = np.round(pred_mess.detach().numpy())
-                    if sum(pred_mess) and sum(pred_field):
-                        outlier = np.where(pred_mess==1)[0]
-                        outlier = outlier - (self._sample_length-batch.shape[0]+1)
-                        self.outliers[new_messages_idx[outlier]][0]=1
-                        self.outliers[new_messages_idx[outlier]][1]=i
-                        if type(self.outliers[new_messages_idx[outlier]][2])==list:
-                            field = self.inside_fields[np.where(pred_field==1)[0]]
-                            if field not in self.outliers[new_messages_idx[outlier]][2]:
-                                self.outliers[new_messages_idx[outlier]][2].append(field)
-                        else:
-                            self.outliers[new_messages_idx[outlier]][2] = [field]
-                    """
-       
+        samples = []
+        for message_idx in range(message_decoded.shape[0]):
+            samples.append(self.compute_inside_sample(message_decoded, idx, message_idx))
+        self._nn[0].eval()
+        pred1 = np.round(self._nn[0](samples).detach().numpy())
+        for message_idx in range(message_decoded.shape[0]):
+            if pred1[message_idx]:
+                self.outliers[message_idx][0] = 1
+                self.outliers[message_idx][1] = idx[message_idx]
+                self._nn[1].eval()
+                pred2 = np.round(self._nn[1](samples).detach().numpy())
+                fields_idx = np.where(pred2[message_idx]==1)[0].tolist()
+                self.outliers[message_idx][2] = [self.inside_fields[index] for index in fields_idx]
 
+       
 def calculate_ad_accuracy(real, predictions):
     """
     Computes the accuracy of anomaly detecion phase
     Arguments: 
     - real - list of true labels (integers)
-    - predictions - array of predicted labels (integers)
+    - predictions - list of predicted labels (integers)
     Returns: accuracies - dictionary containing the computed metrics:
     "jaccard", "hamming", "recall", "precision", "f1"
     """
-    if type(predictions)!=list: predictions = [predictions] 
-    # Calculate Jaccard metric 
-    jaccard = len(set(real).intersection(set(predictions)))/len(set(real).union(set(predictions)))
-    # Calculate Hamming metric
-    real_vec = np.zeros((14), dtype=bool)
-    for field in real: real_vec[field] = True
-    pred_vec = np.zeros((14), dtype=bool)
-    for pred in predictions: pred_vec[pred] = True
-    hamming = np.mean(np.bitwise_not(np.bitwise_xor(real_vec, pred_vec)))
-    # Calculate recall - percentage of how many corrupted fields were predicted
-    recall = []
-    for real_0 in real:
-        recall.append(real_0 in predictions)
-    recall = np.mean(recall)
-    # Calculate precision - percentage of how many predicted fields were actually corrupted
-    precision = []
-    for pred_0 in predictions:
-        precision.append(pred_0 in real)
-    if len(precision): precision = np.mean(precision)
-    else: precision = 0
-    # Calculate F1 score
-    if (precision+recall): f1 = 2*precision*recall/(precision+recall)
-    else: f1 = 0
-    # Gather all
-    accuracies = {
-        "jaccard": jaccard,
-        "hamming": hamming,
-        "recall": recall,
-        "precision": precision,
-        "f1": f1
-    }
-    return accuracies
+    #if type(predictions)!=list: predictions = [predictions] 
+    if type(predictions)==list:
+        # Calculate Jaccard metric 
+        jaccard = len(set(real).intersection(set(predictions)))/len(set(real).union(set(predictions)))
+        # Calculate Hamming metric
+        real_vec = np.zeros((14), dtype=bool)
+        for field in real: real_vec[field] = True
+        pred_vec = np.zeros((14), dtype=bool)
+        for pred in predictions: pred_vec[pred] = True
+        hamming = np.mean(np.bitwise_not(np.bitwise_xor(real_vec, pred_vec)))
+        # Calculate recall - percentage of how many corrupted fields were predicted
+        recall = []
+        for real_0 in real:
+            recall.append(real_0 in predictions)
+        recall = np.mean(recall)
+        # Calculate precision - percentage of how many predicted fields were actually corrupted
+        precision = []
+        for pred_0 in predictions:
+            precision.append(pred_0 in real)
+        if len(precision): precision = np.mean(precision)
+        else: precision = 0
+        # Calculate F1 score
+        if (precision+recall): f1 = 2*precision*recall/(precision+recall)
+        else: f1 = 0
+        # Gather all
+        accuracies = {
+            "jaccard": jaccard,
+            "hamming": hamming,
+            "recall": recall,
+            "precision": precision,
+            "f1": f1 }
+        return accuracies
+    elif predictions==0: return {"jaccard": 0, "hamming": 0, "recall": 0, "precision": 0, "f1": 0}
