@@ -5,7 +5,6 @@ torch.manual_seed(0)
 from sklearn.neighbors import KNeighborsClassifier 
 from sklearn.ensemble import RandomForestClassifier 
 from sklearn.model_selection import train_test_split
-from sklearn.utils import shuffle
 from scipy import signal
 import matplotlib.pyplot as plt
 plt.rcParams.update({'font.size': 16})
@@ -28,7 +27,7 @@ class AnomalyDetection:
     outliers = []  # list with anomaly detection information, shape = (num_messages, 3)
     #  (1. column - if a message is outlier, 2. column - proposed correct cluster, 3. column - possibly damaged fields)
     fields = [2,3,4,5,7,8,9,10,12]
-    inside_fields = [4,5,7,8,9,10]
+    inside_fields = [5,7,8,9]
     _field_classifier = []
     _num_estimators = 15
     _max_depth = 5
@@ -66,26 +65,33 @@ class AnomalyDetection:
         if if_visualize:
             # Calculate the accuracy of the classifiers on the training data
             variables = pickle.load(open('utils/anomaly_detection_files/standalone_clusters_inputs.h5', 'rb'))
+            print(" Average accuracy of field classifier:")
             accuracy = []
             for i in range(len(variables[1])):
                 pred = self._field_classifier[i].predict(variables[0][i])
-                accuracy.append(np.mean(pred == variables[1][i]))
-            print(" Average accuracy of field classifier on trainset: " + str(round(np.mean(accuracy),4)))
+                accuracy.append(np.mean(pred == variables[1][i]))          
+            print("  trainset: " + str(round(np.mean(accuracy),4)))
+            accuracy = []
+            for i in range(len(variables[3])):
+                pred = self._field_classifier[i].predict(variables[2][i])
+                accuracy.append(np.mean(pred == variables[3][i]))
+            print("  valset: " + str(round(np.mean(accuracy),4)))
             variables = pickle.load(open('utils/anomaly_detection_files/nn_inputs.h5', 'rb'))
             print(" Average accuracy of a binary class. neural net:")
-            y = np.array(variables[1]).reshape(-1,1)
-            pred = np.round(self._nn[0](variables[0]).detach().numpy())
-            print("  trainset " + str(round(np.mean(pred == y),4)) )
-            y = np.array(variables[3]).reshape(-1,1)
-            pred = np.round(self._nn[0](variables[2]).detach().numpy())
-            print("  valset: " + str(round(np.mean(pred== y),4)))
-            print(" Average accuracy of a multi-label class. neural net:")
-            y = np.array(variables[5])
-            pred = np.round(self._nn[1](variables[4]).detach().numpy())
-            print("  trainset " + str(round(np.mean(pred == y),4)) )
-            y = np.array(variables[7])
-            pred = np.round(self._nn[1](variables[6]).detach().numpy())
-            print("  valset: " + str(round(np.mean(pred== y),4)))
+            accuracy = []
+            for i in range(len(variables[1])):
+                y = np.array(variables[1][i]).reshape(-1,1)
+                self._nn[i].eval()
+                pred = np.round(self._nn[i](variables[0][i]).detach().numpy())
+                accuracy.append(np.mean(pred == y))
+            print("  trainset " + str(round(np.mean(accuracy),4)) )
+            accuracy = []
+            for i in range(len(variables[3])):
+                y = np.array(variables[3][i]).reshape(-1,1)
+                self._nn[i].eval()
+                pred = np.round(self._nn[i](variables[2][i]).detach().numpy())
+                accuracy.append(np.mean(pred == y))
+            print("  valset: " + str(round(np.mean(accuracy),4)))
         # Optimize hyperparametres if allowed
         if optimize == 'max_depth': self._optimize_rf(data, parameter='max_depth')
         elif optimize == 'n_estimators': self._optimize_rf(data, parameter='n_estimators')
@@ -435,10 +441,10 @@ class AnomalyDetection:
         Compute 
         Argument:
         """
-        diff_fields = [7,8,9,10] # long, lat, cog, th
-        valued_fields = [4,5] # rot, sog
-        scales = {4:127, 5:102.2, 7:180, 8:90, 9:360, 10:360}
-        sample = np.zeros((14))
+        diff_fields = [7,8] # long, lat
+        valued_fields = [5,9] # sog, cog
+        scales = {5:102.2, 7:180, 8:90, 9:360}
+        sample = np.zeros((10))
         # Select 3 consecutive samples
         messages_idx = np.where(np.array(MMSI)==MMSI[message_idx])[0]
         new_message_idx = np.where(messages_idx==message_idx)[0]
@@ -446,18 +452,17 @@ class AnomalyDetection:
         else: previous_idx=-1
         if new_message_idx<messages_idx.shape[0]-1: next_idx = messages_idx[new_message_idx+1]
         else: next_idx=-1
-        if previous_idx!=-1 and next_idx!=-1:
-            X = np.zeros((3,message_decoded.shape[1]))
-            X[0,:] = message_decoded[previous_idx,:]
-            X[1,:] = message_decoded[message_idx,:]
-            X[2,:] = message_decoded[next_idx,:]
-            for field in diff_fields:
-                #Get the derivatives for some of the features
-                waveform = X[1:X.shape[0],field]-X[0:X.shape[0]-1,field]
-                waveform = abs(waveform/(scales[field]))
-                sample[diff_fields.index(field)*2:diff_fields.index(field)*2+2] = waveform
-            for field in valued_fields:
-                sample[8+valued_fields.index(field)*3:11+valued_fields.index(field)*3] = abs(X[:,field]/scales[field])
+        X = np.zeros((3,message_decoded.shape[1]))
+        if previous_idx!=-1: X[0,:] = message_decoded[previous_idx,:]
+        X[1,:] = message_decoded[message_idx,:]
+        if next_idx!=-1: X[2,:] = message_decoded[next_idx,:]
+        for field in diff_fields:
+            #Get the derivatives for some of the features
+            waveform = X[1:X.shape[0],field]-X[0:X.shape[0]-1,field]
+            waveform = abs(waveform/(scales[field]))
+            sample[diff_fields.index(field)*2:diff_fields.index(field)*2+2] = waveform
+        for field in valued_fields:
+            sample[4+valued_fields.index(field)*3:7+valued_fields.index(field)*3] = abs(X[:,field]/scales[field])
         return sample
 
 
@@ -483,69 +488,68 @@ class AnomalyDetection:
         MMSI.append(data.MMSI_train)
         MMSI.append(data.MMSI_val)
         field_bits = np.array([6, 8, 38, 42, 50, 60, 61, 89, 116, 128, 137, 143, 148])  # range of fields
-        bits = np.array(np.arange(42,60).tolist() + np.arange(61,137).tolist())
+        bits = np.array(np.arange(50,60).tolist() + np.arange(61,128).tolist())
         x = []
-        x.append([])
-        x.append([])
-        x[0].append([]) # x[0][0] train, binary
-        x[0].append([]) # x[0][1] train, multi-label
-        x[1].append([]) # x[1][0] val, binary
-        x[1].append([]) # x[1][1] val, multi-label
+        x.append([]) # x[0] - train
+        x.append([]) # x[1] - val
         y = []
         y.append([])
         y.append([])
-        y[0].append([])
-        y[0].append([])
-        y[1].append([])
-        y[1].append([])
         corruption = []
         corruption.append(Corruption(message_bits[0],1))
         corruption.append(Corruption(message_bits[1],1))
         for i in [0,1]: # If i==0 add to train, if i==1 to val
-            for message_idx in range(message_bits[i].shape[0]):
-                # If there is at least one message from the past
-                if len(np.where(np.array(MMSI[i]) == MMSI[i][message_idx])[0])>2:
-                    # Choose a bit to corrupt (based on a range of the field)
-                    bit_idx = np.random.permutation(bits)[0:message_idx%2+1].tolist()
-                    fields = [sum(field_bits <= bit) for bit in np.sort(bit_idx)]
-                    # Corrupt that bit (or two bits if message_idx is odd)
-                    message_bits_corr, _ = corruption[i].corrupt_bits(
-                        message_bits=message_bits[i],
-                        bit_idx=bit_idx[0],
-                        message_idx=message_idx)
-                    if message_idx%2: # For odd idx, corrupt another bit
+            for field in self.inside_fields:
+                samples_field = []
+                y_field = []
+                for message_idx in range(message_bits[i].shape[0]):
+                    # If there is at least one message from the past
+                    if len(np.where(np.array(MMSI[i]) == MMSI[i][message_idx])[0])>2:
+                        # Choose a bit to corrupt (based on a range of the field)
+                        bit_idx = np.random.randint(field_bits[field-1], field_bits[field]-1)
+                        # Corrupt that bit (or two bits if message_idx is odd)
                         message_bits_corr, _ = corruption[i].corrupt_bits(
-                            message_bits=message_bits_corr,
-                            bit_idx=bit_idx[1],
+                            message_bits=message_bits[i],
+                            bit_idx=bit_idx,
                             message_idx=message_idx)
-                    message_decoded_corr = copy.deepcopy(message_decoded[i])
-                    _, _, message_decoded_0 = decode(message_bits_corr[message_idx,:])  # decode from binary             
-                    message_decoded_corr[message_idx] = message_decoded_0
-                # Create a sample - take 3 consecutive examples
-                sample = self.compute_inside_sample(
-                    message_decoded=message_decoded_corr,
-                    MMSI=MMSI[i],
-                    message_idx=message_idx)
-                x[i][0].append(sample)
-                x[i][1].append(sample)
-                # Create a ground truth vectors y
-                y[i][0].append(1)
-                vec = np.zeros((len(self.inside_fields)))
-                for field in fields: vec[self.inside_fields.index(field)] = 1
-                y[i][1].append(vec)
-                # Create some negative (no corruption) samples
-                sample = self.compute_inside_sample(
-                    message_decoded=message_decoded[i],
-                    MMSI=MMSI[i],
-                    message_idx=message_idx)
-                x[i][0].append(sample)
-                y[i][0].append(0)
+                        if message_idx%2: # For odd idx, corrupt another bit
+                            bad_bit = True
+                            while bad_bit: 
+                                new_bit_idx = np.random.choice(bits)
+                                bad_bit = new_bit_idx==bit_idx
+                            message_bits_corr, _ = corruption[i].corrupt_bits(
+                                message_bits=message_bits_corr,
+                                bit_idx=new_bit_idx,
+                                message_idx=message_idx)
+                        message_decoded_corr = copy.deepcopy(message_decoded[i])
+                        _, _, message_decoded_0 = decode(message_bits_corr[message_idx,:])  # decode from binary             
+                        message_decoded_corr[message_idx] = message_decoded_0
+                        # Create a sample - take 3 consecutive examples
+                        sample = self.compute_inside_sample(
+                            message_decoded=message_decoded_corr,
+                            MMSI=MMSI[i],
+                            message_idx=message_idx)
+                        samples_field.append(sample)
+                        y_field.append(1) # create a ground truth vector y
+                        # Create some negative (no corruption) samples
+                        sample = self.compute_inside_sample(
+                            message_decoded=message_decoded[i],
+                            MMSI=MMSI[i],
+                            message_idx=message_idx)
+                        samples_field.append(sample)
+                        y_field.append(0)
+                x[i].append(samples_field)
+                y[i].append(y_field)
+            samples_binary = []
+            y_binary = []
+            for idx in range(len(samples_field)):
+                field = np.random.randint(len(self.inside_fields))
+                samples_binary.append(x[i][field][idx])
+                y_binary.append(y[i][field][idx])
+            x[i].append(samples_binary)
+            y[i].append(y_binary)
         # Save file with the inputs for the classifier
-        x_train_b, y_train_b = shuffle(x[0][0], y[0][0])
-        x_val_b, y_val_b = shuffle(x[1][0], y[1][0])
-        x_train_m, y_train_m = shuffle(x[0][1], y[0][1])
-        x_val_m, y_val_m = shuffle(x[1][1], y[1][1])
-        variables = [x_train_b, y_train_b, x_val_b, y_val_b, x_train_m, y_train_m, x_val_m, y_val_m]
+        variables = [x[0], y[0], x[1], y[1]]
         pickle.dump(variables, open('utils/anomaly_detection_files/nn_inputs.h5', 'ab'))
 
     def _train_nn(self):
@@ -555,11 +559,6 @@ class AnomalyDetection:
         Argument: data_original - object of a Data class, containing all 3 datasets (train, val, test) with:
           X, Xraw, message_bits, message_decoded, MMSI
         """
-        self._nn.append(NeuralNet(goal="binary"))
-        self._nn[0] = self._nn[0].float()
-        self._nn.append(NeuralNet(goal="multi_label"))
-        self._nn[1] = self._nn[1].float()
-        shape1 = [1,6]
         # Check if the file with the training data exist
         if not os.path.exists('utils/anomaly_detection_files/nn_inputs.h5'):
             # if not, create a corrupted dataset
@@ -567,29 +566,31 @@ class AnomalyDetection:
             self._create_nn_dataset()
             print("  Complete.")
         variables = pickle.load(open('utils/anomaly_detection_files/nn_inputs.h5', 'rb'))
-        for i in range(len(self._nn)):
-            x_train = variables[i*4+0]
-            y_train = variables[i*4+1]
-            x_val = variables[i*4+2]
-            y_val = variables[i*4+3]
+        for i in range(len(self.inside_fields)+1):
+            self._nn.append(NeuralNet())
+            self._nn[i] = self._nn[i].float()
+            x_train = variables[0][i] #[i*4+0]
+            y_train = variables[1][i] #[i*4+1]
+            x_val = variables[2][i]  #[i*4+2]
+            y_val = variables[3][i] #[i*4+3]
             # Set criterion and optimizer
             criterion = torch.nn.BCELoss()
             optimizer = torch.optim.Adam(params=self._nn[i].parameters(), lr=0.005)
             # Train NN
             loss_train = []
             loss_val = []
-            for epoch in range(1000):
+            for epoch in range(200):
                 # Eval
                 self._nn[i].eval()
                 with torch.no_grad():
                     pred = self._nn[i](x_val)
-                    loss = criterion(pred, torch.tensor(y_val, dtype=torch.float).reshape(-1,shape1[i]))
+                    loss = criterion(pred, torch.tensor(y_val, dtype=torch.float).reshape(-1,1))
                     loss_val.append(loss.detach().numpy())
                 # Train
                 self._nn[i].train()
                 optimizer.zero_grad()
                 pred = self._nn[i](x_train)
-                loss = criterion(pred, torch.tensor(y_train, dtype=torch.float).reshape(-1,shape1[i]))
+                loss = criterion(pred, torch.tensor(y_train, dtype=torch.float).reshape(-1,1))
                 loss.backward()
                 optimizer.step()
                 print("Epoch " + str(epoch) + ": loss " + str(loss.detach().numpy()))
@@ -617,16 +618,19 @@ class AnomalyDetection:
         samples = []
         for message_idx in range(message_decoded.shape[0]):
             samples.append(self.compute_inside_sample(message_decoded, idx, message_idx))
-        self._nn[0].eval()
-        pred1 = np.round(self._nn[0](samples).detach().numpy())
+        self._nn[-1].eval()
+        pred1 = np.round(self._nn[-1](samples).detach().numpy())
+        pred2 = []
+        for i in range(len(self.inside_fields)):
+            self._nn[i].eval()
+            pred2.append(np.round(self._nn[i](samples).detach().numpy()))
         for message_idx in range(message_decoded.shape[0]):
             if pred1[message_idx]:
                 self.outliers[message_idx][0] = 1
                 self.outliers[message_idx][1] = idx[message_idx]
-                self._nn[1].eval()
-                pred2 = np.round(self._nn[1](samples).detach().numpy())
-                fields_idx = np.where(pred2[message_idx]==1)[0].tolist()
-                self.outliers[message_idx][2] = [self.inside_fields[index] for index in fields_idx]
+                self.outliers[message_idx][2] = []
+                for i in range(len(self.inside_fields)):
+                    if pred2[i][message_idx]: self.outliers[message_idx][2].append(self.inside_fields[i])
 
        
 def calculate_ad_accuracy(real, predictions):

@@ -86,7 +86,7 @@ else:  # or run the computations on the original data
     num_experiments = 100 # number of messages to randomly choose and corrupt
     num_metrics = 6 # number of quality metrics to compute
     field_bits = np.array([6, 8, 38, 42, 50, 60, 61, 89, 116, 128, 137, 143, 148])  # range of fields
-    bits = np.array(np.arange(42,60).tolist() + np.arange(61,137).tolist() + np.arange(143,145).tolist())
+    bits = np.array(np.arange(50,60).tolist() + np.arange(61,128).tolist())
     for j in range(2): # iterate 2 times: for 1 and 2 bits corrupted
         corruption = Corruption(data.X,j+1)
         OK_vec2 = np.zeros((num_experiments, num_metrics))
@@ -128,8 +128,8 @@ else:  # or run the computations on the original data
                 )
             # Check which fields are damaged
             field = [sum(field_bits <= bit) for bit in np.sort(bit_idx)]
-            print(field)
-            print(outliers.outliers[message_idx][2])
+            #print(field)
+            #print(outliers.outliers[message_idx][2])
             accuracies = calculate_ad_accuracy(field, outliers.outliers[message_idx][2])
             OK_vec2[i,0] = outliers.outliers[message_idx][0] # accuracy
             OK_vec2[i,1] = accuracies["recall"]

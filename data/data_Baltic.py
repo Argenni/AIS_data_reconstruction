@@ -74,7 +74,7 @@ for i in data:
 concatenation = np.concatenate(
     (np.array(timestamp).reshape(-1,1), np.array(MMSI).reshape(-1,1), np.array(message_decoded)), 
     axis=1)
-concatenation = np.sort(concatenation, axis=0)
+concatenation = concatenation[concatenation[:, 0].argsort()]
 timestamp = concatenation[:,0].tolist()
 MMSI = np.array(concatenation[:,1], dtype=int).tolist()
 message_decoded = np.array(concatenation[:,2:], dtype=float)
