@@ -92,16 +92,19 @@ else:  # or run the computations on the original data
         OK_vec2 = np.zeros((num_experiments, num_metrics))
         np.random.seed(1)
         for i in range(num_experiments):  # For each of the randomly chosen AIS messages
+            outliers = AnomalyDetection(data=data)
             stop = False
             while not stop:
                 # corrupt its random bit
                 Xraw_corr = copy.deepcopy(data.Xraw)
                 MMSI_corr = copy.deepcopy(data.MMSI)
                 message_decoded_corr = copy.deepcopy(data.message_decoded)
-                bit_idx = np.random.permutation(bits)[0:j+1].tolist()
-                message_bits_corr, message_idx = corruption.corrupt_bits(message_bits=data.message_bits, bit_idx=bit_idx[0])
+                field = np.random.choice(outliers.inside_fields, size=2, replace=False)
+                bit_idx = np.random.randint(field_bits[field[0]-1], field_bits[field[0]]-1)
+                message_bits_corr, message_idx = corruption.corrupt_bits(message_bits=data.message_bits, bit_idx=bit_idx)
                 if j: # if two bits must be corrupted
-                    message_bits_corr, message_idx = corruption.corrupt_bits(message_bits_corr, message_idx=message_idx, bit_idx=bit_idx[1])
+                    new_bit_idx = np.random.randint(field_bits[field[1]-1], field_bits[field[1]]-1)
+                    message_bits_corr, message_idx = corruption.corrupt_bits(message_bits_corr, message_idx=message_idx, bit_idx=new_bit_idx)
                 # put it back to the dataset
                 X_0, MMSI_0, message_decoded_0 = decode(message_bits_corr[message_idx,:])
                 Xraw_corr[message_idx,:] = X_0
@@ -121,15 +124,14 @@ else:  # or run the computations on the original data
                 corruption.indices_corrupted[message_idx] = stop
             
             # Perform anomaly detection inside clusters
-            outliers = AnomalyDetection(data=data)
             outliers.detect_inside(
                 idx=idx_corr,
                 message_decoded=message_decoded_corr
                 )
             # Check which fields are damaged
-            field = [sum(field_bits <= bit) for bit in np.sort(bit_idx)]
-            #print(field)
-            #print(outliers.outliers[message_idx][2])
+            field = field[0:j+1]
+            print(field)
+            print(outliers.outliers[message_idx][2])
             accuracies = calculate_ad_accuracy(field, outliers.outliers[message_idx][2])
             OK_vec2[i,0] = outliers.outliers[message_idx][0] # accuracy
             OK_vec2[i,1] = accuracies["recall"]

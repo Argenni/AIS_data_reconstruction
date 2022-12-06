@@ -28,8 +28,13 @@ class NeuralNet(torch.nn.Module):
             torch.nn.BatchNorm1d(self._max_features, track_running_stats=False, affine=False),
             torch.nn.ReLU(),
             torch.nn.Dropout(0.3) )
+        self.layer3 = torch.nn.Sequential(
+            torch.nn.Linear(in_features=max_features, out_features=int(max_features/2)),
+            torch.nn.BatchNorm1d(self._max_features, track_running_stats=False, affine=False),
+            torch.nn.ReLU(),
+            torch.nn.Dropout(0.3) )
         self.output_layer = torch.nn.Sequential(
-            torch.nn.Linear(in_features=self._max_features, out_features=1),
+            torch.nn.Linear(in_features=int(self._max_features/2), out_features=4),
             torch.nn.Sigmoid() )
 
     def forward(self, X):
@@ -37,6 +42,7 @@ class NeuralNet(torch.nn.Module):
         X = torch.reshape(X, (-1, self._in_features))
         X = self.layer1(X)
         X = self.layer2(X)
+        X = self.layer3(X)
         out = self.output_layer(X)
         return out
         
