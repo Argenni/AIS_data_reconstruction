@@ -5,6 +5,7 @@ torch.manual_seed(0)
 from sklearn.neighbors import KNeighborsClassifier 
 from sklearn.ensemble import RandomForestClassifier 
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import f1_score
 from scipy import signal
 import matplotlib.pyplot as plt
 plt.rcParams.update({'font.size': 16})
@@ -31,8 +32,8 @@ class AnomalyDetection:
     _field_classifier = []
     _num_estimators = 15
     _max_depth = 5
-    _num_estimators2 = 30
-    _max_depth2 = 20
+    _num_estimators2 = 50
+    _max_depth2 = 30
     _k = 5
     _nn = []
 
@@ -441,33 +442,33 @@ class AnomalyDetection:
 
 
     ### -------------------------- Inside anomalies part ------------------------------------
-    def compute_inside_sample(self, message_decoded, MMSI, message_idx):
+    def compute_inside_sample(self, message_decoded, MMSI, message_idx, timestamp):
         """
         Compute 
         Argument:
         """
-        diff_fields = [7,8] # long, lat
-        valued_fields = [5,9] # sog, cog
-        scales = {5:102.2, 7:180, 8:90, 9:360}
-        sample = np.zeros((10))
+        sample = np.zeros((12))
         # Select 3 consecutive samples
         messages_idx = np.where(np.array(MMSI)==MMSI[message_idx])[0]
-        new_message_idx = np.where(messages_idx==message_idx)[0]
+        new_message_idx = np.where(messages_idx==message_idx)[0][0]
         if new_message_idx>0: previous_idx = messages_idx[new_message_idx-1]
         else: previous_idx=-1
         if new_message_idx<messages_idx.shape[0]-1: next_idx = messages_idx[new_message_idx+1]
         else: next_idx=-1
-        X = np.zeros((3,message_decoded.shape[1]))
-        if previous_idx!=-1: X[0,:] = message_decoded[previous_idx,:]
-        X[1,:] = message_decoded[message_idx,:]
-        if next_idx!=-1: X[2,:] = message_decoded[next_idx,:]
-        for field in diff_fields:
-            #Get the derivatives for some of the features
-            waveform = X[1:X.shape[0],field]-X[0:X.shape[0]-1,field]
-            waveform = abs(waveform/(scales[field]))
-            sample[diff_fields.index(field)*2:diff_fields.index(field)*2+2] = waveform
-        for field in valued_fields:
-            sample[4+valued_fields.index(field)*3:7+valued_fields.index(field)*3] = abs(X[:,field]/scales[field])
+        if previous_idx!=-1:
+            sample[0] = ((timestamp[message_idx]-timestamp[previous_idx]).seconds)/60
+            sample[1] = (message_decoded[message_idx,7]-message_decoded[previous_idx,7])/180
+            sample[2] = (message_decoded[message_idx,8]-message_decoded[previous_idx,8])/90
+            sample[3] = message_decoded[previous_idx,5]/102.2
+            sample[4] = message_decoded[previous_idx,9]/360
+        sample[5] = message_decoded[message_idx,5]/102.2
+        sample[6] = message_decoded[message_idx,9]/360
+        if next_idx!=-1:
+            sample[7] = ((timestamp[next_idx]-timestamp[message_idx]).seconds)/60
+            sample[8] = (message_decoded[next_idx,7]-message_decoded[message_idx,7])/180
+            sample[9] = (message_decoded[next_idx,8]-message_decoded[message_idx,8])/90
+            sample[10] = message_decoded[next_idx,5]/102.2
+            sample[11] = message_decoded[next_idx,9]/360
         return sample
 
 
@@ -496,6 +497,9 @@ class AnomalyDetection:
         MMSI = []
         MMSI.append(np.concatenate((data1.MMSI_train, data2.MMSI_train), axis=0))
         MMSI.append(np.concatenate((data1.MMSI_val, data2.MMSI_val), axis=0))
+        timestamp = []
+        timestamp.append(np.concatenate((data1.timestamp_train, data2.timestamp_train), axis=0))
+        timestamp.append(np.concatenate((data1.timestamp_val, data2.timestamp_val), axis=0))
         field_bits = np.array([6, 8, 38, 42, 50, 60, 61, 89, 116, 128, 137, 143, 148])  # range of fields
         x = []
         x.append([]) # x[0] - train
@@ -536,7 +540,8 @@ class AnomalyDetection:
                         sample = self.compute_inside_sample(
                             message_decoded=message_decoded_corr,
                             MMSI=MMSI[i],
-                            message_idx=message_idx)
+                            message_idx=message_idx,
+                            timestamp=timestamp[i])
                         samples_field.append(sample)
                         #vec = np.zeros((len(self.inside_fields)))
                         #for f in field: vec[self.inside_fields.index(f)] = 1
@@ -546,7 +551,8 @@ class AnomalyDetection:
                             sample = self.compute_inside_sample(
                                 message_decoded=message_decoded[i],
                                 MMSI=MMSI[i],
-                                message_idx=message_idx)
+                                message_idx=message_idx,
+                                timestamp=timestamp[i])
                             samples_field.append(sample)
                             y_field.append(0)
                 x[i].append(samples_field)
@@ -658,9 +664,11 @@ class AnomalyDetection:
             accuracies_field_val = []
             for i in range(len(y_train)):
                 pred = field_classifier[i].predict(np.array(x_train[i]))
-                accuracies_field_train.append(np.mean(pred == y_train[i]))
+                accuracies_field_train.append(f1_score(y_train[i], pred))
+                #accuracies_field_train.append(np.mean(pred == y_train[i]))
                 pred = field_classifier[i].predict(np.array(x_val[i]))
-                accuracies_field_val.append(np.mean(pred == y_val[i]))
+                accuracies_field_val.append(f1_score(y_val[i], pred))
+                #accuracies_field_val.append(np.mean(pred == y_val[i]))
             accuracy_train.append(np.mean(accuracies_field_train))
             accuracy_val.append(np.mean(accuracies_field_val))
         print(" Complete.")
@@ -668,9 +676,9 @@ class AnomalyDetection:
         fig, ax = plt.subplots()
         ax.plot(params, accuracy_train, color='k')
         ax.plot(params, accuracy_val, color='b')
-        ax.set_title("Average accuracy vs " + parameter)
+        ax.set_title("Average f1 vs " + parameter)
         ax.set_xlabel(parameter)
-        ax.set_ylabel("Average accuracy")
+        ax.set_ylabel("Average f1")
         ax.legend(["Training set", "Validation set"])
         fig.show()
         # Retrain the model
@@ -682,7 +690,7 @@ class AnomalyDetection:
             os.remove('utils/anomaly_detection_files/nn.h5')
         self._train_nn()
 
-    def detect_inside(self, idx, message_decoded):
+    def detect_inside(self, idx, message_decoded, timestamp):
         """
         Run the anomaly detection for messages inside proper clusters
         Arguments:
@@ -692,7 +700,7 @@ class AnomalyDetection:
         """
         samples = []
         for message_idx in range(message_decoded.shape[0]):
-            samples.append(self.compute_inside_sample(message_decoded, idx, message_idx))
+            samples.append(self.compute_inside_sample(message_decoded, idx, message_idx, timestamp))
         #self._nn.eval()
         #pred = np.round(self._nn(samples).detach().numpy())
         pred = []

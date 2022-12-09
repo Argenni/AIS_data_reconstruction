@@ -92,7 +92,7 @@ print(" Looking for anomalies...")
 outliers = AnomalyDetection(
     data=data,
     if_visualize=True,
-    optimize=None # 'max_depth', 'n_estimators', 'k', None
+    optimize='max_depth2' # 'max_depth', 'n_estimators', 'k', None
     )
 # Conduct anomaly detection - search for standalone clusters
 outliers.detect_standalone_clusters(
@@ -104,7 +104,8 @@ outliers.detect_standalone_clusters(
 # Conduct anomaly detection - search inside proper clusters
 outliers.detect_inside(
     idx=idx, 
-    message_decoded=data.message_decoded
+    message_decoded=data.message_decoded,
+    timestamp=data.timestamp
     )
 print(" Anomalies found: " + str(np.sum(np.array(outliers.outliers, dtype=object)[:,0])))
 visualize_trajectories(

@@ -22,7 +22,6 @@ import numpy as np
 import h5py
 import matplotlib.pyplot as plt
 plt.rcParams.update({'font.size': 16})
-from scipy import signal
 import copy
 import os
 import sys
@@ -126,7 +125,8 @@ else:  # or run the computations on the original data
             # Perform anomaly detection inside clusters
             outliers.detect_inside(
                 idx=idx_corr,
-                message_decoded=message_decoded_corr
+                message_decoded=message_decoded_corr,
+                timestamp=data.timestamp
                 )
             # Check which fields are damaged
             field = field[0:j+1]
