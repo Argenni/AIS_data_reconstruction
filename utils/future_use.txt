@@ -53,3 +53,43 @@
                     else: course = np.sign(delta_lon) * 90
                     if course < 0: course = course + 360
                     X.append(np.abs(course - message_decoded[message_idx, 9])/360)
+
+delta_lon = message_decoded[next_idx, 7]-message_decoded[message_idx, 7]
+coeff_lon = 111320 * np.cos(message_decoded[message_idx, 8]*np.pi/180)
+delta_lon = delta_lon * coeff_lon
+delta_lat = message_decoded[next_idx, 8]-message_decoded[message_idx, 8]
+coeff_lat = 111320
+delta_lat = delta_lat * coeff_lat
+delta_lon_deg = message_decoded[next_idx, 7]-message_decoded[message_idx, 7]
+delta_lat_deg = message_decoded[next_idx, 8]-message_decoded[message_idx, 8]
+time = (timestamp[next_idx]-timestamp[message_idx]).seconds
+# For field==5 - speed over ground
+dist = np.sqrt(delta_lat*delta_lat + delta_lon*delta_lon)
+speed = dist/(time)
+speed = np.round(speed/0.5144, 1)
+speed_diff = speed - message_decoded[message_idx, 5]
+# For field==9 - course over ground
+if delta_lon_deg<0:
+	cart = np.sign(delta_lat_deg)*180-np.arctan(delta_lat_deg/abs(delta_lon_deg))/np.pi*180
+elif delta_lon_deg>0:
+	cart = np.arctan(delta_lat_deg/delta_lon_deg)/np.pi*180
+else: # delta_lon_deg = 0
+	cart = 90
+course = np.mod(90-cart,360)
+course_diff = abs(course - message_decoded[message_idx, 9])
+# For field==7 - longitude
+cart = np.mod(90-message_decoded[message_idx, 9],360)
+if 90<cart<270:
+	delta_lon_deg = delta_lat_deg/np.tan((message_decoded[message_idx, 9]-180)*np.pi/180)
+else:
+	delta_lon_deg = delta_lat_deg/np.tan(message_decoded[message_idx, 9]*np.pi/180)
+lon = message_decoded[next_idx,7]-delta_lon_deg
+lon_diff = message_decoded[message_idx,7]-lon
+# For field==8 - latitude
+cart = np.mod(90-message_decoded[message_idx, 9],360)
+if 90<cart<270:
+	delta_lat_deg = np.tan((message_decoded[message_idx, 9]-180)*np.pi/180) * delta_lon_deg
+else:
+	delta_lat_deg = np.tan(message_decoded[message_idx, 9]*np.pi/180) * delta_lon_deg
+lat = message_decoded[next_idx,8]-delta_lat_deg
+lat_diff = message_decoded[message_idx,8]-lat

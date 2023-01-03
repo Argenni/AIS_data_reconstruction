@@ -1,18 +1,20 @@
 # ------------------ Examine the anomaly detection of AIS message reconstruction --------------------
 # ---------------------------------- Inside clusters -------------------------------------------- 
 """
-Artificially damages random bit of a randomly chosen AIS messages and check the performace
+Artificially damages random bit of a randomly chosen AIS message and checks the performace
 of anomaly detection phase inside clusters.
 Requires: Gdansk.h5 / Baltic.h5 / Gibraltar.h5 file with the following datasets (created by data_.py):
  - message_bits - numpy array of AIS messages in binary form (1 column = 1 bit), shape = (num_messages (805), num_bits (168))
  - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape = (num_messages (805), num_fields (14))
  - X - numpy array, AIS feature vectors (w/o normalization), shape = (num_messages (805), num_features (115))
  - MMSI - list of MMSI identifier from each AIS message, len = num_messages (2805)
-Creates 01b_anomaly_detection_standalone_clusters_Gdansk_.h5 file, with OK_vec with:
-1. cluster assignment accuracy,
+Creates 02a_anomaly_detection_standalone_clusters_Gdansk_.h5 file, with OK_vec with:
+1. message indication recall,
 2. fields to correct classification recall,
-3. fields to correct classification Jaccard score,
-4. fields to correct classification Hamming score. 
+3. fields to correct classification precision,
+4. fields to correct classification f1 score,
+5. fields to correct classification Jaccard score,
+6. fields to correct classification Hamming score. 
 """
 print("\n----------- AIS Anomaly detection - Inside clusters accuracy part 1 --------- ")
 
@@ -33,7 +35,7 @@ from utils.miscellaneous import count_number, Corruption
 
 # ----------------------------!!! EDIT HERE !!! ---------------------------------  
 np.random.seed(1)  # For reproducibility
-filename = 'Gdansk.h5' # 'Gdansk', 'Baltic', 'Gibraltar'
+filename = 'Baltic.h5' # 'Gdansk', 'Baltic', 'Gibraltar'
 distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
 # --------------------------------------------------------------------------------

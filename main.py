@@ -92,7 +92,7 @@ print(" Looking for anomalies...")
 outliers = AnomalyDetection(
     data=data,
     if_visualize=True,
-    optimize='max_depth2' # 'max_depth', 'n_estimators', 'k', None
+    optimize=None # 'max_depth', 'n_estimators', 'k', None
     )
 # Conduct anomaly detection - search for standalone clusters
 outliers.detect_standalone_clusters(

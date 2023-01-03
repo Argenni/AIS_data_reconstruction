@@ -3,7 +3,7 @@ import numpy as np
 import torch
 torch.manual_seed(0)
 from sklearn.neighbors import KNeighborsClassifier 
-from sklearn.ensemble import RandomForestClassifier 
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import f1_score
 from scipy import signal
@@ -17,8 +17,6 @@ import sys
 sys.path.append(".")
 from utils.initialization import decode, Data
 from utils.miscellaneous import Corruption
-from utils.neural_nets import NeuralNet
-
 
 
 class AnomalyDetection:
@@ -32,8 +30,8 @@ class AnomalyDetection:
     _field_classifier = []
     _num_estimators = 15
     _max_depth = 5
-    _num_estimators2 = 50
-    _max_depth2 = 30
+    _num_estimators2 = 15
+    _max_depth2 = 15
     _k = 5
     _nn = []
 
@@ -707,13 +705,14 @@ class AnomalyDetection:
         for i in range(len(self.inside_fields)):
             pred.append(np.round(self._nn[i].predict(samples)))
         for message_idx in range(message_decoded.shape[0]):
-            fields = []
-            for i in range(len(self.inside_fields)):
-                if pred[i][message_idx]: fields.append(self.inside_fields[i])
-            if len(fields):
-                self.outliers[message_idx][0] = 1
-                self.outliers[message_idx][1] = idx[message_idx]
-                self.outliers[message_idx][2] = fields
+            if len(np.where(np.array(idx)==idx[message_idx])[0])>2:
+                fields = []
+                for i in range(len(self.inside_fields)):
+                    if pred[i][message_idx]: fields.append(self.inside_fields[i])
+                if len(fields):
+                    self.outliers[message_idx][0] = 1
+                    self.outliers[message_idx][1] = idx[message_idx]
+                    self.outliers[message_idx][2] = fields
 
        
 def calculate_ad_accuracy(real, predictions):
@@ -725,7 +724,7 @@ def calculate_ad_accuracy(real, predictions):
     Returns: accuracies - dictionary containing the computed metrics:
     "jaccard", "hamming", "recall", "precision", "f1"
     """
-    #if type(predictions)!=list: predictions = [predictions] 
+    if type(predictions)==0: predictions = [] 
     if type(predictions)==list:
         # Calculate Jaccard metric 
         jaccard = len(set(real).intersection(set(predictions)))/len(set(real).union(set(predictions)))
