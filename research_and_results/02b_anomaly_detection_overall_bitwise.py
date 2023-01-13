@@ -37,6 +37,7 @@ np.random.seed(1)  # For reproducibility
 filename = 'Gdansk.h5' # 'Gdansk', 'Baltic', 'Gibraltar'
 distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
+ad_algorithm = 'xgboost' # 'rf' or 'xgboost'
 # --------------------------------------------------------------------------------
 bits = np.array(np.arange(8,42).tolist() + np.arange(50,60).tolist() + np.arange(61,128).tolist())
 mask = []
@@ -56,7 +57,7 @@ while precomputed != '1' and precomputed != '2':
 print(" Importing files... ")
 if precomputed == '2':  # Load file with precomputed values
     file = h5py.File(
-        name='research_and_results/02b_anomaly_detection_overall_bitwise_' + filename,
+        name='research_and_results/02b_anomaly_detection_overall_bitwise_' + ad_algorithm + '_' + filename,
         mode='r'
         )
     OK_vec = np.array(file.get('OK_vec'))
@@ -107,7 +108,7 @@ else:  # or run the computations on the original data
             elif clustering_algorithm == 'DBSCAN':
                 idx_corr, K_corr = clustering.run_DBSCAN(X=X_corr,distance=distance)
 
-            outliers = AnomalyDetection(data=data)
+            outliers = AnomalyDetection(data=data, ad_algorithm=ad_algorithm)
             outliers.detect_standalone_clusters(
                 idx=idx_corr,
                 idx_vec=range(-1, np.max(idx_corr)+1),
@@ -146,10 +147,10 @@ if precomputed == '2':
 else:
     # Save file
     input("Press Enter to save and exit...")
-    if os.path.exists('research_and_results/02b_anomaly_detection_overall_bitwise_Gdansk.h5'):
-        os.remove('research_and_results/02b_anomaly_detection_overall_bitwise_Gdansk.h5')
+    if os.path.exists('research_and_results/02b_anomaly_detection_overall_bitwise_'+ad_algorithm+'_'+filename):
+        os.remove('research_and_results/02b_anomaly_detection_overall_bitwise_'+ad_algorithm+'_'+filename)
     File = h5py.File(
-        'research_and_results/02b_anomaly_detection_overall_bitwise_Gdansk.h5', 
+        'research_and_results/02b_anomaly_detection_overall_bitwise_'+ad_algorithm+'_'+filename, 
         mode='x'
         )
     File.create_dataset('OK_vec', data=OK_vec)

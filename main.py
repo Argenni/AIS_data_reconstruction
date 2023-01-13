@@ -36,6 +36,7 @@ from utils.miscellaneous import count_number, visualize_trajectories, TimeWindow
 np.random.seed(1) #For reproducibility
 distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
+ad_algorithm = 'xgboost' # 'rf' or 'xgboost'
 #--------------------------------------------------------------------------------
 
 # Load data
@@ -92,7 +93,8 @@ print(" Looking for anomalies...")
 outliers = AnomalyDetection(
     data=data,
     if_visualize=True,
-    optimize=None # 'max_depth', 'n_estimators', 'k', None
+    optimize=None, # 'max_depth', 'n_estimators', 'k', 'max_depth2', 'n_estimators2', None
+    ad_algorithm=ad_algorithm
     )
 # Conduct anomaly detection - search for standalone clusters
 outliers.detect_standalone_clusters(

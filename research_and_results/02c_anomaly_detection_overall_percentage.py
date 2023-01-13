@@ -38,6 +38,7 @@ np.random.seed(1)  # For reproducibility
 filename = 'Gdansk.h5' # 'Gdansk', 'Baltic', 'Gibraltar'
 distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
+ad_algorithm = 'xgboost' # 'rf' or 'xgboost'
 # --------------------------------------------------------------------------------
 
 # Decide what to do
@@ -51,7 +52,7 @@ while precomputed != '1' and precomputed != '2':
 print(" Importing files... ")
 if precomputed == '2':  # Load file with precomputed values
     file = h5py.File(
-        name='research_and_results/02c_anomaly_detection_overall_percentage_' + filename,
+        name='research_and_results/02c_anomaly_detection_overall_percentage_' + ad_algorithm + '_' + filename,
         mode='r'
         )
     OK_vec_1 = np.array(file.get('OK_vec_1'))
@@ -97,7 +98,7 @@ else:  # or run the computations on the original data
             MMSI_corr = copy.deepcopy(data.MMSI)
             message_decoded_corr = copy.deepcopy(data.message_decoded)
             corruption = Corruption(data.X,1)
-            outliers = AnomalyDetection(data=data)
+            outliers = AnomalyDetection(data=data, ad_algorithm=ad_algorithm)
             fields = []
             messages = []
             num_messages = int(len(data.MMSI)*percentage/100)
@@ -176,10 +177,10 @@ if precomputed == '2':
 else:
     # Save file
     input("Press Enter to save and exit...")
-    if os.path.exists('research_and_results/02c_anomaly_detection_overall_percentage_'+filename):
-        os.remove('research_and_results/02c_anomaly_detection_overall_percentage_'+filename)
+    if os.path.exists('research_and_results/02c_anomaly_detection_overall_percentage_'+ad_algorithm+'_'+filename):
+        os.remove('research_and_results/02c_anomaly_detection_overall_percentage_'+ad_algorithm+'_'+filename)
     File = h5py.File(
-        'research_and_results/02c_anomaly_detection_overall_percentage_'+filename, 
+        'research_and_results/02c_anomaly_detection_overall_percentage_'+ad_algorithm+'_'+filename, 
         mode='a'
         )
     File.create_dataset('OK_vec_1', data=OK_vec_1)

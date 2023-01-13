@@ -4,6 +4,7 @@ import torch
 torch.manual_seed(0)
 from sklearn.neighbors import KNeighborsClassifier 
 from sklearn.ensemble import RandomForestClassifier
+from xgboost import XGBClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import f1_score
 from scipy import signal
@@ -31,11 +32,12 @@ class AnomalyDetection:
     _num_estimators = 15
     _max_depth = 5
     _num_estimators2 = 15
-    _max_depth2 = 15
+    _max_depth2 = 5
     _k = 5
     _inside_field_classifier = []
+    _ad_algorithm = [] # 'rf' or 'xgboost'
 
-    def __init__(self, data, if_visualize=False, optimize=None):
+    def __init__(self, data, if_visualize=False, optimize=None, ad_algorithm='xgboost'):
         """
         Class initializer
         Arguments: 
@@ -49,6 +51,7 @@ class AnomalyDetection:
 	        'max_depth' or 'n_estimators', default = None
         """
         # Initialize models and necessary variables
+        self._ad_algorithm = ad_algorithm
         self.outliers = np.zeros((data.X.shape[0],3), dtype=int).tolist()
         if os.path.exists('utils/anomaly_detection_files/field_classifier.h5'):
             # If there is a file with the trained standalone clusters field classifier saved, load it
@@ -56,9 +59,9 @@ class AnomalyDetection:
         else:
             # otherwise train a classifier from scratch
             self._train_field_classifier(data)
-        if os.path.exists('utils/anomaly_detection_files/inside_field_classifier.h5'):
+        if os.path.exists('utils/anomaly_detection_files/inside_field_classifier_'+ad_algorithm+'.h5'):
             # If there is a file with the trained inside clusters field classifier saved, load it
-            self._inside_field_classifier = pickle.load(open('utils/anomaly_detection_files/inside_field_classifier.h5', 'rb'))
+            self._inside_field_classifier = pickle.load(open('utils/anomaly_detection_files/inside_field_classifier_'+ad_algorithm+'.h5', 'rb'))
         else:
             # otherwise train a classifier from scratch
             self._train_inside_field_classifier()
@@ -78,7 +81,7 @@ class AnomalyDetection:
                 accuracy.append(np.mean(pred == variables[3][i]))
             print("  valset: " + str(round(np.mean(accuracy),4)))
             variables = pickle.load(open('utils/anomaly_detection_files/inside_field_classifier_inputs.h5', 'rb'))
-            print(" Average accuracy of a inside clusters field classifier:")
+            print(" Average accuracy of inside clusters field classifier:")
             y = np.array(variables[1])
             accuracy = []
             for i in range(len(variables[1])):
@@ -94,6 +97,7 @@ class AnomalyDetection:
         # Optimize hyperparametres if allowed
         if optimize == 'max_depth': self._optimize_rf(data, parameter='max_depth')
         elif optimize == 'n_estimators': self._optimize_rf(data, parameter='n_estimators')
+        elif optimize == 'k': self._optimize_knn(data)
         elif optimize == 'max_depth2': self._optimize_inside_field_classifier(parameter='max_depth')
         elif optimize == 'n_estimators2': self._optimize_inside_field_classifier(parameter='n_estimators')
     
@@ -566,14 +570,21 @@ class AnomalyDetection:
             print("  Complete.")
         variables = pickle.load(open('utils/anomaly_detection_files/inside_field_classifier_inputs.h5', 'rb'))
         for i in range(len(self.inside_fields)):
-            self._inside_field_classifier.append(RandomForestClassifier(
-                    random_state=0,
-                    criterion='entropy',
-                    n_estimators=self._num_estimators2, 
-                    max_depth=self._max_depth2
-                    ).fit(variables[0][i],variables[1][i]))
+            if self._ad_algorithm=='rf':
+                self._inside_field_classifier.append(RandomForestClassifier(
+                        random_state=0,
+                        criterion='entropy',
+                        n_estimators=self._num_estimators2, 
+                        max_depth=self._max_depth2
+                        ).fit(variables[0][i],variables[1][i]))
+            else:
+                self._inside_field_classifier.append(XGBClassifier(
+                        random_state=0,
+                        n_estimators=self._num_estimators2, 
+                        max_depth=self._max_depth2
+                        ).fit(variables[0][i],variables[1][i]))
         # Save the model
-        pickle.dump(self._inside_field_classifier, open('utils/anomaly_detection_files/inside_field_classifier.h5', 'ab'))
+        pickle.dump(self._inside_field_classifier, open('utils/anomaly_detection_files/inside_field_classifier_'+self._ad_algorithm+'.h5', 'ab'))
 
     def _optimize_inside_field_classifier(self, parameter):
         """ 
@@ -598,16 +609,30 @@ class AnomalyDetection:
         print(" Search for optimal " + parameter + "...")
         for param in params:
             field_classifier = []
-            if parameter == 'max_depth':
+            if parameter=='max_depth' and self._ad_algorithm=='rf':
                 for i in range(len(y_train)):
                     field_classifier.append(RandomForestClassifier(
                         random_state=0, 
                         n_estimators=self._num_estimators2, 
                         max_depth=param,
                         ).fit(x_train[i],y_train[i]))
-            elif parameter == 'n_estimators':
+            elif parameter=='n_estimators' and self._ad_algorithm=='rf':
                 for i in range(len(y_train)):
                     field_classifier.append(RandomForestClassifier(
+                        random_state=0, 
+                        n_estimators=param, 
+                        max_depth=self._max_depth2,
+                        ).fit(x_train[i],y_train[i]))
+            elif parameter=='max_depth' and self._ad_algorithm=='xgboost':
+                for i in range(len(y_train)):
+                    field_classifier.append(XGBClassifier(
+                        random_state=0, 
+                        n_estimators=self._num_estimators2, 
+                        max_depth=param,
+                        ).fit(x_train[i],y_train[i]))
+            elif parameter=='n_estimators' and self._ad_algorithm=='xgboost':
+                for i in range(len(y_train)):
+                    field_classifier.append(XGBClassifier(
                         random_state=0, 
                         n_estimators=param, 
                         max_depth=self._max_depth2,
@@ -618,10 +643,8 @@ class AnomalyDetection:
             for i in range(len(y_train)):
                 pred = field_classifier[i].predict(np.array(x_train[i]))
                 accuracies_field_train.append(f1_score(y_train[i], pred))
-                #accuracies_field_train.append(np.mean(pred == y_train[i]))
                 pred = field_classifier[i].predict(np.array(x_val[i]))
                 accuracies_field_val.append(f1_score(y_val[i], pred))
-                #accuracies_field_val.append(np.mean(pred == y_val[i]))
             accuracy_train.append(np.mean(accuracies_field_train))
             accuracy_val.append(np.mean(accuracies_field_val))
         print(" Complete.")
@@ -639,8 +662,8 @@ class AnomalyDetection:
             self._max_depth2 = int(input("Choose the optimal max_depth: "))
         elif parameter == 'n_estimators':
             self._num_estimators2 = int(input("Choose the optimal n_estimators: "))
-        if os.path.exists('utils/anomaly_detection_files/inside_field_classifier.h5'):
-            os.remove('utils/anomaly_detection_files/inside_field_classifier.h5')
+        if os.path.exists('utils/anomaly_detection_files/inside_field_classifier_'+self._ad_algorithm+'.h5'):
+            os.remove('utils/anomaly_detection_files/inside_field_classifier_'+self._ad_algorithm+'.h5')
         self._train_inside_field_classifier()
 
     def detect_inside(self, idx, message_decoded, timestamp):
