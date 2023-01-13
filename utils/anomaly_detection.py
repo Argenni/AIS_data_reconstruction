@@ -33,7 +33,7 @@ class AnomalyDetection:
     _num_estimators2 = 15
     _max_depth2 = 15
     _k = 5
-    _nn = []
+    _inside_field_classifier = []
 
     def __init__(self, data, if_visualize=False, optimize=None):
         """
@@ -51,22 +51,22 @@ class AnomalyDetection:
         # Initialize models and necessary variables
         self.outliers = np.zeros((data.X.shape[0],3), dtype=int).tolist()
         if os.path.exists('utils/anomaly_detection_files/field_classifier.h5'):
-            # If there is a file with the trained classifier saved, load it
+            # If there is a file with the trained standalone clusters field classifier saved, load it
             self._field_classifier = pickle.load(open('utils/anomaly_detection_files/field_classifier.h5', 'rb'))
         else:
             # otherwise train a classifier from scratch
             self._train_field_classifier(data)
-        if os.path.exists('utils/anomaly_detection_files/nn.h5'):
-            # If there is a file with the trained neural network saved, load it
-            self._nn = pickle.load(open('utils/anomaly_detection_files/nn.h5', 'rb'))
+        if os.path.exists('utils/anomaly_detection_files/inside_field_classifier.h5'):
+            # If there is a file with the trained inside clusters field classifier saved, load it
+            self._inside_field_classifier = pickle.load(open('utils/anomaly_detection_files/inside_field_classifier.h5', 'rb'))
         else:
             # otherwise train a classifier from scratch
-            self._train_nn()
+            self._train_inside_field_classifier()
         # Show some classifier parametres if allowed
         if if_visualize:
             # Calculate the accuracy of the classifiers on the training data
             variables = pickle.load(open('utils/anomaly_detection_files/standalone_clusters_inputs.h5', 'rb'))
-            print(" Average accuracy of field classifier:")
+            print(" Average accuracy of standalone clusters field classifier:")
             accuracy = []
             for i in range(len(variables[1])):
                 pred = self._field_classifier[i].predict(variables[0][i])
@@ -77,29 +77,25 @@ class AnomalyDetection:
                 pred = self._field_classifier[i].predict(variables[2][i])
                 accuracy.append(np.mean(pred == variables[3][i]))
             print("  valset: " + str(round(np.mean(accuracy),4)))
-            variables = pickle.load(open('utils/anomaly_detection_files/nn_inputs.h5', 'rb'))
-            print(" Average accuracy of a binary class. neural net:")
+            variables = pickle.load(open('utils/anomaly_detection_files/inside_field_classifier_inputs.h5', 'rb'))
+            print(" Average accuracy of a inside clusters field classifier:")
             y = np.array(variables[1])
-            #self._nn.eval()
-            #pred = np.round(self._nn(variables[0]).detach().numpy())
             accuracy = []
             for i in range(len(variables[1])):
-                pred = self._nn[i].predict(variables[0][i])
+                pred = self._inside_field_classifier[i].predict(variables[0][i])
                 accuracy.append(np.mean(pred == y))
             print("  trainset " + str(round(np.mean(accuracy),4)) )
             y = np.array(variables[3])
-            #self._nn.eval()
-            #pred = np.round(self._nn(variables[2]).detach().numpy())
             accuracy = []
             for i in range(len(variables[3])):
-                pred = self._nn[i].predict(variables[2][i])
+                pred = self._inside_field_classifier[i].predict(variables[2][i])
                 accuracy.append(np.mean(pred == variables[3][i]))
             print("  valset " + str(round(np.mean(accuracy),4)) )
         # Optimize hyperparametres if allowed
         if optimize == 'max_depth': self._optimize_rf(data, parameter='max_depth')
         elif optimize == 'n_estimators': self._optimize_rf(data, parameter='n_estimators')
-        elif optimize == 'max_depth2': self._optimize_nn(parameter='max_depth')
-        elif optimize == 'n_estimators2': self._optimize_nn(parameter='n_estimators')
+        elif optimize == 'max_depth2': self._optimize_inside_field_classifier(parameter='max_depth')
+        elif optimize == 'n_estimators2': self._optimize_inside_field_classifier(parameter='n_estimators')
     
 
     ### ---------------------------- Standalone clusters part ---------------------------------
@@ -470,11 +466,11 @@ class AnomalyDetection:
         return sample
 
 
-    def _create_nn_dataset(self):
+    def _create_inside_field_classifier_dataset(self):
         """
-        Create a dataset that a neural network can learn on by corrupting randomly chosen messages
-        and save it as pickle in utils/anomaly_detection_files/nn_inputs.h5 
-        Argument: data_original - object of a Data class, containing all 3 datasets (train, val, test) with:
+        Create a dataset that a inside field classifier can learn on by corrupting randomly chosen messages
+        and save it as pickle in utils/anomaly_detection_files/inside_field_classifier_inputs.h5 
+        Requires Baltic.h5 and Gibraltar.h5 files, containing all 3 datasets (train, val, test) with:
           X, Xraw, message_bits, message_decoded, MMSI
         """
         file = h5py.File(name='data/Baltic.h5', mode='r')
@@ -541,8 +537,6 @@ class AnomalyDetection:
                             message_idx=message_idx,
                             timestamp=timestamp[i])
                         samples_field.append(sample)
-                        #vec = np.zeros((len(self.inside_fields)))
-                        #for f in field: vec[self.inside_fields.index(f)] = 1
                         y_field.append(1) # create a ground truth vector y
                         # Create some negative (no corruption) samples
                         if message_idx%6:
@@ -557,81 +551,42 @@ class AnomalyDetection:
                 y[i].append(y_field)
         # Save file with the inputs for the classifier
         variables = [x[0], y[0], x[1], y[1]]
-        pickle.dump(variables, open('utils/anomaly_detection_files/nn_inputs.h5', 'ab'))
+        pickle.dump(variables, open('utils/anomaly_detection_files/inside_field_classifier_inputs.h5', 'ab'))
 
-    def _train_nn(self):
+    def _train_inside_field_classifier(self):
         """
-        Train neural network for detecting anomalies in AIS data (which message is damaged)
-        and save it as pickle in utils/anomaly_detection_files/nn.h5
-        Argument: data_original - object of a Data class, containing all 3 datasets (train, val, test) with:
-          X, Xraw, message_bits, message_decoded, MMSI
+        Train inside field classifier for detecting anomalies in AIS data (which message is damaged)
+        and save it as pickle in utils/anomaly_detection_files/inside_field_classifier.h5
         """
         # Check if the file with the training data exist
-        if not os.path.exists('utils/anomaly_detection_files/nn_inputs.h5'):
+        if not os.path.exists('utils/anomaly_detection_files/inside_field_classifier_inputs.h5'):
             # if not, create a corrupted dataset
-            print("  Preparing for training a neural network...")
-            self._create_nn_dataset()
+            print("  Preparing for training inside field classifier...")
+            self._create_inside_field_classifier_dataset()
             print("  Complete.")
-        variables = pickle.load(open('utils/anomaly_detection_files/nn_inputs.h5', 'rb'))
-        """self._nn = NeuralNet()
-        self._nn = self._nn.float()
-        x_train = variables[0] 
-        y_train = variables[1]
-        x_val = variables[2]
-        y_val = variables[3]
-        # Set criterion and optimizer
-        criterion = torch.nn.CrossEntropyLoss()
-        optimizer = torch.optim.Adam(params=self._nn.parameters(), lr=0.001)
-        # Train NN
-        loss_train = []
-        loss_val = []
-        for epoch in range(1000):
-            # Eval
-            self._nn.eval()
-            with torch.no_grad():
-                pred = self._nn(x_val)
-                loss = criterion(pred, torch.tensor(y_val, dtype=torch.float))
-                loss_val.append(loss.detach().numpy())
-            # Train
-            self._nn.train()
-            optimizer.zero_grad()
-            pred = self._nn(x_train)
-            loss = criterion(pred, torch.tensor(y_train, dtype=torch.float))
-            loss.backward()
-            optimizer.step()
-            print("Epoch " + str(epoch) + ": loss " + str(loss.detach().numpy()))
-            loss_train.append(loss.detach().numpy())
-        print("  Complete.")
-        fig, ax = plt.subplots()
-        ax.plot(loss_train, color='k')
-        ax.plot(loss_val, color='r')
-        ax.set_title("Losses in each epoch - NN")
-        ax.set_xlabel("Epoch")
-        ax.set_ylabel("Loss")
-        ax.legend(["Training loss", "Validation loss"])
-        fig.show()"""
+        variables = pickle.load(open('utils/anomaly_detection_files/inside_field_classifier_inputs.h5', 'rb'))
         for i in range(len(self.inside_fields)):
-            self._nn.append(RandomForestClassifier(
+            self._inside_field_classifier.append(RandomForestClassifier(
                     random_state=0,
                     criterion='entropy',
                     n_estimators=self._num_estimators2, 
                     max_depth=self._max_depth2
                     ).fit(variables[0][i],variables[1][i]))
         # Save the model
-        pickle.dump(self._nn, open('utils/anomaly_detection_files/nn.h5', 'ab'))
+        pickle.dump(self._inside_field_classifier, open('utils/anomaly_detection_files/inside_field_classifier.h5', 'ab'))
 
-    def _optimize_nn(self, parameter):
+    def _optimize_inside_field_classifier(self, parameter):
         """ 
         Choose optimal value of max_depth or n_estimators for a random forest classification
         Argument: parameter - string indicating which parameter to optimize: 'max_depth', 'n_estimators'
         """
         # Check if the file with the field classifier inputs exist
-        if not os.path.exists('utils/anomaly_detection_files/nn_inputs.h5'):
+        if not os.path.exists('utils/anomaly_detection_files/inside_field_classifier_inputs.h5'):
             # if not, create a corrupted dataset
             print("  Preparing for training a classifier...")
-            self._create_nn_dataset()
+            self._create_inside_field_classifier_dataset()
             print("  Complete.")
-        variables = pickle.load(open('utils/anomaly_detection_files/nn_inputs.h5', 'rb'))
+        variables = pickle.load(open('utils/anomaly_detection_files/inside_field_classifier_inputs.h5', 'rb'))
         x_train = variables[0]
         y_train = variables[1]
         x_val = variables[2]
@@ -684,26 +639,24 @@ class AnomalyDetection:
             self._max_depth2 = int(input("Choose the optimal max_depth: "))
         elif parameter == 'n_estimators':
             self._num_estimators2 = int(input("Choose the optimal n_estimators: "))
-        if os.path.exists('utils/anomaly_detection_files/nn.h5'):
-            os.remove('utils/anomaly_detection_files/nn.h5')
-        self._train_nn()
+        if os.path.exists('utils/anomaly_detection_files/inside_field_classifier.h5'):
+            os.remove('utils/anomaly_detection_files/inside_field_classifier.h5')
+        self._train_inside_field_classifier()
 
     def detect_inside(self, idx, message_decoded, timestamp):
         """
         Run the anomaly detection for messages inside proper clusters
         Arguments:
         - idx - list of number of cluster assigned to each AIS message, len = num_messages
-        - idx_vec - list of uniqe cluster numbers in a dataset
         - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape = (num_mesages, num_fields (14))
+        - timestamp - list of strings with timestamp of each message, len = num_messages
         """
         samples = []
         for message_idx in range(message_decoded.shape[0]):
             samples.append(self.compute_inside_sample(message_decoded, idx, message_idx, timestamp))
-        #self._nn.eval()
-        #pred = np.round(self._nn(samples).detach().numpy())
         pred = []
         for i in range(len(self.inside_fields)):
-            pred.append(np.round(self._nn[i].predict(samples)))
+            pred.append(np.round(self._inside_field_classifier[i].predict(samples)))
         for message_idx in range(message_decoded.shape[0]):
             if len(np.where(np.array(idx)==idx[message_idx])[0])>2:
                 fields = []

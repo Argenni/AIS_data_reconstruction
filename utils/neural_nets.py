@@ -2,6 +2,8 @@
 import numpy as np
 import torch
 torch.manual_seed(0)
+import pickle
+import matplotlib.pyplot as plt
 
 
 class NeuralNet(torch.nn.Module):
@@ -46,3 +48,42 @@ class NeuralNet(torch.nn.Module):
         out = self.output_layer(X)
         return out
         
+def train_nn():
+    nn = NeuralNet()
+    nn = nn.float()
+    variables = pickle.load(open('utils/anomaly_detection_files/nn_inputs.h5', 'rb'))
+    x_train = variables[0] 
+    y_train = variables[1]
+    x_val = variables[2]
+    y_val = variables[3]
+    # Set criterion and optimizer
+    criterion = torch.nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(params=nn.parameters(), lr=0.001)
+    # Train NN
+    loss_train = []
+    loss_val = []
+    for epoch in range(1000):
+        # Eval
+        nn.eval()
+        with torch.no_grad():
+            pred = nn(x_val)
+            loss = criterion(pred, torch.tensor(y_val, dtype=torch.float))
+            loss_val.append(loss.detach().numpy())
+        # Train
+        nn.train()
+        optimizer.zero_grad()
+        pred = nn(x_train)
+        loss = criterion(pred, torch.tensor(y_train, dtype=torch.float))
+        loss.backward()
+        optimizer.step()
+        print("Epoch " + str(epoch) + ": loss " + str(loss.detach().numpy()))
+        loss_train.append(loss.detach().numpy())
+    print("  Complete.")
+    fig, ax = plt.subplots()
+    ax.plot(loss_train, color='k')
+    ax.plot(loss_val, color='r')
+    ax.set_title("Losses in each epoch - NN")
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel("Loss")
+    ax.legend(["Training loss", "Validation loss"])
+    fig.show()
