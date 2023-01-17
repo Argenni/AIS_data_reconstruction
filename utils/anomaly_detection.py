@@ -31,8 +31,10 @@ class AnomalyDetection:
     _field_classifier = []
     _num_estimators = 15
     _max_depth = 5
-    _num_estimators2 = 15
-    _max_depth2 = 5
+    _num_estimators2_rf = 15
+    _max_depth2_rf = 15
+    _num_estimators2_xgboost = 15
+    _max_depth2_xgboost = 5
     _k = 5
     _inside_field_classifier = []
     _ad_algorithm = [] # 'rf' or 'xgboost'
@@ -574,14 +576,14 @@ class AnomalyDetection:
                 self._inside_field_classifier.append(RandomForestClassifier(
                         random_state=0,
                         criterion='entropy',
-                        n_estimators=self._num_estimators2, 
-                        max_depth=self._max_depth2
+                        n_estimators=self._num_estimators2_rf, 
+                        max_depth=self._max_depth2_rf
                         ).fit(variables[0][i],variables[1][i]))
             else:
                 self._inside_field_classifier.append(XGBClassifier(
                         random_state=0,
-                        n_estimators=self._num_estimators2, 
-                        max_depth=self._max_depth2
+                        n_estimators=self._num_estimators2_xgboost, 
+                        max_depth=self._max_depth2_xgboost
                         ).fit(variables[0][i],variables[1][i]))
         # Save the model
         pickle.dump(self._inside_field_classifier, open('utils/anomaly_detection_files/inside_field_classifier_'+self._ad_algorithm+'.h5', 'ab'))
@@ -613,7 +615,7 @@ class AnomalyDetection:
                 for i in range(len(y_train)):
                     field_classifier.append(RandomForestClassifier(
                         random_state=0, 
-                        n_estimators=self._num_estimators2, 
+                        n_estimators=self._num_estimators2_rf, 
                         max_depth=param,
                         ).fit(x_train[i],y_train[i]))
             elif parameter=='n_estimators' and self._ad_algorithm=='rf':
@@ -621,13 +623,13 @@ class AnomalyDetection:
                     field_classifier.append(RandomForestClassifier(
                         random_state=0, 
                         n_estimators=param, 
-                        max_depth=self._max_depth2,
+                        max_depth=self._max_depth2_rf,
                         ).fit(x_train[i],y_train[i]))
             elif parameter=='max_depth' and self._ad_algorithm=='xgboost':
                 for i in range(len(y_train)):
                     field_classifier.append(XGBClassifier(
                         random_state=0, 
-                        n_estimators=self._num_estimators2, 
+                        n_estimators=self._num_estimators2_xgboost, 
                         max_depth=param,
                         ).fit(x_train[i],y_train[i]))
             elif parameter=='n_estimators' and self._ad_algorithm=='xgboost':
@@ -635,7 +637,7 @@ class AnomalyDetection:
                     field_classifier.append(XGBClassifier(
                         random_state=0, 
                         n_estimators=param, 
-                        max_depth=self._max_depth2,
+                        max_depth=self._max_depth2_xgboost,
                         ).fit(x_train[i],y_train[i]))
             # Calculate the accuracy of the classifier on the training and validation data
             accuracies_field_train = []
@@ -659,9 +661,11 @@ class AnomalyDetection:
         fig.show()
         # Retrain the model
         if parameter == 'max_depth':
-            self._max_depth2 = int(input("Choose the optimal max_depth: "))
+            if self._ad_algorithm=='rf': self._max_depth2_rf = int(input("Choose the optimal max_depth: "))
+            elif self._ad_algorithm=='xgboost': self._max_depth2_xgboost = int(input("Choose the optimal max_depth: "))
         elif parameter == 'n_estimators':
-            self._num_estimators2 = int(input("Choose the optimal n_estimators: "))
+            if self._ad_algorithm=='rf': self._num_estimators2_rf = int(input("Choose the optimal n_estimators: "))
+            elif self._ad_algorithm=='xgboost': self._num_estimators2_xgboost = int(input("Choose the optimal n_estimators: "))
         if os.path.exists('utils/anomaly_detection_files/inside_field_classifier_'+self._ad_algorithm+'.h5'):
             os.remove('utils/anomaly_detection_files/inside_field_classifier_'+self._ad_algorithm+'.h5')
         self._train_inside_field_classifier()
