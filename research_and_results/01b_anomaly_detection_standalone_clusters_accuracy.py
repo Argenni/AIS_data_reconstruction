@@ -36,7 +36,7 @@ from utils.miscellaneous import count_number, Corruption
 
 # ----------------------------!!! EDIT HERE !!! ---------------------------------  
 np.random.seed(1)  # For reproducibility
-filename = 'Gdansk.h5' # 'Gdansk', 'Baltic', 'Gibraltar'
+filename = 'Gibraltar.h5' # 'Gdansk', 'Baltic', 'Gibraltar'
 distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
 # --------------------------------------------------------------------------------
@@ -61,7 +61,7 @@ if precomputed == '2':  # Load file with precomputed values
     baseline_2 = np.array(file.get('baseline_2'))
     file.close()
 else:  # or run the computations on the original data
-    file = h5py.File(name='data\\' + filename, mode='r')
+    file = h5py.File(name='data/' + filename, mode='r')
     data = Data(file)
     data.split(train_percentage=50, val_percentage=25)
     file.close()
@@ -160,7 +160,7 @@ else:  # or run the computations on the original data
             baseline2[i,3] = accuracies["jaccard"]
             baseline2[i,4] = accuracies["hamming"]
 
-            # Plot
+            '''# Plot
             if j==0 and field[0]==7: # when longitude field is damaged
                 fields = [
                     "MMSI","Navigational\nstatus", "Rate of turns","Speed over\nground",
@@ -210,7 +210,7 @@ else:  # or run the computations on the original data
                 axbig.text(f-0.075, cwt_vec[f]+0.01*cwt_vec[f], str(round(cwt_vec[f],3)), color='r')
                 axbig.bar(fields, np.multiply(cwt_vec,real), width=0.5, color='r')
                 fig.set_tight_layout(True)
-                fig.show()
+                fig.show() '''
         
         if j==0:
             OK_vec_1 = np.mean(OK_vec2, axis=0)*100

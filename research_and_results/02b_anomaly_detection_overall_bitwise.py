@@ -37,7 +37,7 @@ np.random.seed(1)  # For reproducibility
 filename = 'Gdansk.h5' # 'Gdansk', 'Baltic', 'Gibraltar'
 distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
-ad_algorithm = 'xgboost' # 'rf' or 'xgboost'
+ad_algorithm = 'rf' # 'rf' or 'xgboost'
 # --------------------------------------------------------------------------------
 bits = np.array(np.arange(8,42).tolist() + np.arange(50,60).tolist() + np.arange(61,128).tolist())
 mask = []
@@ -133,10 +133,9 @@ print(" Complete.")
 titles = {
     '0':"Correctly detected damaged messages - recall [%]", 
     '1':"Correctly detected damaged fields - recall [%]", 
-    '2':"Correctly detected damaged fields - precision [%]",
-    '3':"Correctly detected damaged fields - f1 score [%]"
+    '2':"Correctly detected damaged fields - precision [%]"
     }
-visualize_corrupted_bits(OK_vec[0:4,:], titles)
+visualize_corrupted_bits(OK_vec[0:3,:], titles)
 print(" Message indication recall: " + str(round(np.mean(OK_vec[0,mask==1]),2)) + "%")
 print(" Feature indication recall: " + str(round(np.mean(OK_vec[1,mask==1]),2)) + "%")
 print(" Feature indication precision: " + str(round(np.mean(OK_vec[2,mask==1]),2)) + "%")
