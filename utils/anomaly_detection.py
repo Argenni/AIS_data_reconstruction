@@ -4,6 +4,7 @@ import torch
 torch.manual_seed(0)
 from sklearn.neighbors import KNeighborsClassifier 
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import IsolationForest
 from xgboost import XGBClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import f1_score
@@ -17,7 +18,7 @@ import os
 import sys
 sys.path.append(".")
 from utils.initialization import decode, Data
-from utils.miscellaneous import Corruption
+from utils.miscellaneous import Corruption, count_number
 
 
 class AnomalyDetection:
@@ -26,15 +27,16 @@ class AnomalyDetection:
     """
     outliers = []  # list with anomaly detection information, shape = (num_messages, 3)
     #  (1. column - if a message is outlier, 2. column - proposed correct cluster, 3. column - possibly damaged fields)
-    fields = [2,3,4,5,7,8,9,10,12]
+    fields = [2,3,5,7,8,9,12]
     inside_fields = [5,7,8,9]
+    inside_fields2 = [2,3,12]
     _field_classifier = []
     _num_estimators = 15
     _max_depth = 5
     _num_estimators2_rf = 15
     _max_depth2_rf = 15
     _num_estimators2_xgboost = 15
-    _max_depth2_xgboost = 5
+    _max_depth2_xgboost = 7
     _k = 5
     _inside_field_classifier = []
     _ad_algorithm = [] # 'rf' or 'xgboost'
@@ -148,7 +150,7 @@ class AnomalyDetection:
         message_bits = np.concatenate((data.message_bits_train, data.message_bits_val), axis=0)
         message_decoded = np.concatenate((data.message_decoded_train, data.message_decoded_val), axis=0)
         MMSI = np.concatenate((data.MMSI_train, data.MMSI_val), axis=0)
-        field_bits = np.array([6, 8, 38, 42, 50, 60, 61, 89, 116, 128, 137, 143, 148])  # range of fields
+        field_bits = np.array([6, 8, 38, 42, 50, 60, 61, 89, 116, 128, 137, 143, 145, 148])  # range of fields
         differences =  []
         y = []
         corruption = Corruption(message_bits,1)
@@ -310,7 +312,7 @@ class AnomalyDetection:
           X, Xraw, message_bits, message_decoded, MMSI
         """
         data = copy.deepcopy(data_original)
-        field_bits = np.array([6, 8, 38, 42, 50, 60, 61, 89, 116, 128, 137, 143, 148])  # range of fields
+        field_bits = np.array([6, 8, 38, 42, 50, 60, 61, 89, 116, 128, 137, 143, 145, 148])  # range of fields
         # Iterate over params to find optimal one
         params = [1,3,5,7,9]            
         accuracy = []
@@ -442,7 +444,7 @@ class AnomalyDetection:
 
 
     ### -------------------------- Inside anomalies part ------------------------------------
-    def compute_inside_sample(self, message_decoded, MMSI, message_idx, timestamp):
+    def compute_inside_sample(self, message_decoded, MMSI, message_idx, timestamp, field):
         """
         Compute 
         Argument:
@@ -454,21 +456,50 @@ class AnomalyDetection:
         if new_message_idx>0: previous_idx = messages_idx[new_message_idx-1]
         else: previous_idx=-1
         if new_message_idx<messages_idx.shape[0]-1: next_idx = messages_idx[new_message_idx+1]
-        else: next_idx=-1
-        if previous_idx!=-1:
-            sample[0] = ((timestamp[message_idx]-timestamp[previous_idx]).seconds)/60
-            sample[1] = (message_decoded[message_idx,7]-message_decoded[previous_idx,7])/180
-            sample[2] = (message_decoded[message_idx,8]-message_decoded[previous_idx,8])/90
-            sample[3] = message_decoded[previous_idx,5]/102.2
-            sample[4] = message_decoded[previous_idx,9]/360
-        sample[5] = message_decoded[message_idx,5]/102.2
-        sample[6] = message_decoded[message_idx,9]/360
-        if next_idx!=-1:
-            sample[7] = ((timestamp[next_idx]-timestamp[message_idx]).seconds)/60
-            sample[8] = (message_decoded[next_idx,7]-message_decoded[message_idx,7])/180
-            sample[9] = (message_decoded[next_idx,8]-message_decoded[message_idx,8])/90
-            sample[10] = message_decoded[next_idx,5]/102.2
-            sample[11] = message_decoded[next_idx,9]/360
+        else: next_idx=-1          
+        if field == 9: 
+            sample = np.zeros((9))
+            delta_lon_deg1 = message_decoded[next_idx, 7]-message_decoded[message_idx, 7]
+            delta_lon_deg2 = message_decoded[message_idx, 7]-message_decoded[previous_idx, 7]
+            delta_lat_deg1 = message_decoded[next_idx, 8]-message_decoded[message_idx, 8]
+            delta_lat_deg2 = message_decoded[message_idx, 8]-message_decoded[previous_idx, 8]
+            if delta_lon_deg1 !=0:
+                sample[0] = np.arctan(delta_lat_deg1/delta_lon_deg1)/np.pi*180
+                if delta_lon_deg1<0: cart = np.sign(delta_lat_deg1)*180-np.arctan(delta_lat_deg1/abs(delta_lon_deg1))/np.pi*180
+                elif delta_lon_deg1>0: cart = np.arctan(delta_lat_deg1/delta_lon_deg1)/np.pi*180
+            else: cart = 90 # delta_lon_deg = 0
+            course = np.mod(90-cart,360)
+            sample[2] = abs(course - message_decoded[message_idx, 9])
+            if delta_lon_deg2 !=0:
+                sample[1] = np.arctan(delta_lat_deg2/delta_lon_deg2)/np.pi*180
+                if delta_lon_deg2<0: cart = np.sign(delta_lat_deg2)*180-np.arctan(delta_lat_deg2/abs(delta_lon_deg2))/np.pi*180
+                elif delta_lon_deg2>0: cart = np.arctan(delta_lat_deg2/delta_lon_deg2)/np.pi*180
+            else: cart = 90
+            course = np.mod(90-cart,360)
+            sample[3] = abs(course - message_decoded[message_idx, 9])
+            if previous_idx!=-1:
+                sample[4] = ((timestamp[message_idx]-timestamp[previous_idx]).seconds)/60
+                sample[5] = message_decoded[previous_idx,9]/360
+            sample[6] = message_decoded[message_idx,9]/360
+            if next_idx!=-1:
+                sample[7] = ((timestamp[next_idx]-timestamp[message_idx]).seconds)/60
+                sample[8] = message_decoded[next_idx,9]/360
+        else: 
+            sample = np.zeros((12))
+            if previous_idx!=-1:
+                sample[0] = ((timestamp[message_idx]-timestamp[previous_idx]).seconds)/60 # timestamp difference
+                sample[1] = (message_decoded[message_idx,7]-message_decoded[previous_idx,7])/180 # longitude difference
+                sample[2] = (message_decoded[message_idx,8]-message_decoded[previous_idx,8])/90 # latitude difference
+                sample[3] = message_decoded[previous_idx,5]/102.2 # speed value
+                sample[4] = message_decoded[previous_idx,9]/360 # course value
+            sample[5] = message_decoded[message_idx,5]/102.2
+            sample[6] = message_decoded[message_idx,9]/360
+            if next_idx!=-1:
+                sample[7] = ((timestamp[next_idx]-timestamp[message_idx]).seconds)/60
+                sample[8] = (message_decoded[next_idx,7]-message_decoded[message_idx,7])/180
+                sample[9] = (message_decoded[next_idx,8]-message_decoded[message_idx,8])/90
+                sample[10] = message_decoded[next_idx,5]/102.2
+                sample[11] = message_decoded[next_idx,9]/360
         return sample
 
 
@@ -500,7 +531,7 @@ class AnomalyDetection:
         timestamp = []
         timestamp.append(np.concatenate((data1.timestamp_train, data2.timestamp_train), axis=0))
         timestamp.append(np.concatenate((data1.timestamp_val, data2.timestamp_val), axis=0))
-        field_bits = np.array([6, 8, 38, 42, 50, 60, 61, 89, 116, 128, 137, 143, 148])  # range of fields
+        field_bits = np.array([6, 8, 38, 42, 50, 60, 61, 89, 116, 128, 137, 143, 145, 148])  # range of fields
         x = []
         x.append([]) # x[0] - train
         x.append([]) # x[1] - val
@@ -541,7 +572,8 @@ class AnomalyDetection:
                             message_decoded=message_decoded_corr,
                             MMSI=MMSI[i],
                             message_idx=message_idx,
-                            timestamp=timestamp[i])
+                            timestamp=timestamp[i],
+                            field=field)
                         samples_field.append(sample)
                         y_field.append(1) # create a ground truth vector y
                         # Create some negative (no corruption) samples
@@ -550,7 +582,8 @@ class AnomalyDetection:
                                 message_decoded=message_decoded[i],
                                 MMSI=MMSI[i],
                                 message_idx=message_idx,
-                                timestamp=timestamp[i])
+                                timestamp=timestamp[i],
+                                field=field)
                             samples_field.append(sample)
                             y_field.append(0)
                 x[i].append(samples_field)
@@ -678,12 +711,31 @@ class AnomalyDetection:
         - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape = (num_mesages, num_fields (14))
         - timestamp - list of strings with timestamp of each message, len = num_messages
         """
-        samples = []
-        for message_idx in range(message_decoded.shape[0]):
-            samples.append(self.compute_inside_sample(message_decoded, idx, message_idx, timestamp))
+        # Evaluate identifier fields [2,3,12]
+        for field in self.inside_fields2:
+            _, idx_vec = count_number(idx)
+            for i in idx_vec:
+                messages_idx = (np.where(np.array(idx)==i)[0]).tolist()
+                if len(messages_idx)>2:
+                    waveform = message_decoded[messages_idx,field]               
+                    clf = IsolationForest(random_state=0).fit(waveform.reshape(-1, 1))
+                    pred2 = clf.predict(waveform.reshape(-1, 1))
+                    outliers = (np.where(pred2==1)[0]).tolist()
+                    for outlier in outliers:
+                        message_idx = messages_idx[outlier]
+                        self.outliers[message_idx][0] = 1
+                        self.outliers[message_idx][1] = idx[message_idx]
+                        if self.outliers[message_idx][2]==0: self.outliers[message_idx][2] = [field]
+                        else: 
+                            if field not in self.outliers[message_idx][2]: 
+                                self.outliers[message_idx][2] = self.outliers[message_idx][2] + [field]
+        # Evaluate regular fields [5,7,8,9]
         pred = []
-        for i in range(len(self.inside_fields)):
-            pred.append(np.round(self._inside_field_classifier[i].predict(samples)))
+        for field in range(len(self.inside_fields)):
+            samples = []
+            for message_idx in range(message_decoded.shape[0]):
+                samples.append(self.compute_inside_sample(message_decoded, idx, message_idx, timestamp, self.inside_fields[field]))
+            pred.append(np.round(self._inside_field_classifier[field].predict(samples)))
         for message_idx in range(message_decoded.shape[0]):
             if len(np.where(np.array(idx)==idx[message_idx])[0])>2:
                 fields = []
@@ -692,7 +744,8 @@ class AnomalyDetection:
                 if len(fields):
                     self.outliers[message_idx][0] = 1
                     self.outliers[message_idx][1] = idx[message_idx]
-                    self.outliers[message_idx][2] = fields
+                    if self.outliers[message_idx][2]==0: self.outliers[message_idx][2] = fields
+                    else: self.outliers[message_idx][2] = self.outliers[message_idx][2] + fields
 
        
 def calculate_ad_accuracy(real, predictions):

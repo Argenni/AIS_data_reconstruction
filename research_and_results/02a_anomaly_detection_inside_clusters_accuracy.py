@@ -87,7 +87,7 @@ else:  # or run the computations on the original data
     # Artificially corrupt the dataset
     num_experiments = 100 # number of messages to randomly choose and corrupt
     num_metrics = 6 # number of quality metrics to compute
-    field_bits = np.array([6, 8, 38, 42, 50, 60, 61, 89, 116, 128, 137, 143, 148])  # range of fields
+    field_bits = np.array([6, 8, 38, 42, 50, 60, 61, 89, 116, 128, 137, 143, 145, 148])  # range of fields
     bits = np.array(np.arange(50,60).tolist() + np.arange(61,128).tolist())
     for j in range(2): # iterate 2 times: for 1 and 2 bits corrupted
         corruption = Corruption(data.X,j+1)

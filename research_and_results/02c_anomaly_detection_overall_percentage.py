@@ -34,7 +34,7 @@ from utils.miscellaneous import count_number, Corruption
 
 # ----------------------------!!! EDIT HERE !!! ---------------------------------  
 np.random.seed(1)  # For reproducibility
-filename = 'Gibraltar.h5' # 'Gdansk', 'Baltic', 'Gibraltar'
+filename = 'Gdansk.h5' # 'Gdansk', 'Baltic', 'Gibraltar'
 distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
 ad_algorithm = 'rf' # 'rf' or 'xgboost'
@@ -87,8 +87,8 @@ else:  # or run the computations on the original data
     num_experiments = 10
     percentages = [5, 10]
     num_metrics = 5 # number of quality metrics to compute
-    field_bits = np.array([6, 8, 38, 42, 50, 60, 61, 89, 116, 128, 137, 143, 148])  # range of fields
-    bits = np.array(np.arange(8,60).tolist() + np.arange(61,137).tolist())
+    field_bits = np.array([6, 8, 38, 42, 50, 60, 61, 89, 116, 128, 137, 143, 145, 148])  # range of fields
+    bits = np.array(np.arange(8,42).tolist() + np.arange(50,60).tolist() + np.arange(61,128).tolist() + np.arange(143,145).tolist())
     for percentage in percentages:
         OK_vec2 = np.zeros((num_experiments, num_metrics))
         np.random.seed(1)
