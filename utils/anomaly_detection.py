@@ -606,17 +606,32 @@ class AnomalyDetection:
         variables = pickle.load(open('utils/anomaly_detection_files/inside_field_classifier_inputs.h5', 'rb'))
         for i in range(len(self.inside_fields)):
             if self._ad_algorithm=='rf':
-                self._inside_field_classifier.append(RandomForestClassifier(
+                if self.inside_fields[i] != 9:
+                    self._inside_field_classifier.append(RandomForestClassifier(
                         random_state=0,
                         criterion='entropy',
                         n_estimators=self._num_estimators2_rf, 
                         max_depth=self._max_depth2_rf
                         ).fit(variables[0][i],variables[1][i]))
+                else:
+                    self._inside_field_classifier.append(RandomForestClassifier(
+                        random_state=0,
+                        criterion='entropy',
+                        n_estimators=self._num_estimators2_rf, 
+                        max_depth=np.floor(0.8*self._max_depth2_rf)
+                        ).fit(variables[0][i],variables[1][i]))
             else:
-                self._inside_field_classifier.append(XGBClassifier(
+                if self.inside_fields[i] != 9:
+                    self._inside_field_classifier.append(XGBClassifier(
                         random_state=0,
                         n_estimators=self._num_estimators2_xgboost, 
                         max_depth=self._max_depth2_xgboost
+                        ).fit(variables[0][i],variables[1][i]))
+                else:
+                    self._inside_field_classifier.append(XGBClassifier(
+                        random_state=0,
+                        n_estimators=self._num_estimators2_xgboost, 
+                        max_depth=np.floor(0.8*self._max_depth2_xgboost)
                         ).fit(variables[0][i],variables[1][i]))
         # Save the model
         pickle.dump(self._inside_field_classifier, open('utils/anomaly_detection_files/inside_field_classifier_'+self._ad_algorithm+'.h5', 'ab'))
