@@ -34,10 +34,10 @@ from utils.miscellaneous import count_number, Corruption
 
 # ----------------------------!!! EDIT HERE !!! ---------------------------------  
 np.random.seed(1)  # For reproducibility
-filename = 'Gibraltar.h5' # 'Gdansk', 'Baltic', 'Gibraltar'
+filename = 'Baltic.h5' # 'Gdansk', 'Baltic', 'Gibraltar'
 distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
-ad_algorithm = 'xgboost' # 'rf' or 'xgboost'
+ad_algorithm = 'rf' # 'rf' or 'xgboost'
 # --------------------------------------------------------------------------------
 
 # Decide what to do
