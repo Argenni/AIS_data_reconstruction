@@ -36,10 +36,10 @@ from utils.miscellaneous import count_number, Corruption
 
 # ----------------------------!!! EDIT HERE !!! ---------------------------------  
 np.random.seed(1)  # For reproducibility
-filename = 'Gibraltar.h5' # 'Gdansk', 'Baltic', 'Gibraltar'
+filename = 'Baltic.h5' # 'Gdansk', 'Baltic', 'Gibraltar'
 distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
-ad_algorithm = 'rf' # 'rf' or 'xgboost'
+ad_algorithm = 'xgboost' # 'rf' or 'xgboost'
 # --------------------------------------------------------------------------------
 
 # Decide what to do
@@ -254,9 +254,9 @@ else:
     # Save file
     input("Press Enter to save and exit...")
     if os.path.exists('research_and_results/01b_anomaly_detection_standalone_clusters_'+ad_algorithm+'_'+filename):
-        os.remove('research_and_results/01b_anomaly_detection_standalone_clusters__'+ad_algorithm+'_'+filename)
+        os.remove('research_and_results/01b_anomaly_detection_standalone_clusters_'+ad_algorithm+'_'+filename)
     File = h5py.File(
-        'research_and_results/01b_anomaly_detection_standalone_clusters__'+ad_algorithm+'_'+filename, 
+        'research_and_results/01b_anomaly_detection_standalone_clusters_'+ad_algorithm+'_'+filename, 
         mode='a'
         )
     File.create_dataset('OK_vec_1', data=OK_vec_1)

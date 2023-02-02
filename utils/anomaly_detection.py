@@ -1,7 +1,5 @@
 # ----------- Library of functions used in anomaly detection phase of AIS message reconstruction ----------
 import numpy as np
-import torch
-torch.manual_seed(0)
 from sklearn.neighbors import KNeighborsClassifier 
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.ensemble import IsolationForest
