@@ -36,9 +36,10 @@ from utils.miscellaneous import count_number, Corruption
 
 # ----------------------------!!! EDIT HERE !!! ---------------------------------  
 np.random.seed(1)  # For reproducibility
-filename = 'Gibraltar.h5' # 'Gdansk', 'Baltic', 'Gibraltar'
+filename = 'Baltic.h5' # 'Gdansk', 'Baltic', 'Gibraltar'
 distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
+ad_algorithm = 'xgboost' # 'rf' or 'xgboost'
 # --------------------------------------------------------------------------------
 
 # Decide what to do
@@ -52,7 +53,7 @@ while precomputed != '1' and precomputed != '2':
 print(" Importing files... ")
 if precomputed == '2':  # Load file with precomputed values
     file = h5py.File(
-        name='research_and_results/01b_anomaly_detection_standalone_clusters_accuracy_' + filename,
+        name='research_and_results/01b_anomaly_detection_standalone_clusters_'+ad_algorithm+'_'+filename,
         mode='r'
         )
     OK_vec_1 = np.array(file.get('OK_vec_1'))
@@ -118,7 +119,7 @@ else:  # or run the computations on the original data
                 elif clustering_algorithm == 'DBSCAN':
                     idx_corr, K_corr = clustering.run_DBSCAN(X=X_corr,distance=distance)
                 # Check if the cluster is a standalone cluster
-                outliers = AnomalyDetection(data=data)
+                outliers = AnomalyDetection(data=data, ad_algorithm=ad_algorithm)
                 outliers.detect_standalone_clusters(
                     idx=idx_corr,
                     idx_vec=range(-1, np.max(idx_corr)+1),
@@ -252,10 +253,10 @@ if precomputed == '2':
 else:
     # Save file
     input("Press Enter to save and exit...")
-    if os.path.exists('research_and_results/01b_anomaly_detection_standalone_clusters_accuracy_'+filename):
-        os.remove('research_and_results/01b_anomaly_detection_standalone_clusters_accuracy_'+filename)
+    if os.path.exists('research_and_results/01b_anomaly_detection_standalone_clusters_'+ad_algorithm+'_'+filename):
+        os.remove('research_and_results/01b_anomaly_detection_standalone_clusters_'+ad_algorithm+'_'+filename)
     File = h5py.File(
-        'research_and_results/01b_anomaly_detection_standalone_clusters_accuracy_'+filename, 
+        'research_and_results/01b_anomaly_detection_standalone_clusters_'+ad_algorithm+'_'+filename, 
         mode='a'
         )
     File.create_dataset('OK_vec_1', data=OK_vec_1)

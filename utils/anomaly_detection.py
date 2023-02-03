@@ -1,7 +1,5 @@
 # ----------- Library of functions used in anomaly detection phase of AIS message reconstruction ----------
 import numpy as np
-import torch
-torch.manual_seed(0)
 from sklearn.neighbors import KNeighborsClassifier 
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.ensemble import IsolationForest
@@ -57,9 +55,9 @@ class AnomalyDetection:
         # Initialize models and necessary variables
         self._ad_algorithm = ad_algorithm
         self.outliers = np.zeros((data.X.shape[0],3), dtype=int).tolist()
-        if os.path.exists('utils/anomaly_detection_files/field_classifier.h5'):
+        if os.path.exists('utils/anomaly_detection_files/field_classifier_'+ad_algorithm+'.h5'):
             # If there is a file with the trained standalone clusters field classifier saved, load it
-            self._field_classifier = pickle.load(open('utils/anomaly_detection_files/field_classifier.h5', 'rb'))
+            self._field_classifier = pickle.load(open('utils/anomaly_detection_files/field_classifier_'+ad_algorithm+'.h5', 'rb'))
         else:
             # otherwise train a classifier from scratch
             self._train_field_classifier(data)
@@ -109,7 +107,7 @@ class AnomalyDetection:
     ### ---------------------------- Standalone clusters part ---------------------------------
     def _train_field_classifier(self, data_original):
         """ 
-        Train a random forest to classify which fields of AIS message to correct
+        Train a random forest or xgboost to classify which fields of AIS message to correct
         and save it as pickle in utils/anomaly_detection_files/field_classifier.h5
         Argument: data_original - object of a Data class, containing all 3 datasets (train, val, test) with:
           X, Xraw, message_bits, message_decoded, MMSI
@@ -127,15 +125,22 @@ class AnomalyDetection:
         print("  Training an anomaly detector...")
         self._field_classifier = []
         for i in range(len(y)):
-            self._field_classifier.append(RandomForestClassifier(
-                random_state=0,
-                criterion='entropy',
-                n_estimators=self._num_estimators, 
-                max_depth=self._max_depth
-                ).fit(differences[i],y[i]))
+            if self._ad_algorithm == 'rf':
+                self._field_classifier.append(RandomForestClassifier(
+                    random_state=0,
+                    criterion='entropy',
+                    n_estimators=self._num_estimators, 
+                    max_depth=self._max_depth
+                    ).fit(differences[i],y[i]))
+            else:  
+                self._field_classifier.append(XGBClassifier(
+                    random_state=0,
+                    n_estimators=self._num_estimators, 
+                    max_depth=int(np.floor(self._max_depth*0.6))
+                    ).fit(differences[i],y[i]))
         print("  Complete.")
         # Save
-        pickle.dump(self._field_classifier, open('utils/anomaly_detection_files/field_classifier.h5', 'ab'))
+        pickle.dump(self._field_classifier, open('utils/anomaly_detection_files/field_classifier_'+self._ad_algorithm+'.h5', 'ab'))
         
     def _create_field_classifier_dataset(self, data_original):
         """
@@ -301,8 +306,8 @@ class AnomalyDetection:
             self._max_depth = int(input("Choose the optimal max_depth: "))
         elif parameter == 'n_estimators':
             self._num_estimators = int(input("Choose the optimal n_estimators: "))
-        if os.path.exists('utils/anomaly_detection_files/field_classifier.h5'):
-            os.remove('utils/anomaly_detection_files/field_classifier.h5')
+        if os.path.exists('utils/anomaly_detection_files/field_classifier_rf.h5'):
+            os.remove('utils/anomaly_detection_files/field_classifier_rf.h5')
         self._train_field_classifier(data_original)
 
     def _optimize_knn(self, data_original):
@@ -606,17 +611,32 @@ class AnomalyDetection:
         variables = pickle.load(open('utils/anomaly_detection_files/inside_field_classifier_inputs.h5', 'rb'))
         for i in range(len(self.inside_fields)):
             if self._ad_algorithm=='rf':
-                self._inside_field_classifier.append(RandomForestClassifier(
+                if self.inside_fields[i] != 9:
+                    self._inside_field_classifier.append(RandomForestClassifier(
                         random_state=0,
                         criterion='entropy',
                         n_estimators=self._num_estimators2_rf, 
                         max_depth=self._max_depth2_rf
                         ).fit(variables[0][i],variables[1][i]))
+                else:
+                    self._inside_field_classifier.append(RandomForestClassifier(
+                        random_state=0,
+                        criterion='entropy',
+                        n_estimators=self._num_estimators2_rf, 
+                        max_depth=np.floor(0.8*self._max_depth2_rf)
+                        ).fit(variables[0][i],variables[1][i]))
             else:
-                self._inside_field_classifier.append(XGBClassifier(
+                if self.inside_fields[i] != 9:
+                    self._inside_field_classifier.append(XGBClassifier(
                         random_state=0,
                         n_estimators=self._num_estimators2_xgboost, 
                         max_depth=self._max_depth2_xgboost
+                        ).fit(variables[0][i],variables[1][i]))
+                else:
+                    self._inside_field_classifier.append(XGBClassifier(
+                        random_state=0,
+                        n_estimators=self._num_estimators2_xgboost, 
+                        max_depth=np.floor(0.8*self._max_depth2_xgboost)
                         ).fit(variables[0][i],variables[1][i]))
         # Save the model
         pickle.dump(self._inside_field_classifier, open('utils/anomaly_detection_files/inside_field_classifier_'+self._ad_algorithm+'.h5', 'ab'))

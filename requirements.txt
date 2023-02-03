@@ -3,3 +3,4 @@ h5py==3.4.0
 sklearn
 matplotlib==3.4.3
 scipy==1.7.1
+xgboost==1.7.3
