@@ -29,8 +29,10 @@ class AnomalyDetection:
     inside_fields = [5,7,8,9]
     inside_fields2 = [2,3,12]
     _field_classifier = []
-    _num_estimators = 15
-    _max_depth = 5
+    _num_estimators_rf = 15
+    _max_depth_rf = 5
+    _num_estimators_xgboost = 15
+    _max_depth_xgboost = 3
     _num_estimators2_rf = 15
     _max_depth2_rf = 15
     _num_estimators2_xgboost = 15
@@ -97,8 +99,8 @@ class AnomalyDetection:
                 accuracy.append(np.mean(pred == variables[3][i]))
             print("  valset " + str(round(np.mean(accuracy),4)) )
         # Optimize hyperparametres if allowed
-        if optimize == 'max_depth': self._optimize_rf(data, parameter='max_depth')
-        elif optimize == 'n_estimators': self._optimize_rf(data, parameter='n_estimators')
+        if optimize == 'max_depth': self._optimize_standalone_cluster_classifier(data, parameter='max_depth')
+        elif optimize == 'n_estimators': self._optimize_standalone_cluster_classifier(data, parameter='n_estimators')
         elif optimize == 'k': self._optimize_knn(data)
         elif optimize == 'max_depth2': self._optimize_inside_field_classifier(parameter='max_depth')
         elif optimize == 'n_estimators2': self._optimize_inside_field_classifier(parameter='n_estimators')
@@ -129,14 +131,14 @@ class AnomalyDetection:
                 self._field_classifier.append(RandomForestClassifier(
                     random_state=0,
                     criterion='entropy',
-                    n_estimators=self._num_estimators, 
-                    max_depth=self._max_depth
+                    n_estimators=self._num_estimators_rf, 
+                    max_depth=self._max_depth_rf
                     ).fit(differences[i],y[i]))
             else:  
                 self._field_classifier.append(XGBClassifier(
                     random_state=0,
-                    n_estimators=self._num_estimators, 
-                    max_depth=int(np.floor(self._max_depth*0.6))
+                    n_estimators=self._num_estimators_xgboost, 
+                    max_depth=int(np.floor(self._max_depth_xgboost))
                     ).fit(differences[i],y[i]))
         print("  Complete.")
         # Save
@@ -241,7 +243,7 @@ class AnomalyDetection:
         X.append((np.abs(np.std(with_) - np.std(without)))/(np.std(with_)+1e-6))
         return X
     
-    def _optimize_rf(self, data_original, parameter):
+    def _optimize_standalone_cluster_classifier(self, data_original, parameter):
         """ 
         Choose optimal value of max_depth or n_estimators for a random forest classification
         Arguments: 
@@ -267,19 +269,33 @@ class AnomalyDetection:
         print(" Search for optimal " + parameter + "...")
         for param in params:
             field_classifier = []
-            if parameter == 'max_depth':
+            if parameter=='max_depth' and self._ad_algorithm=='rf':
                 for i in range(len(y_train)):
                     field_classifier.append(RandomForestClassifier(
                         random_state=0, 
-                        n_estimators=self._num_estimators, 
+                        n_estimators=self._num_estimators_rf, 
                         max_depth=param,
                         ).fit(differences_train[i],y_train[i]))
-            elif parameter == 'n_estimators':
+            elif parameter == 'n_estimators' and self._ad_algorithm=='rf':
                 for i in range(len(y_train)):
                     field_classifier.append(RandomForestClassifier(
                         random_state=0, 
                         n_estimators=param, 
-                        max_depth=self._max_depth,
+                        max_depth=self._max_depth_rf,
+                        ).fit(differences_train[i],y_train[i]))
+            elif parameter=='max_depth' and self._ad_algorithm=='xgboost':
+                for i in range(len(y_train)):
+                    field_classifier.append(XGBClassifier(
+                        random_state=0, 
+                        n_estimators=self._num_estimators_xgboost, 
+                        max_depth=param,
+                        ).fit(differences_train[i],y_train[i]))
+            elif parameter == 'n_estimators' and self._ad_algorithm=='rf':
+                for i in range(len(y_train)):
+                    field_classifier.append(XGBClassifier(
+                        random_state=0, 
+                        n_estimators=param, 
+                        max_depth=self._max_depth_xgboost,
                         ).fit(differences_train[i],y_train[i]))
             # Calculate the accuracy of the classifier on the training and validation data
             accuracies_field_train = []
@@ -665,28 +681,28 @@ class AnomalyDetection:
         for param in params:
             field_classifier = []
             if parameter=='max_depth' and self._ad_algorithm=='rf':
-                for i in range(len(y_train)):
+                for i in range(len(y_train)-1):
                     field_classifier.append(RandomForestClassifier(
                         random_state=0, 
                         n_estimators=self._num_estimators2_rf, 
                         max_depth=param,
                         ).fit(x_train[i],y_train[i]))
             elif parameter=='n_estimators' and self._ad_algorithm=='rf':
-                for i in range(len(y_train)):
+                for i in range(len(y_train)-1):
                     field_classifier.append(RandomForestClassifier(
                         random_state=0, 
                         n_estimators=param, 
                         max_depth=self._max_depth2_rf,
                         ).fit(x_train[i],y_train[i]))
             elif parameter=='max_depth' and self._ad_algorithm=='xgboost':
-                for i in range(len(y_train)):
+                for i in range(len(y_train)-1):
                     field_classifier.append(XGBClassifier(
                         random_state=0, 
                         n_estimators=self._num_estimators2_xgboost, 
                         max_depth=param,
                         ).fit(x_train[i],y_train[i]))
             elif parameter=='n_estimators' and self._ad_algorithm=='xgboost':
-                for i in range(len(y_train)):
+                for i in range(len(y_train)-1):
                     field_classifier.append(XGBClassifier(
                         random_state=0, 
                         n_estimators=param, 
