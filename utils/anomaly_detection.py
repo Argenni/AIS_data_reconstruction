@@ -31,11 +31,11 @@ class AnomalyDetection:
     _field_classifier = []
     _num_estimators_rf = 15
     _max_depth_rf = 5
-    _num_estimators_xgboost = 15
-    _max_depth_xgboost = 3
+    _num_estimators_xgboost = 12
+    _max_depth_xgboost = 2
     _num_estimators2_rf = 15
     _max_depth2_rf = 15
-    _num_estimators2_xgboost = 15
+    _num_estimators2_xgboost = 20
     _max_depth2_xgboost = 7
     _k = 5
     _inside_field_classifier = []
@@ -290,7 +290,7 @@ class AnomalyDetection:
                         n_estimators=self._num_estimators_xgboost, 
                         max_depth=param,
                         ).fit(differences_train[i],y_train[i]))
-            elif parameter == 'n_estimators' and self._ad_algorithm=='rf':
+            elif parameter == 'n_estimators' and self._ad_algorithm=='xgboost':
                 for i in range(len(y_train)):
                     field_classifier.append(XGBClassifier(
                         random_state=0, 
@@ -639,7 +639,7 @@ class AnomalyDetection:
                         random_state=0,
                         criterion='entropy',
                         n_estimators=self._num_estimators2_rf, 
-                        max_depth=np.floor(0.8*self._max_depth2_rf)
+                        max_depth=int(np.floor(0.8*self._max_depth2_rf))
                         ).fit(variables[0][i],variables[1][i]))
             else:
                 if self.inside_fields[i] != 9:
@@ -652,7 +652,7 @@ class AnomalyDetection:
                     self._inside_field_classifier.append(XGBClassifier(
                         random_state=0,
                         n_estimators=self._num_estimators2_xgboost, 
-                        max_depth=np.floor(0.8*self._max_depth2_xgboost)
+                        max_depth=int(np.floor(0.8*self._max_depth2_xgboost))
                         ).fit(variables[0][i],variables[1][i]))
         # Save the model
         pickle.dump(self._inside_field_classifier, open('utils/anomaly_detection_files/inside_field_classifier_'+self._ad_algorithm+'.h5', 'ab'))
@@ -676,7 +676,9 @@ class AnomalyDetection:
         # Iterate over params to find optimal one
         params = [2, 5, 8, 10, 13, 15, 20, 30, 50, 100]
         accuracy_train = []
+        accuracy_train_course = []
         accuracy_val = []
+        accuracy_val_course = []
         print(" Search for optimal " + parameter + "...")
         for param in params:
             field_classifier = []
@@ -687,6 +689,11 @@ class AnomalyDetection:
                         n_estimators=self._num_estimators2_rf, 
                         max_depth=param,
                         ).fit(x_train[i],y_train[i]))
+                field_classifier.append(RandomForestClassifier(
+                    random_state=0, 
+                    n_estimators=self._num_estimators2_rf, 
+                    max_depth=param,
+                    ).fit(x_train[i+1],y_train[i+1]))
             elif parameter=='n_estimators' and self._ad_algorithm=='rf':
                 for i in range(len(y_train)-1):
                     field_classifier.append(RandomForestClassifier(
@@ -694,6 +701,11 @@ class AnomalyDetection:
                         n_estimators=param, 
                         max_depth=self._max_depth2_rf,
                         ).fit(x_train[i],y_train[i]))
+                field_classifier.append(RandomForestClassifier(
+                    random_state=0, 
+                    n_estimators=param, 
+                    max_depth=int(np.floor(0.8*self._max_depth2_rf)),
+                    ).fit(x_train[i+1],y_train[i+1]))
             elif parameter=='max_depth' and self._ad_algorithm=='xgboost':
                 for i in range(len(y_train)-1):
                     field_classifier.append(XGBClassifier(
@@ -701,6 +713,11 @@ class AnomalyDetection:
                         n_estimators=self._num_estimators2_xgboost, 
                         max_depth=param,
                         ).fit(x_train[i],y_train[i]))
+                field_classifier.append(XGBClassifier(
+                    random_state=0, 
+                    n_estimators=self._num_estimators2_xgboost, 
+                    max_depth=param,
+                    ).fit(x_train[i+1],y_train[i+1]))
             elif parameter=='n_estimators' and self._ad_algorithm=='xgboost':
                 for i in range(len(y_train)-1):
                     field_classifier.append(XGBClassifier(
@@ -708,6 +725,11 @@ class AnomalyDetection:
                         n_estimators=param, 
                         max_depth=self._max_depth2_xgboost,
                         ).fit(x_train[i],y_train[i]))
+                field_classifier.append(XGBClassifier(
+                    random_state=0, 
+                    n_estimators=param, 
+                    max_depth=int(np.floor(0.8*self._max_depth2_xgboost)),
+                    ).fit(x_train[i+1],y_train[i+1]))
             # Calculate the accuracy of the classifier on the training and validation data
             accuracies_field_train = []
             accuracies_field_val = []
@@ -716,17 +738,22 @@ class AnomalyDetection:
                 accuracies_field_train.append(f1_score(y_train[i], pred))
                 pred = field_classifier[i].predict(np.array(x_val[i]))
                 accuracies_field_val.append(f1_score(y_val[i], pred))
-            accuracy_train.append(np.mean(accuracies_field_train))
-            accuracy_val.append(np.mean(accuracies_field_val))
+            accuracy_train.append(np.mean(accuracies_field_train[:-1]))
+            accuracy_train_course.append(accuracies_field_train[-1])
+            accuracy_val.append(np.mean(accuracies_field_val[:-1]))
+            accuracy_val_course.append(accuracies_field_val[-1])
         print(" Complete.")
         # Plot
         fig, ax = plt.subplots()
         ax.plot(params, accuracy_train, color='k')
         ax.plot(params, accuracy_val, color='b')
+        ax.plot(params, accuracy_train_course, color='r')
+        ax.plot(params, accuracy_val_course, color='g')
         ax.set_title("Average f1 vs " + parameter)
         ax.set_xlabel(parameter)
         ax.set_ylabel("Average f1")
-        ax.legend(["Training set", "Validation set"])
+        ax.legend(["Training set - fields 5,7,8", "Validation set - fields 5,7,8",
+                   "Training set - field 9", "Validation set - field 9" ])
         fig.show()
         # Retrain the model
         if parameter == 'max_depth':
