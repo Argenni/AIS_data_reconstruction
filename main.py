@@ -28,7 +28,7 @@ import sys
 sys.path.append('.')
 from utils.initialization import Data
 from utils.clustering import Clustering, calculate_CC
-from utils.anomaly_detection import StandaloneClusters
+from utils.anomaly_detection import AnomalyDetection
 from utils.miscellaneous import count_number, visualize_trajectories, TimeWindow
 
 # ----------------------------!!! EDIT HERE !!! --------------------------------- 
@@ -36,6 +36,7 @@ from utils.miscellaneous import count_number, visualize_trajectories, TimeWindow
 np.random.seed(1) #For reproducibility
 distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
+ad_algorithm = 'rf' # 'rf' or 'xgboost'
 #--------------------------------------------------------------------------------
 
 # Load data
@@ -62,7 +63,6 @@ data.X_train, mu_train, sigma_train = data.normalize(data.Xraw_train)
 data.X_val, mu_val, sigma_val = data.normalize(data.Xraw_val)
 data.X, mu, sigma = data.normalize(data.Xraw)
 print(" Complete.")
-#input("Press Enter to continue...")
 
 
 # ----------- Part 1 - Clustering ----------------
@@ -85,35 +85,43 @@ visualize_trajectories(
     MMSI_vec=range(-1, np.max(idx)+1),
     goal='clustering'
 )
-#input("Press Enter to continue...")
 
 
 # ----------- Part 2 - Anomaly detection ------- 
 print("\n----------- Part 2 - Anomaly detection ---------- ")
-print(" Looking for anomalies - standalone clusters...")
-outliers_standalone = StandaloneClusters(
+print(" Looking for anomalies...")
+outliers = AnomalyDetection(
     data=data,
     if_visualize=True,
-    optimize=None # 'max_depth', 'n_estimators', 'k', None
+    optimize=None, # 'max_depth', 'n_estimators', 'k', 'max_depth2', 'n_estimators2', None
+    ad_algorithm=ad_algorithm
     )
 # Conduct anomaly detection - search for standalone clusters
-outliers_standalone.detect(
+outliers.detect_standalone_clusters(
     idx=idx,
     idx_vec=range(-1, np.max(idx)+1),
     X=data.X,
     message_decoded=data.message_decoded,
     )
-print(" Anomalies found: " + str(np.sum(np.array(outliers_standalone.outliers, dtype=object)[:,0])))
+# Conduct anomaly detection - search inside proper clusters
+outliers.detect_inside(
+    idx=idx, 
+    message_decoded=data.message_decoded,
+    timestamp=data.timestamp
+    )
+print(" Anomalies found: " + str(np.sum(np.array(outliers.outliers, dtype=object)[:,0])))
 visualize_trajectories(
     X=data.Xraw,
-    MMSI=np.array(outliers_standalone.outliers, dtype=object)[:,0].tolist(),
+    MMSI=np.array(outliers.outliers, dtype=object)[:,0].tolist(),
     MMSI_vec=[0,1],
     goal='anomaly_detection'
     )
-#input("Press Enter to exit...")
+
+# Save results
 np.savetxt(
     'output/output.txt',
-    np.array(outliers_standalone.outliers, dtype=object), 
+    np.array(outliers.outliers, dtype=object), 
     delimiter=',',
     fmt='%s',
     header="If_outlier, Correct_cluster_id, Damage_fields")
+input("Press Enter to exit...")

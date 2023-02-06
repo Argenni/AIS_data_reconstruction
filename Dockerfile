@@ -9,6 +9,6 @@ CMD ["python", "main.py"]
 
 
 # ------ Build new image and tag it --------------
-# docker build --no-cache -t ais:v2 .
+# docker build --no-cache -t ais:v3 .
 # ------ Run container from that image -----------
-# docker container run -v $(pwd)/output:/output --name ais ais:v2
+# docker container run -v $(pwd)/output:/output --name ais ais:v3

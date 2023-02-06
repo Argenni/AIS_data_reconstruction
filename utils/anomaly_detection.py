@@ -1,33 +1,47 @@
 # ----------- Library of functions used in anomaly detection phase of AIS message reconstruction ----------
 import numpy as np
 from sklearn.neighbors import KNeighborsClassifier 
-from sklearn.ensemble import RandomForestClassifier 
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import IsolationForest
+from xgboost import XGBClassifier
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import f1_score
 from scipy import signal
 import matplotlib.pyplot as plt
 plt.rcParams.update({'font.size': 16})
+import h5py
 import copy
 import pickle
 import os
 import sys
 sys.path.append(".")
-from utils.initialization import decode
-from utils.miscellaneous import Corruption
+from utils.initialization import decode, Data
+from utils.miscellaneous import Corruption, count_number
 
 
-class StandaloneClusters:
+class AnomalyDetection:
     """
-    Class that introduces anomaly detection by analysing standalone clusters
+    Class that introduces anomaly detection in AIS data
     """
     outliers = []  # list with anomaly detection information, shape = (num_messages, 3)
     #  (1. column - if a message is outlier, 2. column - proposed correct cluster, 3. column - possibly damaged fields)
-    fields = [2,3,4,5,7,8,9,10,12]
+    fields = [2,3,5,7,8,9,12]
+    inside_fields = [5,7,8,9]
+    inside_fields2 = [2,3,12]
     _field_classifier = []
-    _num_estimators = 15
-    _max_depth = 5
+    _num_estimators_rf = 15
+    _max_depth_rf = 5
+    _num_estimators_xgboost = 12
+    _max_depth_xgboost = 2
+    _num_estimators2_rf = 15
+    _max_depth2_rf = 15
+    _num_estimators2_xgboost = 20
+    _max_depth2_xgboost = 7
     _k = 5
+    _inside_field_classifier = []
+    _ad_algorithm = [] # 'rf' or 'xgboost'
 
-    def __init__(self, data, if_visualize=False, optimize=None):
+    def __init__(self, data, if_visualize=False, optimize=None, ad_algorithm='xgboost'):
         """
         Class initializer
         Arguments: 
@@ -40,33 +54,63 @@ class StandaloneClusters:
         optimize (optional) - string deciding whether to optimize classifier hyperparametres or not,
 	        'max_depth' or 'n_estimators', default = None
         """
-        # Initialize classifier and necessary variables
+        # Initialize models and necessary variables
+        self._ad_algorithm = ad_algorithm
         self.outliers = np.zeros((data.X.shape[0],3), dtype=int).tolist()
-        if os.path.exists('utils/anomaly_detection_files/field_classifier.h5'):
-            # If there is a file with the trained classifier saved, load it
-            self._field_classifier = pickle.load(open('utils/anomaly_detection_files/field_classifier.h5', 'rb'))
+        if os.path.exists('utils/anomaly_detection_files/field_classifier_'+ad_algorithm+'.h5'):
+            # If there is a file with the trained standalone clusters field classifier saved, load it
+            self._field_classifier = pickle.load(open('utils/anomaly_detection_files/field_classifier_'+ad_algorithm+'.h5', 'rb'))
         else:
             # otherwise train a classifier from scratch
-            self.train_field_classifier(data)
+            self._train_field_classifier(data)
+        if os.path.exists('utils/anomaly_detection_files/inside_field_classifier_'+ad_algorithm+'.h5'):
+            # If there is a file with the trained inside clusters field classifier saved, load it
+            self._inside_field_classifier = pickle.load(open('utils/anomaly_detection_files/inside_field_classifier_'+ad_algorithm+'.h5', 'rb'))
+        else:
+            # otherwise train a classifier from scratch
+            self._train_inside_field_classifier()
         # Show some classifier parametres if allowed
         if if_visualize:
-            # Calculate the accuracy of the classifier on the training data
+            # Calculate the accuracy of the classifiers on the training data
             variables = pickle.load(open('utils/anomaly_detection_files/standalone_clusters_inputs.h5', 'rb'))
-            differences = variables[0]
-            y = variables[1]
+            print(" Average accuracy of standalone clusters field classifier:")
             accuracy = []
-            for i in range(len(y)):
-                pred = self._field_classifier[i].predict(differences[i])
-                accuracy.append(np.mean(pred == y[i]))
-            print(" Average accuracy on training data: " + str(round(np.mean(accuracy),4)))
+            for i in range(len(variables[1])):
+                pred = self._field_classifier[i].predict(variables[0][i])
+                accuracy.append(np.mean(pred == variables[1][i]))          
+            print("  trainset: " + str(round(np.mean(accuracy),4)))
+            accuracy = []
+            for i in range(len(variables[3])):
+                pred = self._field_classifier[i].predict(variables[2][i])
+                accuracy.append(np.mean(pred == variables[3][i]))
+            print("  valset: " + str(round(np.mean(accuracy),4)))
+            variables = pickle.load(open('utils/anomaly_detection_files/inside_field_classifier_inputs.h5', 'rb'))
+            print(" Average accuracy of inside clusters field classifier:")
+            y = np.array(variables[1])
+            accuracy = []
+            for i in range(len(variables[1])):
+                pred = self._inside_field_classifier[i].predict(variables[0][i])
+                accuracy.append(np.mean(pred == y))
+            print("  trainset " + str(round(np.mean(accuracy),4)) )
+            y = np.array(variables[3])
+            accuracy = []
+            for i in range(len(variables[3])):
+                pred = self._inside_field_classifier[i].predict(variables[2][i])
+                accuracy.append(np.mean(pred == variables[3][i]))
+            print("  valset " + str(round(np.mean(accuracy),4)) )
         # Optimize hyperparametres if allowed
-        if optimize == 'max_depth': self.optimize_rf(data, parameter='max_depth')
-        elif optimize == 'n_estimators': self.optimize_rf(data, parameter='n_estimators')
-        elif optimize == 'k': self.optimize_knn(data)
+        if optimize == 'max_depth': self._optimize_standalone_cluster_classifier(data, parameter='max_depth')
+        elif optimize == 'n_estimators': self._optimize_standalone_cluster_classifier(data, parameter='n_estimators')
+        elif optimize == 'k': self._optimize_knn(data)
+        elif optimize == 'max_depth2': self._optimize_inside_field_classifier(parameter='max_depth')
+        elif optimize == 'n_estimators2': self._optimize_inside_field_classifier(parameter='n_estimators')
     
-    def train_field_classifier(self, data_original):
+
+    ### ---------------------------- Standalone clusters part ---------------------------------
+    def _train_field_classifier(self, data_original):
         """ 
-        Train a random forest to classify which fields of AIS message to correct
+        Train a random forest or xgboost to classify which fields of AIS message to correct
+        and save it as pickle in utils/anomaly_detection_files/field_classifier.h5
         Argument: data_original - object of a Data class, containing all 3 datasets (train, val, test) with:
           X, Xraw, message_bits, message_decoded, MMSI
         """
@@ -83,20 +127,28 @@ class StandaloneClusters:
         print("  Training an anomaly detector...")
         self._field_classifier = []
         for i in range(len(y)):
-            self._field_classifier.append(RandomForestClassifier(
-                random_state=0,
-                criterion='entropy',
-                n_estimators=self._num_estimators, 
-                max_depth=self._max_depth
-                ).fit(differences[i],y[i]))
+            if self._ad_algorithm == 'rf':
+                self._field_classifier.append(RandomForestClassifier(
+                    random_state=0,
+                    criterion='entropy',
+                    n_estimators=self._num_estimators_rf, 
+                    max_depth=self._max_depth_rf
+                    ).fit(differences[i],y[i]))
+            else:  
+                self._field_classifier.append(XGBClassifier(
+                    random_state=0,
+                    n_estimators=self._num_estimators_xgboost, 
+                    max_depth=int(np.floor(self._max_depth_xgboost))
+                    ).fit(differences[i],y[i]))
         print("  Complete.")
         # Save
-        pickle.dump(self._field_classifier, open('utils/anomaly_detection_files/field_classifier.h5', 'ab'))
+        pickle.dump(self._field_classifier, open('utils/anomaly_detection_files/field_classifier_'+self._ad_algorithm+'.h5', 'ab'))
         
     def _create_field_classifier_dataset(self, data_original):
         """
-        Corrupt random messages, collect the corrupted fields and their differences
-        to create a dataset that a field classifier can learn on
+        Corrupt random messages, collect the corrupted fields and their differences to create a dataset 
+        that a field classifier can learn on and save it as pickle in 
+        utils/anomaly_detection_files/standalone_clusters_inputs.h5
         Argument: data - object of a Data class, containing all 3 datasets (train, val, test) with:
           X, Xraw, message_bits, message_decoded, MMSI 
         """
@@ -105,7 +157,7 @@ class StandaloneClusters:
         message_bits = np.concatenate((data.message_bits_train, data.message_bits_val), axis=0)
         message_decoded = np.concatenate((data.message_decoded_train, data.message_decoded_val), axis=0)
         MMSI = np.concatenate((data.MMSI_train, data.MMSI_val), axis=0)
-        field_bits = np.array([6, 8, 38, 42, 50, 60, 61, 89, 116, 128, 137, 143, 148])  # range of fields
+        field_bits = np.array([6, 8, 38, 42, 50, 60, 61, 89, 116, 128, 137, 143, 145, 148])  # range of fields
         differences =  []
         y = []
         corruption = Corruption(message_bits,1)
@@ -164,7 +216,6 @@ class StandaloneClusters:
         Computes the input data for field anomaly detection classifier
         (relative differencee between fields' standard deviation or wavelet transform with and without an outlier,
         the higher the difference, the more likely that field is corrupted)
-        For internal use only
         Arguments:
         - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape = (num_mesages, num_fields (14))
         - idx - list of indices of clusters assigned to each message, len = num_messages
@@ -192,9 +243,10 @@ class StandaloneClusters:
         X.append((np.abs(np.std(with_) - np.std(without)))/(np.std(with_)+1e-6))
         return X
     
-    def optimize_rf(self, data_original, parameter):
+    def _optimize_standalone_cluster_classifier(self, data_original, parameter):
         """ 
-        Choose optimal value of max_depth or n_estimators for a random forest classification
+        Choose optimal value of max_depth or n_estimators for a Random Forest/XGBoost classifier
+        for standalone clusters
         Arguments: 
         - data_original - object of a Data class, containing all 3 datasets (train, val, test) with:
           X, Xraw, message_bits, message_decoded, MMSI
@@ -218,19 +270,33 @@ class StandaloneClusters:
         print(" Search for optimal " + parameter + "...")
         for param in params:
             field_classifier = []
-            if parameter == 'max_depth':
+            if parameter=='max_depth' and self._ad_algorithm=='rf':
                 for i in range(len(y_train)):
                     field_classifier.append(RandomForestClassifier(
                         random_state=0, 
-                        n_estimators=self._num_estimators, 
+                        n_estimators=self._num_estimators_rf, 
                         max_depth=param,
                         ).fit(differences_train[i],y_train[i]))
-            elif parameter == 'n_estimators':
+            elif parameter == 'n_estimators' and self._ad_algorithm=='rf':
                 for i in range(len(y_train)):
                     field_classifier.append(RandomForestClassifier(
                         random_state=0, 
                         n_estimators=param, 
-                        max_depth=self._max_depth,
+                        max_depth=self._max_depth_rf,
+                        ).fit(differences_train[i],y_train[i]))
+            elif parameter=='max_depth' and self._ad_algorithm=='xgboost':
+                for i in range(len(y_train)):
+                    field_classifier.append(XGBClassifier(
+                        random_state=0, 
+                        n_estimators=self._num_estimators_xgboost, 
+                        max_depth=param,
+                        ).fit(differences_train[i],y_train[i]))
+            elif parameter == 'n_estimators' and self._ad_algorithm=='xgboost':
+                for i in range(len(y_train)):
+                    field_classifier.append(XGBClassifier(
+                        random_state=0, 
+                        n_estimators=param, 
+                        max_depth=self._max_depth_xgboost,
                         ).fit(differences_train[i],y_train[i]))
             # Calculate the accuracy of the classifier on the training and validation data
             accuracies_field_train = []
@@ -257,18 +323,18 @@ class StandaloneClusters:
             self._max_depth = int(input("Choose the optimal max_depth: "))
         elif parameter == 'n_estimators':
             self._num_estimators = int(input("Choose the optimal n_estimators: "))
-        if os.path.exists('utils/anomaly_detection_files/standalone_clusters_field_classifier.h5'):
-            os.remove('utils/anomaly_detection_files/standalone_clusters_field_classifier.h5')
-        self.train_field_classifier(data_original)
+        if os.path.exists('utils/anomaly_detection_files/field_classifier_rf.h5'):
+            os.remove('utils/anomaly_detection_files/field_classifier_rf.h5')
+        self._train_field_classifier(data_original)
 
-    def optimize_knn(self, data_original):
+    def _optimize_knn(self, data_original):
         """ 
-        Choose optimal value of k for k-NN classificator
+        Choose optimal value of k for k-NN classifier for standalone clusters
         Argument: data_original - object of a Data class, containing all 3 datasets (train, val, test) with:
           X, Xraw, message_bits, message_decoded, MMSI
         """
         data = copy.deepcopy(data_original)
-        field_bits = np.array([6, 8, 38, 42, 50, 60, 61, 89, 116, 128, 137, 143, 148])  # range of fields
+        field_bits = np.array([6, 8, 38, 42, 50, 60, 61, 89, 116, 128, 137, 143, 145, 148])  # range of fields
         # Iterate over params to find optimal one
         params = [1,3,5,7,9]            
         accuracy = []
@@ -317,7 +383,7 @@ class StandaloneClusters:
         # Save the optimal kvalue
         self._k = int(input("Choose the optimal k: "))
 
-    def detect(self, idx, idx_vec, X, message_decoded):
+    def detect_standalone_clusters(self, idx, idx_vec, X, message_decoded):
         """
         Run the entire anomaly detection based on searching for standalone clusters
         Arguments:
@@ -378,7 +444,8 @@ class StandaloneClusters:
         for i in indices: outliers[i] = 1
         knn = KNeighborsClassifier(n_neighbors=5)  # Find the closest 5 points to the outliers (except other outliers)
         knn.fit(X[outliers!=1,:], idx[outliers!= 1])  # the cluster that those points belong
-        return knn.predict(X[message_idx,:].reshape(1,-1))  # is potentially the right cluster for the outlier
+        pred = knn.predict(X[message_idx,:].reshape(1,-1))
+        return pred[0] # is potentially the right cluster for the outlier
 
     def _find_damaged_fields(self, message_decoded, idx, message_idx):
         """
@@ -387,7 +454,7 @@ class StandaloneClusters:
         - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape = (num_mesages, num_fields (14))
         - idx - list of indices of clusters assigned to each message, len = num_messages
         - message_idx - integer scalar, index of a potential outlier to correct
-        Returns: 1d array of possibly dmaged fields
+        Returns: list of possibly damaged fields
         """
         fields = []
         for i, field in enumerate(self.fields):
@@ -397,44 +464,401 @@ class StandaloneClusters:
             if pred: fields.append(field)
         return fields
 
-    
+
+    ### -------------------------- Inside anomalies part ------------------------------------
+    def compute_inside_sample(self, message_decoded, MMSI, message_idx, timestamp, field):
+        """
+        Computes the input data for field anomaly detection classifier inside proper clusters
+        Arguments:
+        - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape = (num_mesages, num_fields (14))
+        - MMSI - list of MMSI identifier from each AIS message, len = num_messages
+        - message_idx - integer scalar, index of a potential outlier to correct
+        - timestamp - list of strings with timestamp of each message, len = num_messages
+        - field - integer scalar, a field to examine
+        Returns: X - list of computed differences
+        Argument:
+        """
+        sample = np.zeros((12))
+        # Select 3 consecutive samples
+        messages_idx = np.where(np.array(MMSI)==MMSI[message_idx])[0]
+        new_message_idx = np.where(messages_idx==message_idx)[0][0]
+        if new_message_idx>0: previous_idx = messages_idx[new_message_idx-1]
+        else: previous_idx=-1
+        if new_message_idx<messages_idx.shape[0]-1: next_idx = messages_idx[new_message_idx+1]
+        else: next_idx=-1          
+        if field == 9: 
+            sample = np.zeros((9))
+            delta_lon_deg1 = message_decoded[next_idx, 7]-message_decoded[message_idx, 7]
+            delta_lon_deg2 = message_decoded[message_idx, 7]-message_decoded[previous_idx, 7]
+            delta_lat_deg1 = message_decoded[next_idx, 8]-message_decoded[message_idx, 8]
+            delta_lat_deg2 = message_decoded[message_idx, 8]-message_decoded[previous_idx, 8]
+            if delta_lon_deg1 !=0:
+                sample[0] = np.arctan(delta_lat_deg1/delta_lon_deg1)/np.pi*180
+                if delta_lon_deg1<0: cart = np.sign(delta_lat_deg1)*180-np.arctan(delta_lat_deg1/abs(delta_lon_deg1))/np.pi*180
+                elif delta_lon_deg1>0: cart = np.arctan(delta_lat_deg1/delta_lon_deg1)/np.pi*180
+            else: cart = 90 # delta_lon_deg = 0
+            course = np.mod(90-cart,360)
+            sample[2] = abs(course - message_decoded[message_idx, 9])
+            if delta_lon_deg2 !=0:
+                sample[1] = np.arctan(delta_lat_deg2/delta_lon_deg2)/np.pi*180
+                if delta_lon_deg2<0: cart = np.sign(delta_lat_deg2)*180-np.arctan(delta_lat_deg2/abs(delta_lon_deg2))/np.pi*180
+                elif delta_lon_deg2>0: cart = np.arctan(delta_lat_deg2/delta_lon_deg2)/np.pi*180
+            else: cart = 90
+            course = np.mod(90-cart,360)
+            sample[3] = abs(course - message_decoded[message_idx, 9])
+            if previous_idx!=-1:
+                sample[4] = ((timestamp[message_idx]-timestamp[previous_idx]).seconds)/60
+                sample[5] = message_decoded[previous_idx,9]/360
+            sample[6] = message_decoded[message_idx,9]/360
+            if next_idx!=-1:
+                sample[7] = ((timestamp[next_idx]-timestamp[message_idx]).seconds)/60
+                sample[8] = message_decoded[next_idx,9]/360
+        else: 
+            sample = np.zeros((12))
+            if previous_idx!=-1:
+                sample[0] = ((timestamp[message_idx]-timestamp[previous_idx]).seconds)/60 # timestamp difference
+                sample[1] = (message_decoded[message_idx,7]-message_decoded[previous_idx,7])/180 # longitude difference
+                sample[2] = (message_decoded[message_idx,8]-message_decoded[previous_idx,8])/90 # latitude difference
+                sample[3] = message_decoded[previous_idx,5]/102.2 # speed value
+                sample[4] = message_decoded[previous_idx,9]/360 # course value
+            sample[5] = message_decoded[message_idx,5]/102.2
+            sample[6] = message_decoded[message_idx,9]/360
+            if next_idx!=-1:
+                sample[7] = ((timestamp[next_idx]-timestamp[message_idx]).seconds)/60
+                sample[8] = (message_decoded[next_idx,7]-message_decoded[message_idx,7])/180
+                sample[9] = (message_decoded[next_idx,8]-message_decoded[message_idx,8])/90
+                sample[10] = message_decoded[next_idx,5]/102.2
+                sample[11] = message_decoded[next_idx,9]/360
+        return sample
+
+
+    def _create_inside_field_classifier_dataset(self):
+        """
+        Create a dataset that a inside field classifier can learn on by corrupting randomly chosen messages
+        and save it as pickle in utils/anomaly_detection_files/inside_field_classifier_inputs.h5 
+        Requires Baltic.h5 and Gibraltar.h5 files, containing all 3 datasets (train, val, test) with:
+          X, Xraw, message_bits, message_decoded, MMSI
+        """
+        file = h5py.File(name='data/Baltic.h5', mode='r')
+        data1 = Data(file=file)
+        data1.split(train_percentage=50, val_percentage=25) # split into train, val and test set
+        file.close()
+        file = h5py.File(name='data/Gibraltar.h5', mode='r')
+        data2 = Data(file=file)
+        data2.split(train_percentage=50, val_percentage=25) # split into train, val and test set
+        file.close()
+        # Compose a dataset from train and val sets, keep test untouched
+        message_bits = []
+        message_bits.append(np.concatenate((data1.message_bits_train, data2.message_bits_train), axis=0))
+        message_bits.append(np.concatenate((data1.message_bits_val, data2.message_bits_val), axis=0))
+        message_decoded = []
+        message_decoded.append(np.concatenate((data1.message_decoded_train, data2.message_decoded_train), axis=0))
+        message_decoded.append(np.concatenate((data1.message_decoded_val, data2.message_decoded_val), axis=0))
+        MMSI = []
+        MMSI.append(np.concatenate((data1.MMSI_train, data2.MMSI_train), axis=0))
+        MMSI.append(np.concatenate((data1.MMSI_val, data2.MMSI_val), axis=0))
+        timestamp = []
+        timestamp.append(np.concatenate((data1.timestamp_train, data2.timestamp_train), axis=0))
+        timestamp.append(np.concatenate((data1.timestamp_val, data2.timestamp_val), axis=0))
+        field_bits = np.array([6, 8, 38, 42, 50, 60, 61, 89, 116, 128, 137, 143, 145, 148])  # range of fields
+        x = []
+        x.append([]) # x[0] - train
+        x.append([]) # x[1] - val
+        y = []
+        y.append([])
+        y.append([])
+        corruption = []
+        corruption.append(Corruption(message_bits[0],1))
+        corruption.append(Corruption(message_bits[1],1))
+        for i in [0,1]: # If i==0 add to train, if i==1 to val
+            for field in self.inside_fields:
+                samples_field = []
+                y_field = []
+                for message_idx in range(message_bits[i].shape[0]):
+                    # If there is at least one message from the past
+                    if len(np.where(np.array(MMSI[i]) == MMSI[i][message_idx])[0])>2:
+                        # Choose a bit to corrupt (based on a range of the field)
+                        bit_idx = np.random.randint(field_bits[field-1], field_bits[field]-1)
+                        # Corrupt that bit (or two bits if message_idx is odd)
+                        message_bits_corr, _ = corruption[i].corrupt_bits(
+                            message_bits=message_bits[i],
+                            bit_idx=bit_idx,
+                            message_idx=message_idx)
+                        if message_idx%2: # For odd idx, corrupt another bit
+                            new_fields = copy.deepcopy(self.inside_fields)
+                            new_fields.remove(field)
+                            new_field = np.random.choice(new_fields)
+                            new_bit_idx = np.random.randint(field_bits[new_field-1], field_bits[new_field]-1)
+                            message_bits_corr, _ = corruption[i].corrupt_bits(
+                                message_bits=message_bits_corr,
+                                bit_idx=new_bit_idx,
+                                message_idx=message_idx)
+                        message_decoded_corr = copy.deepcopy(message_decoded[i])
+                        _, _, message_decoded_0 = decode(message_bits_corr[message_idx,:])  # decode from binary             
+                        message_decoded_corr[message_idx] = message_decoded_0
+                        # Create a sample - take 3 consecutive examples
+                        sample = self.compute_inside_sample(
+                            message_decoded=message_decoded_corr,
+                            MMSI=MMSI[i],
+                            message_idx=message_idx,
+                            timestamp=timestamp[i],
+                            field=field)
+                        samples_field.append(sample)
+                        y_field.append(1) # create a ground truth vector y
+                        # Create some negative (no corruption) samples
+                        if message_idx%6:
+                            sample = self.compute_inside_sample(
+                                message_decoded=message_decoded[i],
+                                MMSI=MMSI[i],
+                                message_idx=message_idx,
+                                timestamp=timestamp[i],
+                                field=field)
+                            samples_field.append(sample)
+                            y_field.append(0)
+                x[i].append(samples_field)
+                y[i].append(y_field)
+        # Save file with the inputs for the classifier
+        variables = [x[0], y[0], x[1], y[1]]
+        pickle.dump(variables, open('utils/anomaly_detection_files/inside_field_classifier_inputs.h5', 'ab'))
+
+    def _train_inside_field_classifier(self):
+        """
+        Train inside field classifier for detecting anomalies in AIS data (which message is damaged)
+        and save it as pickle in utils/anomaly_detection_files/inside_field_classifier.h5
+        """
+        # Check if the file with the training data exist
+        if not os.path.exists('utils/anomaly_detection_files/inside_field_classifier_inputs.h5'):
+            # if not, create a corrupted dataset
+            print("  Preparing for training inside field classifier...")
+            self._create_inside_field_classifier_dataset()
+            print("  Complete.")
+        variables = pickle.load(open('utils/anomaly_detection_files/inside_field_classifier_inputs.h5', 'rb'))
+        for i in range(len(self.inside_fields)):
+            if self._ad_algorithm=='rf':
+                if self.inside_fields[i] != 9:
+                    self._inside_field_classifier.append(RandomForestClassifier(
+                        random_state=0,
+                        criterion='entropy',
+                        n_estimators=self._num_estimators2_rf, 
+                        max_depth=self._max_depth2_rf
+                        ).fit(variables[0][i],variables[1][i]))
+                else:
+                    self._inside_field_classifier.append(RandomForestClassifier(
+                        random_state=0,
+                        criterion='entropy',
+                        n_estimators=self._num_estimators2_rf, 
+                        max_depth=int(np.floor(0.8*self._max_depth2_rf))
+                        ).fit(variables[0][i],variables[1][i]))
+            else:
+                if self.inside_fields[i] != 9:
+                    self._inside_field_classifier.append(XGBClassifier(
+                        random_state=0,
+                        n_estimators=self._num_estimators2_xgboost, 
+                        max_depth=self._max_depth2_xgboost
+                        ).fit(variables[0][i],variables[1][i]))
+                else:
+                    self._inside_field_classifier.append(XGBClassifier(
+                        random_state=0,
+                        n_estimators=self._num_estimators2_xgboost, 
+                        max_depth=int(np.floor(0.8*self._max_depth2_xgboost))
+                        ).fit(variables[0][i],variables[1][i]))
+        # Save the model
+        pickle.dump(self._inside_field_classifier, open('utils/anomaly_detection_files/inside_field_classifier_'+self._ad_algorithm+'.h5', 'ab'))
+
+    def _optimize_inside_field_classifier(self, parameter):
+        """ 
+        Choose optimal value of max_depth or n_estimators for a Random Forest/XGBoost classifier
+        for detecting damaged fields inside proper clusters
+        Argument: parameter - string indicating which parameter to optimize: 'max_depth', 'n_estimators'
+        """
+        # Check if the file with the field classifier inputs exist
+        if not os.path.exists('utils/anomaly_detection_files/inside_field_classifier_inputs.h5'):
+            # if not, create a corrupted dataset
+            print("  Preparing for training a classifier...")
+            self._create_inside_field_classifier_dataset()
+            print("  Complete.")
+        variables = pickle.load(open('utils/anomaly_detection_files/inside_field_classifier_inputs.h5', 'rb'))
+        x_train = variables[0]
+        y_train = variables[1]
+        x_val = variables[2]
+        y_val = variables[3]
+        # Iterate over params to find optimal one
+        params = [2, 5, 8, 10, 13, 15, 20, 30, 50, 100]
+        accuracy_train = []
+        accuracy_train_course = []
+        accuracy_val = []
+        accuracy_val_course = []
+        print(" Search for optimal " + parameter + "...")
+        for param in params:
+            field_classifier = []
+            if parameter=='max_depth' and self._ad_algorithm=='rf':
+                for i in range(len(y_train)-1):
+                    field_classifier.append(RandomForestClassifier(
+                        random_state=0, 
+                        n_estimators=self._num_estimators2_rf, 
+                        max_depth=param,
+                        ).fit(x_train[i],y_train[i]))
+                field_classifier.append(RandomForestClassifier(
+                    random_state=0, 
+                    n_estimators=self._num_estimators2_rf, 
+                    max_depth=param,
+                    ).fit(x_train[i+1],y_train[i+1]))
+            elif parameter=='n_estimators' and self._ad_algorithm=='rf':
+                for i in range(len(y_train)-1):
+                    field_classifier.append(RandomForestClassifier(
+                        random_state=0, 
+                        n_estimators=param, 
+                        max_depth=self._max_depth2_rf,
+                        ).fit(x_train[i],y_train[i]))
+                field_classifier.append(RandomForestClassifier(
+                    random_state=0, 
+                    n_estimators=param, 
+                    max_depth=int(np.floor(0.8*self._max_depth2_rf)),
+                    ).fit(x_train[i+1],y_train[i+1]))
+            elif parameter=='max_depth' and self._ad_algorithm=='xgboost':
+                for i in range(len(y_train)-1):
+                    field_classifier.append(XGBClassifier(
+                        random_state=0, 
+                        n_estimators=self._num_estimators2_xgboost, 
+                        max_depth=param,
+                        ).fit(x_train[i],y_train[i]))
+                field_classifier.append(XGBClassifier(
+                    random_state=0, 
+                    n_estimators=self._num_estimators2_xgboost, 
+                    max_depth=param,
+                    ).fit(x_train[i+1],y_train[i+1]))
+            elif parameter=='n_estimators' and self._ad_algorithm=='xgboost':
+                for i in range(len(y_train)-1):
+                    field_classifier.append(XGBClassifier(
+                        random_state=0, 
+                        n_estimators=param, 
+                        max_depth=self._max_depth2_xgboost,
+                        ).fit(x_train[i],y_train[i]))
+                field_classifier.append(XGBClassifier(
+                    random_state=0, 
+                    n_estimators=param, 
+                    max_depth=int(np.floor(0.8*self._max_depth2_xgboost)),
+                    ).fit(x_train[i+1],y_train[i+1]))
+            # Calculate the accuracy of the classifier on the training and validation data
+            accuracies_field_train = []
+            accuracies_field_val = []
+            for i in range(len(y_train)):
+                pred = field_classifier[i].predict(np.array(x_train[i]))
+                accuracies_field_train.append(f1_score(y_train[i], pred))
+                pred = field_classifier[i].predict(np.array(x_val[i]))
+                accuracies_field_val.append(f1_score(y_val[i], pred))
+            accuracy_train.append(np.mean(accuracies_field_train[:-1]))
+            accuracy_train_course.append(accuracies_field_train[-1])
+            accuracy_val.append(np.mean(accuracies_field_val[:-1]))
+            accuracy_val_course.append(accuracies_field_val[-1])
+        print(" Complete.")
+        # Plot
+        fig, ax = plt.subplots()
+        ax.plot(params, accuracy_train, color='k')
+        ax.plot(params, accuracy_val, color='b')
+        ax.plot(params, accuracy_train_course, color='r')
+        ax.plot(params, accuracy_val_course, color='g')
+        ax.set_title("Average f1 vs " + parameter)
+        ax.set_xlabel(parameter)
+        ax.set_ylabel("Average f1")
+        ax.legend(["Training set - fields 5,7,8", "Validation set - fields 5,7,8",
+                   "Training set - field 9", "Validation set - field 9" ])
+        fig.show()
+        # Retrain the model
+        if parameter == 'max_depth':
+            if self._ad_algorithm=='rf': self._max_depth2_rf = int(input("Choose the optimal max_depth: "))
+            elif self._ad_algorithm=='xgboost': self._max_depth2_xgboost = int(input("Choose the optimal max_depth: "))
+        elif parameter == 'n_estimators':
+            if self._ad_algorithm=='rf': self._num_estimators2_rf = int(input("Choose the optimal n_estimators: "))
+            elif self._ad_algorithm=='xgboost': self._num_estimators2_xgboost = int(input("Choose the optimal n_estimators: "))
+        if os.path.exists('utils/anomaly_detection_files/inside_field_classifier_'+self._ad_algorithm+'.h5'):
+            os.remove('utils/anomaly_detection_files/inside_field_classifier_'+self._ad_algorithm+'.h5')
+        self._train_inside_field_classifier()
+
+    def detect_inside(self, idx, message_decoded, timestamp):
+        """
+        Run the anomaly detection for messages inside proper clusters
+        Arguments:
+        - idx - list of number of cluster assigned to each AIS message, len = num_messages
+        - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape = (num_mesages, num_fields (14))
+        - timestamp - list of strings with timestamp of each message, len = num_messages
+        """
+        # Evaluate identifier fields [2,3,12]
+        for field in self.inside_fields2:
+            _, idx_vec = count_number(idx)
+            for i in idx_vec:
+                messages_idx = (np.where(np.array(idx)==i)[0]).tolist()
+                if len(messages_idx)>2:
+                    waveform = message_decoded[messages_idx,field]               
+                    clf = IsolationForest(random_state=0).fit(waveform.reshape(-1, 1))
+                    pred2 = clf.predict(waveform.reshape(-1, 1))
+                    outliers = (np.where(pred2==1)[0]).tolist()
+                    for outlier in outliers:
+                        message_idx = messages_idx[outlier]
+                        self.outliers[message_idx][0] = 1
+                        self.outliers[message_idx][1] = idx[message_idx]
+                        if self.outliers[message_idx][2]==0: self.outliers[message_idx][2] = [field]
+                        else: 
+                            if field not in self.outliers[message_idx][2]: 
+                                self.outliers[message_idx][2] = self.outliers[message_idx][2] + [field]
+        # Evaluate regular fields [5,7,8,9]
+        pred = []
+        for field in range(len(self.inside_fields)):
+            samples = []
+            for message_idx in range(message_decoded.shape[0]):
+                samples.append(self.compute_inside_sample(message_decoded, idx, message_idx, timestamp, self.inside_fields[field]))
+            pred.append(np.round(self._inside_field_classifier[field].predict(samples)))
+        for message_idx in range(message_decoded.shape[0]):
+            if len(np.where(np.array(idx)==idx[message_idx])[0])>2:
+                fields = []
+                for i in range(len(self.inside_fields)):
+                    if pred[i][message_idx]: fields.append(self.inside_fields[i])
+                if len(fields):
+                    self.outliers[message_idx][0] = 1
+                    self.outliers[message_idx][1] = idx[message_idx]
+                    if self.outliers[message_idx][2]==0: self.outliers[message_idx][2] = fields
+                    else: self.outliers[message_idx][2] = self.outliers[message_idx][2] + fields
+
+       
 def calculate_ad_accuracy(real, predictions):
     """
     Computes the accuracy of anomaly detecion phase
     Arguments: 
     - real - list of true labels (integers)
-    - predictions - array of predicted labels (integers)
+    - predictions - list of predicted labels (integers)
     Returns: accuracies - dictionary containing the computed metrics:
     "jaccard", "hamming", "recall", "precision", "f1"
     """
-    # Calculate Jaccard metric 
-    jaccard = len(set(real).intersection(set(predictions)))/len(set(real).union(set(predictions)))
-    # Calculate Hamming metric
-    real_vec = np.zeros((14), dtype=bool)
-    for field in real: real_vec[field] = True
-    pred_vec = np.zeros((14), dtype=bool)
-    for pred in predictions: pred_vec[pred] = True
-    hamming = np.mean(np.bitwise_not(np.bitwise_xor(real_vec, pred_vec)))
-    # Calculate recall - percentage of how many corrupted fields were predicted
-    recall = []
-    for real_0 in real:
-        recall.append(real_0 in predictions)
-    recall = np.mean(recall)
-    # Calculate precision - percentage of how many predicted fields were actually corrupted
-    precision = []
-    for pred_0 in predictions:
-        precision.append(pred_0 in real)
-    if len(precision): precision = np.mean(precision)
-    else: precision = 0
-    # Calculate F1 score
-    if (precision+recall): f1 = 2*precision*recall/(precision+recall)
-    else: f1 = 0
-    # Gather all
-    accuracies = {
-        "jaccard": jaccard,
-        "hamming": hamming,
-        "recall": recall,
-        "precision": precision,
-        "f1": f1
-    }
-    return accuracies
+    if type(predictions)==0: predictions = [] 
+    if type(predictions)==list:
+        # Calculate Jaccard metric 
+        jaccard = len(set(real).intersection(set(predictions)))/len(set(real).union(set(predictions)))
+        # Calculate Hamming metric
+        real_vec = np.zeros((14), dtype=bool)
+        for field in real: real_vec[field] = True
+        pred_vec = np.zeros((14), dtype=bool)
+        for pred in predictions: pred_vec[pred] = True
+        hamming = np.mean(np.bitwise_not(np.bitwise_xor(real_vec, pred_vec)))
+        # Calculate recall - percentage of how many corrupted fields were predicted
+        recall = []
+        for real_0 in real:
+            recall.append(real_0 in predictions)
+        recall = np.mean(recall)
+        # Calculate precision - percentage of how many predicted fields were actually corrupted
+        precision = []
+        for pred_0 in predictions:
+            precision.append(pred_0 in real)
+        if len(precision): precision = np.mean(precision)
+        else: precision = 0
+        # Calculate F1 score
+        if (precision+recall): f1 = 2*precision*recall/(precision+recall)
+        else: f1 = 0
+        # Gather all
+        accuracies = {
+            "jaccard": jaccard,
+            "hamming": hamming,
+            "recall": recall,
+            "precision": precision,
+            "f1": f1 }
+        return accuracies
+    elif predictions==0: return {"jaccard": 0, "hamming": 0, "recall": 0, "precision": 0, "f1": 0}

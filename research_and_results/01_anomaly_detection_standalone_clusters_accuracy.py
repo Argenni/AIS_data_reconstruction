@@ -2,11 +2,11 @@
 # ---------------------------------- Standalone clusters -------------------------------------------- 
 """
 Artificially damages each bit of a randomly chosen 20 AIS messages and check if the message is still
- assigned to the same #cluster as before, if not, if it forms a standalone cluster (conducts then 
+ assigned to the same cluster as before, if not, if it forms a standalone cluster (conducts then 
  a procedure to find a right cluster and damaged field to that message)
 Requires: Gdansk.h5 file with the following datasets (created by data_Gdansk.py):
- - message_bits - numpy array of AIS messages in binary form (1 column = 1 bit), shape = (num_mes33ages (805), num_bits (168))
- - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape = (num_mesages (805), num_fields (14))
+ - message_bits - numpy array of AIS messages in binary form (1 column = 1 bit), shape = (num_messages (805), num_bits (168))
+ - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape = (num_messages (805), num_fields (14))
  - X - numpy array, AIS feature vectors (w/o normalization), shape = (num_messages (805), num_features (115))
  - MMSI - list of MMSI identifier from each AIS message, len = num_messages (2805)
 Creates 01_anomaly_detection_standalone_clusters_Gdansk_.h5 file with OK_vec and baseline, shape = (4, 146), where:
@@ -29,10 +29,10 @@ import os
 import sys
 sys.path.append('.')
 from utils.initialization import Data, decode # pylint: disable=import-error
-from utils.clustering import Clustering
-from utils.anomaly_detection import StandaloneClusters, calculate_ad_accuracy
+from utils.clustering import Clustering, check_cluster_assignment
+from utils.anomaly_detection import AnomalyDetection, calculate_ad_accuracy
 from utils.miscellaneous import count_number, Corruption  
-from research import check_cluster_assignment, visualize_corrupted_bits
+from research import visualize_corrupted_bits
 
 # ----------------------------!!! EDIT HERE !!! ---------------------------------  
 np.random.seed(1)  # For reproducibility
@@ -120,8 +120,8 @@ else:  # or run the computations on the original data
                 )
 
             # Check if the cluster is a standalone cluster
-            outliers = StandaloneClusters(data=data)
-            outliers.detect(
+            outliers = AnomalyDetection(data=data)
+            outliers.detect_standalone_clusters(
                 idx=idx_corr,
                 idx_vec=range(-1, np.max(idx_corr)+1),
                 X=X_corr,

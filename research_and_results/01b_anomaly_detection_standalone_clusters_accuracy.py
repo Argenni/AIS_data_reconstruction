@@ -4,15 +4,17 @@
 Artificially damages random bit of a randomly chosen AIS messages and check the performace
 of standalone clusters anomaly detection phase.
 Requires: Gdansk.h5 file with the following datasets (created by data_Gdansk.py):
- - message_bits - numpy array of AIS messages in binary form (1 column = 1 bit), shape = (num_mes33ages (805), num_bits (168))
- - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape = (num_mesages (805), num_fields (14))
+ - message_bits - numpy array of AIS messages in binary form (1 column = 1 bit), shape = (num_messages (805), num_bits (168))
+ - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape = (num_messages (805), num_fields (14))
  - X - numpy array, AIS feature vectors (w/o normalization), shape = (num_messages (805), num_features (115))
- - MMSI - list of MMSI identifier from each AIS message, len = num_messages (2805)
+ - MMSI - list of MMSI identifier from each AIS message, len = num_messages (805)
 Creates 01b_anomaly_detection_standalone_clusters_Gdansk_.h5 file, with OK_vec with:
 1. cluster assignment accuracy,
 2. fields to correct classification recall,
-3. fields to correct classification Jaccard score,
-4. fields to correct classification Hamming score. 
+3. fields to correct classification precision,
+4. fields to correct classification f1 score,
+5. fields to correct classification Jaccard score,
+6. fields to correct classification Hamming score. 
 """
 print("\n----------- AIS Anomaly detection - Standalone clusters accuracy part 2 --------- ")
 
@@ -28,16 +30,16 @@ import os
 import sys
 sys.path.append('.')
 from utils.initialization import Data, decode # pylint: disable=import-error
-from utils.clustering import Clustering
-from utils.anomaly_detection import StandaloneClusters, calculate_ad_accuracy
+from utils.clustering import Clustering, check_cluster_assignment
+from utils.anomaly_detection import AnomalyDetection, calculate_ad_accuracy
 from utils.miscellaneous import count_number, Corruption
-from research import check_cluster_assignment 
 
 # ----------------------------!!! EDIT HERE !!! ---------------------------------  
 np.random.seed(1)  # For reproducibility
-filename = 'Gdansk.h5' # 'Gdansk', 'Baltic', 'Gibraltar'
+filename = 'Gibraltar.h5' # 'Gdansk', 'Baltic', 'Gibraltar'
 distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
+ad_algorithm = 'xgboost' # 'rf' or 'xgboost'
 # --------------------------------------------------------------------------------
 
 # Decide what to do
@@ -51,7 +53,7 @@ while precomputed != '1' and precomputed != '2':
 print(" Importing files... ")
 if precomputed == '2':  # Load file with precomputed values
     file = h5py.File(
-        name='research_and_results/01b_anomaly_detection_standalone_clusters_accuracy_' + filename,
+        name='research_and_results/01b_anomaly_detection_standalone_clusters_'+ad_algorithm+'_'+filename,
         mode='r'
         )
     OK_vec_1 = np.array(file.get('OK_vec_1'))
@@ -60,7 +62,7 @@ if precomputed == '2':  # Load file with precomputed values
     baseline_2 = np.array(file.get('baseline_2'))
     file.close()
 else:  # or run the computations on the original data
-    file = h5py.File(name='data\\' + filename, mode='r')
+    file = h5py.File(name='data/' + filename, mode='r')
     data = Data(file)
     data.split(train_percentage=50, val_percentage=25)
     file.close()
@@ -88,7 +90,7 @@ else:  # or run the computations on the original data
     # Artificially corrupt the dataset
     num_experiments = 100 # number of messages to randomly choose and corrupt
     num_metrics = 6 # number of quality metrics to compute
-    bits = np.array(np.arange(8,60).tolist() + np.arange(61,137).tolist() + np.arange(143,145).tolist())
+    bits = np.array(np.arange(8,42).tolist() + np.arange(50,60).tolist() + np.arange(61,128).tolist() + np.arange(143,145).tolist())
     for j in range(2): # iterate 2 times: for 1 and 2 bits corrupted
         corruption = Corruption(data.X,j+1)
         OK_vec2 = np.zeros((num_experiments, num_metrics))
@@ -117,8 +119,8 @@ else:  # or run the computations on the original data
                 elif clustering_algorithm == 'DBSCAN':
                     idx_corr, K_corr = clustering.run_DBSCAN(X=X_corr,distance=distance)
                 # Check if the cluster is a standalone cluster
-                outliers = StandaloneClusters(data=data)
-                outliers.detect(
+                outliers = AnomalyDetection(data=data, ad_algorithm=ad_algorithm)
+                outliers.detect_standalone_clusters(
                     idx=idx_corr,
                     idx_vec=range(-1, np.max(idx_corr)+1),
                     X=X_corr,
@@ -134,7 +136,7 @@ else:  # or run the computations on the original data
             OK_vec2[i,0] = check_cluster_assignment(idx, idx_corr, message_idx)
             
             # Check which fields are damaged
-            field_bits = np.array([6, 8, 38, 42, 50, 60, 61, 89, 116, 128, 137, 143, 148])  # range of fields
+            field_bits = np.array([6, 8, 38, 42, 50, 60, 61, 89, 116, 128, 137, 143, 145, 148])  # range of fields
             field = [sum(field_bits <= bit) for bit in np.sort(bit_idx)]
             #print(field)
             #print(outliers.outliers[message_idx][2])
@@ -159,7 +161,7 @@ else:  # or run the computations on the original data
             baseline2[i,3] = accuracies["jaccard"]
             baseline2[i,4] = accuracies["hamming"]
 
-            # Plot
+            '''# Plot
             if j==0 and field[0]==7: # when longitude field is damaged
                 fields = [
                     "MMSI","Navigational\nstatus", "Rate of turns","Speed over\nground",
@@ -209,7 +211,7 @@ else:  # or run the computations on the original data
                 axbig.text(f-0.075, cwt_vec[f]+0.01*cwt_vec[f], str(round(cwt_vec[f],3)), color='r')
                 axbig.bar(fields, np.multiply(cwt_vec,real), width=0.5, color='r')
                 fig.set_tight_layout(True)
-                fig.show()
+                fig.show() '''
         
         if j==0:
             OK_vec_1 = np.mean(OK_vec2, axis=0)*100
@@ -251,10 +253,10 @@ if precomputed == '2':
 else:
     # Save file
     input("Press Enter to save and exit...")
-    if os.path.exists('research_and_results/01b_anomaly_detection_standalone_clusters_accuracy_'+filename):
-        os.remove('research_and_results/01b_anomaly_detection_standalone_clusters_accuracy_'+filename)
+    if os.path.exists('research_and_results/01b_anomaly_detection_standalone_clusters_'+ad_algorithm+'_'+filename):
+        os.remove('research_and_results/01b_anomaly_detection_standalone_clusters_'+ad_algorithm+'_'+filename)
     File = h5py.File(
-        'research_and_results/01b_anomaly_detection_standalone_clusters_accuracy_'+filename, 
+        'research_and_results/01b_anomaly_detection_standalone_clusters_'+ad_algorithm+'_'+filename, 
         mode='a'
         )
     File.create_dataset('OK_vec_1', data=OK_vec_1)
