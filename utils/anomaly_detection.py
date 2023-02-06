@@ -476,7 +476,7 @@ class AnomalyDetection:
         - timestamp - list of strings with timestamp of each message, len = num_messages
         - field - integer scalar, a field to examine
         Returns: X - list of computed differences
-        Argument:
+        Argument: sample - a vectoer descibing a message for anomaly detection, np.zeros((12 or 9))
         """
         sample = np.zeros((12))
         # Select 3 consecutive samples
