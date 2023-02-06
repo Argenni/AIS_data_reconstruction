@@ -245,7 +245,8 @@ class AnomalyDetection:
     
     def _optimize_standalone_cluster_classifier(self, data_original, parameter):
         """ 
-        Choose optimal value of max_depth or n_estimators for a random forest classification
+        Choose optimal value of max_depth or n_estimators for a Random Forest/XGBoost classifier
+        for standalone clusters
         Arguments: 
         - data_original - object of a Data class, containing all 3 datasets (train, val, test) with:
           X, Xraw, message_bits, message_decoded, MMSI
@@ -328,7 +329,7 @@ class AnomalyDetection:
 
     def _optimize_knn(self, data_original):
         """ 
-        Choose optimal value of k for k-NN classificator
+        Choose optimal value of k for k-NN classifier for standalone clusters
         Argument: data_original - object of a Data class, containing all 3 datasets (train, val, test) with:
           X, Xraw, message_bits, message_decoded, MMSI
         """
@@ -467,7 +468,14 @@ class AnomalyDetection:
     ### -------------------------- Inside anomalies part ------------------------------------
     def compute_inside_sample(self, message_decoded, MMSI, message_idx, timestamp, field):
         """
-        Compute 
+        Computes the input data for field anomaly detection classifier inside proper clusters
+        Arguments:
+        - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape = (num_mesages, num_fields (14))
+        - MMSI - list of MMSI identifier from each AIS message, len = num_messages
+        - message_idx - integer scalar, index of a potential outlier to correct
+        - timestamp - list of strings with timestamp of each message, len = num_messages
+        - field - integer scalar, a field to examine
+        Returns: X - list of computed differences
         Argument:
         """
         sample = np.zeros((12))
@@ -659,7 +667,8 @@ class AnomalyDetection:
 
     def _optimize_inside_field_classifier(self, parameter):
         """ 
-        Choose optimal value of max_depth or n_estimators for a random forest classification
+        Choose optimal value of max_depth or n_estimators for a Random Forest/XGBoost classifier
+        for detecting damaged fields inside proper clusters
         Argument: parameter - string indicating which parameter to optimize: 'max_depth', 'n_estimators'
         """
         # Check if the file with the field classifier inputs exist
