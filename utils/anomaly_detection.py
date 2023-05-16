@@ -1,4 +1,5 @@
 # ----------- Library of functions used in anomaly detection phase of AIS message reconstruction ----------
+import wave
 import numpy as np
 from sklearn.neighbors import KNeighborsClassifier 
 from sklearn.ensemble import RandomForestClassifier
@@ -789,18 +790,20 @@ class AnomalyDetection:
             for i in idx_vec:
                 messages_idx = (np.where(np.array(idx)==i)[0]).tolist()
                 if len(messages_idx)>2:
-                    waveform = message_decoded[messages_idx,field]               
-                    clf = IsolationForest(random_state=0).fit(waveform.reshape(-1, 1))
-                    pred2 = clf.predict(waveform.reshape(-1, 1))
-                    outliers = (np.where(pred2==1)[0]).tolist()
-                    for outlier in outliers:
-                        message_idx = messages_idx[outlier]
-                        self.outliers[message_idx][0] = 1
-                        self.outliers[message_idx][1] = idx[message_idx]
-                        if self.outliers[message_idx][2]==0: self.outliers[message_idx][2] = [field]
-                        else: 
-                            if field not in self.outliers[message_idx][2]: 
-                                self.outliers[message_idx][2] = self.outliers[message_idx][2] + [field]
+                    waveform = message_decoded[messages_idx,field]
+                    if np.std(waveform): #If there is at least one outstanding value
+                        waveform = waveform.reshape(-1, 1)    
+                        clf = IsolationForest(random_state=0).fit(waveform)
+                        pred2 = clf.predict(waveform)
+                        outliers = (np.where(pred2==-1)[0]).tolist()
+                        for outlier in outliers:
+                            message_idx = messages_idx[outlier]
+                            self.outliers[message_idx][0] = 1
+                            self.outliers[message_idx][1] = idx[message_idx]
+                            if self.outliers[message_idx][2]==0: self.outliers[message_idx][2] = [field]
+                            else: 
+                                if field not in self.outliers[message_idx][2]: 
+                                    self.outliers[message_idx][2] = self.outliers[message_idx][2] + [field]
         # Evaluate regular fields [5,7,8,9]
         pred = []
         for field in range(len(self.inside_fields)):
