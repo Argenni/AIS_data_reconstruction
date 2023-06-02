@@ -138,9 +138,6 @@ else:  # or run the computations on the original data
             # Check which fields are damaged
             field_bits = np.array([6, 8, 38, 42, 50, 60, 61, 89, 116, 128, 137, 143, 145, 148])  # range of fields
             field = [sum(field_bits <= bit) for bit in np.sort(bit_idx)]
-            #print(field)
-            #print(outliers.outliers[message_idx][2])
-            #print("\n")
             accuracies = calculate_ad_accuracy(field, outliers.outliers[message_idx][2])
             OK_vec2[i,1] = accuracies["recall"]
             OK_vec2[i,2] = accuracies["precision"]
@@ -161,7 +158,7 @@ else:  # or run the computations on the original data
             baseline2[i,3] = accuracies["jaccard"]
             baseline2[i,4] = accuracies["hamming"]
 
-            '''# Plot
+            '''# Plot a graph that shows intuition behind wavelet transform here
             if j==0 and field[0]==7: # when longitude field is damaged
                 fields = [
                     "MMSI","Navigational\nstatus", "Rate of turns","Speed over\nground",

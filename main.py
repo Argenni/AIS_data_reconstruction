@@ -37,6 +37,7 @@ np.random.seed(1) #For reproducibility
 distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
 ad_algorithm = 'xgboost' # 'rf' or 'xgboost'
+wavelet = 'morlet' # 'morlet' or 'ricker'
 #--------------------------------------------------------------------------------
 
 # Load data
@@ -94,7 +95,8 @@ outliers = AnomalyDetection(
     data=data,
     if_visualize=True,
     optimize=None, # 'max_depth', 'n_estimators', 'k', 'max_depth2', 'n_estimators2', None
-    ad_algorithm=ad_algorithm
+    ad_algorithm=ad_algorithm,
+    wavelet=wavelet
     )
 # Conduct anomaly detection - search for standalone clusters
 outliers.detect_standalone_clusters(

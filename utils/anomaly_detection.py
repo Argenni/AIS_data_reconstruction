@@ -1,5 +1,4 @@
 # ----------- Library of functions used in anomaly detection phase of AIS message reconstruction ----------
-import wave
 import numpy as np
 from sklearn.neighbors import KNeighborsClassifier 
 from sklearn.ensemble import RandomForestClassifier
@@ -41,8 +40,9 @@ class AnomalyDetection:
     _k = 5
     _inside_field_classifier = []
     _ad_algorithm = [] # 'rf' or 'xgboost'
+    _wavelet = [] # 'morlet' or 'ricker'
 
-    def __init__(self, data, if_visualize=False, optimize=None, ad_algorithm='xgboost'):
+    def __init__(self, data, if_visualize=False, optimize=None, ad_algorithm='xgboost', wavelet = 'morlet'):
         """
         Class initializer
         Arguments: 
@@ -57,10 +57,11 @@ class AnomalyDetection:
         """
         # Initialize models and necessary variables
         self._ad_algorithm = ad_algorithm
+        self._wavelet = wavelet
         self.outliers = np.zeros((data.X.shape[0],3), dtype=int).tolist()
-        if os.path.exists('utils/anomaly_detection_files/field_classifier_'+ad_algorithm+'.h5'):
+        if os.path.exists('utils/anomaly_detection_files/standalone_'+wavelet+'_field_classifier_'+ad_algorithm+'.h5'):
             # If there is a file with the trained standalone clusters field classifier saved, load it
-            self._field_classifier = pickle.load(open('utils/anomaly_detection_files/field_classifier_'+ad_algorithm+'.h5', 'rb'))
+            self._field_classifier = pickle.load(open('utils/anomaly_detection_files/standalone_'+wavelet+'_field_classifier_'+ad_algorithm+'.h5', 'rb'))
         else:
             # otherwise train a classifier from scratch
             self._train_field_classifier(data)
@@ -73,7 +74,7 @@ class AnomalyDetection:
         # Show some classifier parametres if allowed
         if if_visualize:
             # Calculate the accuracy of the classifiers on the training data
-            variables = pickle.load(open('utils/anomaly_detection_files/standalone_clusters_inputs.h5', 'rb'))
+            variables = pickle.load(open('utils/anomaly_detection_files/standalone_'+wavelet+'_inputs.h5', 'rb'))
             print(" Average accuracy of standalone clusters field classifier:")
             accuracy = []
             for i in range(len(variables[1])):
@@ -116,12 +117,12 @@ class AnomalyDetection:
           X, Xraw, message_bits, message_decoded, MMSI
         """
         # Check if the file with the field classifier inputs exist
-        if not os.path.exists('utils/anomaly_detection_files/standalone_clusters_inputs.h5'):
+        if not os.path.exists('utils/anomaly_detection_files/standalone_'+self._wavelet+'_inputs.h5'):
             # if not, create a corrupted dataset
             print("  Preparing for training a classifier...")
             self._create_field_classifier_dataset(data_original=data_original)
             print("  Complete.")
-        variables = pickle.load(open('utils/anomaly_detection_files/standalone_clusters_inputs.h5', 'rb'))
+        variables = pickle.load(open('utils/anomaly_detection_files/standalone_'+self._wavelet+'_inputs.h5', 'rb'))
         differences = variables[0]
         y = variables[1]
         # Train one classifier for each class
@@ -143,7 +144,7 @@ class AnomalyDetection:
                     ).fit(differences[i],y[i]))
         print("  Complete.")
         # Save
-        pickle.dump(self._field_classifier, open('utils/anomaly_detection_files/field_classifier_'+self._ad_algorithm+'.h5', 'ab'))
+        pickle.dump(self._field_classifier, open('utils/anomaly_detection_files/standalone_'+self._wavelet+'_field_classifier_'+self._ad_algorithm+'.h5', 'ab'))
         
     def _create_field_classifier_dataset(self, data_original):
         """
@@ -210,7 +211,7 @@ class AnomalyDetection:
             y_val.append(y_val_0)
         # Save file with the inputs for the classifier
         variables = [differences_train, y_train, differences_val, y_val]
-        pickle.dump(variables, open('utils/anomaly_detection_files/standalone_clusters_inputs.h5', 'ab'))
+        pickle.dump(variables, open('utils/anomaly_detection_files/standalone_'+self._wavelet+'_inputs.h5', 'ab'))
 
     def compute_fields_diff(self, message_decoded, idx, message_idx, field):
         """
@@ -238,7 +239,8 @@ class AnomalyDetection:
         if len(without)>1: without2 = abs(without[1:len(without)]-without[0:len(without)-1])
         else: without2 = [0]
         if scale and sum(with2): without2 = without2/scale
-        without_cwt = abs(signal.cwt(without2, signal.morlet2, np.array([1,3])))
+        if self._wavelet == 'morlet': without_cwt = abs(signal.cwt(without2, signal.morlet2, np.array([1,3])))
+        elif self._wavelet == 'ricker': without_cwt = abs(signal.cwt(without2, signal.ricker, np.array([1,3])))
         X.append(np.abs(max(with_cwt[0,:])-max(without_cwt[0,:]))/(max(with_cwt[0,:])+1e-6)) # relative difference
         # Compute standard deviation difference
         X.append((np.abs(np.std(with_) - np.std(without)))/(np.std(with_)+1e-6))
@@ -254,12 +256,12 @@ class AnomalyDetection:
         - parameter - string indicating which parameter to optimize: 'max_depth', 'n_estimators'
         """
         # Check if the file with the field classifier inputs exist
-        if not os.path.exists('utils/anomaly_detection_files/standalone_clusters_inputs.h5'):
+        if not os.path.exists('utils/anomaly_detection_files/standalone_'+self._wavelet+'_inputs.h5'):
             # if not, create a corrupted dataset
             print("  Preparing for training a classifier...")
             self._create_field_classifier_dataset(data_original=data_original)
             print("  Complete.")
-        variables = pickle.load(open('utils/anomaly_detection_files/standalone_clusters_inputs.h5', 'rb'))
+        variables = pickle.load(open('utils/anomaly_detection_files/standalone_'+self._wavelet+'_inputs.h5', 'rb'))
         differences_train = variables[0]
         y_train = variables[1]
         differences_val = variables[2]
@@ -324,8 +326,8 @@ class AnomalyDetection:
             self._max_depth = int(input("Choose the optimal max_depth: "))
         elif parameter == 'n_estimators':
             self._num_estimators = int(input("Choose the optimal n_estimators: "))
-        if os.path.exists('utils/anomaly_detection_files/field_classifier_rf.h5'):
-            os.remove('utils/anomaly_detection_files/field_classifier_rf.h5')
+        if os.path.exists('utils/anomaly_detection_files/standalone_'+self._wavelet+'_field_classifier_'+self._ad_algorithm+'.h5'):
+            os.remove('utils/anomaly_detection_files/standalone_'+self._wavelet+'_field_classifier_'+self._ad_algorithm+'.h5')
         self._train_field_classifier(data_original)
 
     def _optimize_knn(self, data_original):
