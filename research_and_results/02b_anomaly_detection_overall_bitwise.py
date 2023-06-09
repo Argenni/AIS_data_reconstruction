@@ -37,7 +37,7 @@ np.random.seed(1)  # For reproducibility
 filename = 'Gdansk.h5' # 'Gdansk', 'Baltic', 'Gibraltar'
 distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
-ad_algorithm = 'xgboost' # 'rf' or 'xgboost'
+ad_algorithm = 'rf' # 'rf' or 'xgboost'
 # --------------------------------------------------------------------------------
 bits = np.array(np.arange(8,42).tolist() + np.arange(50,60).tolist() + np.arange(61,128).tolist() + np.arange(143,145).tolist())
 mask = []

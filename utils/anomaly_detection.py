@@ -42,23 +42,29 @@ class AnomalyDetection:
     _ad_algorithm = [] # 'rf' or 'xgboost'
     _wavelet = [] # 'morlet' or 'ricker'
 
-    def __init__(self, data, if_visualize=False, optimize=None, ad_algorithm='xgboost', wavelet = 'morlet'):
+    def __init__(self, data, if_visualize=False, optimize=None, ad_algorithm='xgboost', wavelet = 'morlet', set='test'):
         """
         Class initializer
         Arguments: 
         data - object of a Data class, containing all 3 datasets (train, val, test) with:
           X, Xraw, message_bits, message_decoded, MMSI
-        difference (optional) - string deciding how to indicate the anomaly,
-            'wavelet' (default - by wavelet transform) or 'std' (by standard deviation)
         if_visualize (optional) - boolean deciding whether to show training performance or not,
             default = False
         optimize (optional) - string deciding whether to optimize classifier hyperparametres or not,
 	        'max_depth' or 'n_estimators', default = None
+        ad_algorithm (optional) - string deciding which anomaly detection classifier to use:
+            'rf' or 'xgboost', default = 'xgboost'
+        wavelet (optional) - string deciding which wavelet to use while computing cwt in standalone clusters analysis:
+            'morlet' or 'ricker' (as available in SciPy), default = 'morlet'
+        test (optional) - string indicating which part of the dataset in self.data to analyse:
+            'train', 'val' or 'test', default = 'test'
         """
         # Initialize models and necessary variables
         self._ad_algorithm = ad_algorithm
         self._wavelet = wavelet
-        self.outliers = np.zeros((data.X.shape[0],3), dtype=int).tolist()
+        if set == 'train': self.outliers = np.zeros((data.X_train.shape[0],3), dtype=int).tolist()
+        elif set == 'val': self.outliers = np.zeros((data.X_val.shape[0],3), dtype=int).tolist()
+        else: self.outliers = np.zeros((data.X.shape[0],3), dtype=int).tolist()
         if os.path.exists('utils/anomaly_detection_files/standalone_'+wavelet+'_field_classifier_'+ad_algorithm+'.h5'):
             # If there is a file with the trained standalone clusters field classifier saved, load it
             self._field_classifier = pickle.load(open('utils/anomaly_detection_files/standalone_'+wavelet+'_field_classifier_'+ad_algorithm+'.h5', 'rb'))
