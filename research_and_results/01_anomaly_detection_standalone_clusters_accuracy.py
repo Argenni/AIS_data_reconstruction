@@ -32,7 +32,7 @@ from utils.initialization import Data, decode # pylint: disable=import-error
 from utils.clustering import Clustering, check_cluster_assignment
 from utils.anomaly_detection import AnomalyDetection, calculate_ad_accuracy
 from utils.miscellaneous import count_number, Corruption  
-from research import visualize_corrupted_bits
+from research import visualize_corrupted_bits, check_cluster_assignment
 
 # ----------------------------!!! EDIT HERE !!! ---------------------------------  
 np.random.seed(1)  # For reproducibility
