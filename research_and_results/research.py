@@ -123,10 +123,10 @@ class AnomalyDetection_LOF(AnomalyDetection):
             self.outliers[i][1] = self._find_correct_cluster(X, idx_new, i, indices)
             idx_new[i] = self.outliers[i][1]
             # Find the damaged fields to correct
-            messages_idx = (np.where(np.array(idx)==idx_new[i])[0]).tolist()
+            messages_idx = (np.where(np.array(idx_new)==idx_new[i])[0]).tolist()
             message_idx_new = messages_idx.index(i)
-            samples = []
             for field in self.fields:
+                samples = []
                 for message in messages_idx:
                     samples.append(np.array(self.compute_fields_diff(message_decoded, idx_new, message, field)))
                 clf = LocalOutlierFactor()
@@ -137,7 +137,8 @@ class AnomalyDetection_LOF(AnomalyDetection):
                         if field not in self.outliers[i][2]: 
                             self.outliers[i][2] = self.outliers[i][2] + [field]
             # If around half of fields are classified abnormal, that message is not an outlier
-            if len(self.outliers[i][2])>=np.floor(len(self.fields)/2): self.outliers[i][0] = 0
+            if self.outliers[i][2] != 0:
+                if len(self.outliers[i][2])>=np.floor(len(self.fields)/2): self.outliers[i][0] = 0
 
     def detect_inside(self, idx, message_decoded, timestamp):
         """

@@ -35,7 +35,7 @@ from research import AnomalyDetection_LOF
 
 # ----------------------------!!! EDIT HERE !!! ---------------------------------  
 np.random.seed(1)  # For reproducibility
-filename = 'Gdansk.h5' # 'Gdansk', 'Baltic', 'Gibraltar'
+filename = 'Gibraltar.h5' # 'Gdansk', 'Baltic', 'Gibraltar'
 distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
 # --------------------------------------------------------------------------------
@@ -51,7 +51,7 @@ while precomputed != '1' and precomputed != '2':
 print(" Importing files... ")
 if precomputed == '2':  # Load file with precomputed values
     file = h5py.File(
-        name='research_and_results/02c_anomaly_detection_overall_percentage_' + filename,
+        name='research_and_results/02d_anomaly_detection_overall_percentage_lof_' + filename,
         mode='r'
         )
     OK_vec_1 = np.array(file.get('OK_vec_1'))
@@ -176,10 +176,10 @@ if precomputed == '2':
 else:
     # Save file
     input("Press Enter to save and exit...")
-    if os.path.exists('research_and_results/02c_anomaly_detection_overall_percentage_'+filename):
-        os.remove('research_and_results/02c_anomaly_detection_overall_percentage_'+filename)
+    if os.path.exists('research_and_results/02d_anomaly_detection_overall_percentage_lof_'+filename):
+        os.remove('research_and_results/02d_anomaly_detection_overall_percentage_lof_'+filename)
     File = h5py.File(
-        'research_and_results/02c_anomaly_detection_overall_percentage_'+filename, 
+        'research_and_results/02d_anomaly_detection_overall_percentage_lof_'+filename, 
         mode='a'
         )
     File.create_dataset('OK_vec_1', data=OK_vec_1)
