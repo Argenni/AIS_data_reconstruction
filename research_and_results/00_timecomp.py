@@ -60,9 +60,6 @@ if precomputed == '2':  # Load file with precomputed values
     elif stage == 'ad':
         file = h5py.File(name='research_and_results/00_timecomp_' + ad_algorithm, mode='r')
     OK_vec = np.array(file.get('OK_vec'))
-    measure1 = np.array(file.get('measure1'))
-    measure2 = np.array(file.get('measure2'))
-    slides = np.array(file.get('slides'))
     file.close()
 
 else:  # or run the computations
@@ -70,7 +67,7 @@ else:  # or run the computations
     field_bits = np.array([6, 8, 38, 42, 50, 60, 61, 89, 116, 128, 137, 143, 145, 148])  # range of fields
     measure1 = []
     measure2 = []
-    slides=np.zeros((len(windows,len(filename))))
+    slides=np.zeros((len(windows),len(filename)))
     for file_num in range(len(filename)):
         measure1.append([]) # First index - for a filename
         measure2.append([])
@@ -82,91 +79,97 @@ else:  # or run the computations
         data_original = Data(file)
         data_original.split(train_percentage=50, val_percentage=25)
         file.close()
-        overall_time = datetime.timedelta(minutes=max(data_original.timestamp)-min(data_original.timestamp))
-        for window_num, window in windows:   
+        overall_time = max(data_original.timestamp)-min(data_original.timestamp)
+        overall_time = overall_time.seconds/60
+        for window_num in range(len(windows)):   
             for percentage_num in range(len(percentages)):        
                 measure1[file_num][percentage_num].append([]) # Third index - for window
                 measure2[file_num][percentage_num].append([])
-            if window < overall_time: 
+            if windows[window_num] > overall_time: 
                 measure1[file_num][percentage_num][window_num].append(0)
                 measure2[file_num][percentage_num][window_num].append(0)
             else: 
                 start = 0
-                stop = start + window
+                stop = start + windows[window_num]
                 while stop <= overall_time:
                     # Select only messages from the given time window
                     data = copy.deepcopy(data_original)
+                    print(start)
+                    print(stop)
                     time_window = TimeWindow(start, stop)
                     time_window.use_time_window(data)
-                    for percentage_num in range(len(percentages)):
-                        # Corrupt data
-                        Xraw_corr = copy.deepcopy(data.Xraw)
-                        MMSI_corr = copy.deepcopy(data.MMSI)
-                        message_decoded_corr = copy.deepcopy(data.message_decoded)
-                        corruption = Corruption(data.X,1)
-                        messages = []
-                        fields = []
-                        num_messages = int(len(data.MMSI)*percentages[percentage_num]/100)
-                        for n in range(num_messages):
-                            bits_corr = np.random.choice(bits, size=2, replace=False)
-                            field = [sum(field_bits <= bit) for bit in np.sort(bits_corr)]
-                            fields.append(field)
-                            message_bits_corr, message_idx = corruption.corrupt_bits(message_bits=data.message_bits, bit_idx=bits_corr[0])
-                            message_bits_corr, message_idx = corruption.corrupt_bits(message_bits_corr, message_idx=message_idx, bit_idx=bits_corr[1])
-                            messages.append(message_idx)
-                            # put it back to the dataset
-                            X_0, MMSI_0, message_decoded_0 = decode(message_bits_corr[message_idx,:])
-                            Xraw_corr[message_idx,:] = X_0
-                            MMSI_corr[message_idx] = MMSI_0
-                            message_decoded_corr[message_idx,:] = message_decoded_0
-                        # Preprocess data
-                        _, MMSI_vec = count_number(data.MMSI)                
-                        K, _ = count_number(MMSI_corr)  # Count number of groups/ships
-                        Xcorr, _, _ = data.normalize(Xraw_corr) 
-                        clustering = Clustering() # perform clustering
-                        if clustering_algorithm == 'kmeans':
-                            print(" Running k-means clustering...")
-                            idx_corr, centroids = clustering.run_kmeans(X=Xcorr,K=K)
-                        elif clustering_algorithm == 'DBSCAN':
-                            print(" Running DBSCAN clustering...")
-                            idx_corr, K = clustering.run_DBSCAN(X=Xcorr,distance=distance)
-                        # Run anomaly detection if needed 
-                        if stage == 'ad' or stage == 'prediction':
-                            outliers = AnomalyDetection(data=data, ad_algorithm=ad_algorithm)
-                            outliers.detect_standalone_clusters(
-                                idx=idx_corr,
-                                idx_vec=range(-1, np.max(idx_corr)+1),
-                                X=Xcorr,
-                                message_decoded=message_decoded_corr)
-                            outliers.detect_inside(
-                                idx=idx_corr,
-                                message_decoded=message_decoded_corr,
-                                timestamp=data.timestamp)
-                        # Compute quality measures
-                        if stage == 'clustering':
-                            measure1[file_num][percentage_num][window_num].append(silhouette_score(idx_corr))
-                            measure1[file_num][percentage_num][window_num].append(calculate_CC(idx_corr, data.MMSI, MMSI_vec))
-                        elif stage == 'ad':
-                            pred = np.array([outliers.outliers[n][0] for n in range(len(outliers.outliers))], dtype=int)
-                            true = np.array(corruption.indices_corrupted, dtype=int)
-                            measure1[file_num][percentage_num][window_num].append(f1_score(true, pred))
-                            f1 =[]
+                    data.X, _, _ = data.normalize(data.Xraw)
+                    if (data.Xraw).shape[0] == 0: break
+                    else: 
+                        for percentage_num in range(len(percentages)):
+                            # Corrupt data
+                            Xraw_corr = copy.deepcopy(data.Xraw)
+                            MMSI_corr = copy.deepcopy(data.MMSI)
+                            message_decoded_corr = copy.deepcopy(data.message_decoded)
+                            corruption = Corruption(data.Xraw,1)
+                            messages = []
+                            fields = []
+                            num_messages = int(len(data.MMSI)*percentages[percentage_num]/100)
                             for n in range(num_messages):
-                                accuracy = calculate_ad_accuracy(fields[n], outliers.outliers[messages[n]][2])
-                                f1.append(accuracy["f1"])
-                            measure2[file_num][percentage_num][window_num].append(np.mean(f1))
-                        if percentage_num==0: slides[window_num,file_num] = slides[window_num,file_num]+1
+                                bits_corr = np.random.choice(bits, size=2, replace=False)
+                                field = [sum(field_bits <= bit) for bit in np.sort(bits_corr)]
+                                fields.append(field)
+                                message_bits_corr, message_idx = corruption.corrupt_bits(message_bits=data.message_bits, bit_idx=bits_corr[0])
+                                message_bits_corr, message_idx = corruption.corrupt_bits(message_bits_corr, message_idx=message_idx, bit_idx=bits_corr[1])
+                                messages.append(message_idx)
+                                # put it back to the dataset
+                                X_0, MMSI_0, message_decoded_0 = decode(message_bits_corr[message_idx,:])
+                                Xraw_corr[message_idx,:] = X_0
+                                MMSI_corr[message_idx] = MMSI_0
+                                message_decoded_corr[message_idx,:] = message_decoded_0
+                            # Preprocess data
+                            _, MMSI_vec = count_number(data.MMSI)                
+                            K, _ = count_number(MMSI_corr)  # Count number of groups/ships
+                            Xcorr, _, _ = data.normalize(Xraw_corr) 
+                            clustering = Clustering() # perform clustering
+                            if clustering_algorithm == 'kmeans':
+                                print(" Running k-means clustering...")
+                                idx_corr, centroids = clustering.run_kmeans(X=Xcorr,K=K)
+                            elif clustering_algorithm == 'DBSCAN':
+                                print(" Running DBSCAN clustering...")
+                                idx_corr, K = clustering.run_DBSCAN(X=Xcorr,distance=distance)
+                            # Run anomaly detection if needed 
+                            if stage == 'ad' or stage == 'prediction':
+                                outliers = AnomalyDetection(data=data, ad_algorithm=ad_algorithm)
+                                outliers.detect_standalone_clusters(
+                                    idx=idx_corr,
+                                    idx_vec=range(-1, np.max(idx_corr)+1),
+                                    X=Xcorr,
+                                    message_decoded=message_decoded_corr)
+                                outliers.detect_inside(
+                                    idx=idx_corr,
+                                    message_decoded=message_decoded_corr,
+                                    timestamp=data.timestamp)
+                            # Compute quality measures
+                            if stage == 'clustering':
+                                measure1[file_num][percentage_num][window_num].append(silhouette_score(idx_corr))
+                                measure1[file_num][percentage_num][window_num].append(calculate_CC(idx_corr, data.MMSI, MMSI_vec))
+                            elif stage == 'ad':
+                                pred = np.array([outliers.outliers[n][0] for n in range(len(outliers.outliers))], dtype=int)
+                                true = np.array(corruption.indices_corrupted, dtype=int)
+                                measure1[file_num][percentage_num][window_num].append(f1_score(true, pred))
+                                f1 =[]
+                                for n in range(num_messages):
+                                    accuracy = calculate_ad_accuracy(fields[n], outliers.outliers[messages[n]][2])
+                                    f1.append(accuracy["f1"])
+                                measure2[file_num][percentage_num][window_num].append(np.mean(f1))
+                            if percentage_num==0: slides[window_num,file_num] = slides[window_num,file_num]+1
                     # Slide the time window
-                    if window == 5: 
-                        start = start + window
-                        stop = stop + window
+                    if windows[window_num] == 5: 
+                        start = start + windows[window_num]
+                        stop = stop + windows[window_num]
                     else:
-                        start = start + np.ceil(window/2)
-                        stop = stop + np.ceil(window/2)
+                        start = start + np.ceil(windows[window_num]/2)
+                        stop = stop + np.ceil(windows[window_num]/2)
 
     # Compute final results                              
     OK_vec = np.zeros((len(percentages), len(windows), 2)) # For computed quality measures for each time window length
-    cum_slides = np.sum(slides, axis=0)
+    cum_slides = np.sum(slides, axis=1).reshape(len(windows),-1)
     cum_measures =  np.zeros((2,len(percentages),len(windows),len(filename)))
     for percentage_num in range(len(percentages)):
         for window_num in range(len(windows)):
@@ -182,7 +185,7 @@ for i in range(2):
     legend = []
     for percentage_num in range(len(percentages)):
         ax[i].plot(windows,OK_vec[percentage_num,:,i])
-        legend.append(str(percentages[percentage_num])+"\% messages damaged")
+        legend.append(str(percentages[percentage_num])+"% messages damaged")
     ax[i].set_xlabel("Time frame length [min]")
     ax[i].legend(legend)
 if stage == 'clustering': 
@@ -208,7 +211,4 @@ else:
             os.remove('research_and_results/00_timecomp_'+ad_algorithm)
             file = h5py.File('research_and_results/00_timecomp_'+ad_algorithm, mode='a')
     file.create_dataset('OK_vec', data=OK_vec)
-    file.create_dataset('measure1', data=measure1)
-    file.create_dataset('measure2', data=measure2)
-    file.create_dataset('slides', data=slides)
     file.close()
