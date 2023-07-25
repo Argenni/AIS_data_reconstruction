@@ -151,39 +151,51 @@ class TimeWindow:
         self._start = start
         self._stop = stop
     
-    def use_time_window(self, data_original):
+    def use_time_window(self, data_original, crop_train=True, crop_val=True, crop_test=True, verbose=True):
         """
         Chooses only messages from a time window with given start and stop
-        Argument: data - Data object, dataset to crop including:
-        - message_bits - numpy array of AIS messages in binary form (1 column = 1 bit), shape = (num_mesages, num_bits (168))
-        - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape = (num_mesages, num_fields (14))
-        - Xraw - numpy array, AIS feature vectors (w/o normalization), shape = (num_messages, num_features (115))
-        - MMSI - list of MMSI identifier from each AIS message, len = num_messages
-        - timestamp - list of strings with timestamp of each message, len = num_messages
+        Arguments: 
+        - data - Data object, dataset to crop including:
+            - message_bits - numpy array of AIS messages in binary form (1 column = 1 bit), shape = (num_mesages, num_bits (168))
+            - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape = (num_mesages, num_fields (14))
+            - Xraw - numpy array, AIS feature vectors (w/o normalization), shape = (num_messages, num_features (115))
+            - MMSI - list of MMSI identifier from each AIS message, len = num_messages
+            - timestamp - list of strings with timestamp of each message, len = num_messages
+        - crop_train/val/test - Boolean, indicating whether to use time window on a specific set or not (default = True)
+        - verbose - Boolean, indicating whether to print warnings if any of the aforementioned sets were not cropped (default = True)
         Returns: cropped data
         """
         data = copy.deepcopy(data_original)
         # Crop train set
-        indices = [datetime.timedelta(minutes=self._start) < max(data.timestamp_train)-time < datetime.timedelta(minutes=self._stop) for time in data.timestamp_train]
-        data.timestamp_train = np.array(data.timestamp_train)[indices].tolist()
-        data.MMSI_train = np.array(data.MMSI_train)[indices].tolist()
-        data.Xraw_train = data.Xraw_train[indices, :]
-        data.message_bits_train = data.message_bits_train[indices, :]
-        data.message_decoded_train = data.message_decoded_train[indices, :]
+        if (len(data.timestamp_train)>0 and crop_train):
+            indices = [datetime.timedelta(minutes=self._start) < max(data.timestamp_train)-time < datetime.timedelta(minutes=self._stop) for time in data.timestamp_train]
+            data.timestamp_train = np.array(data.timestamp_train)[indices].tolist()
+            data.MMSI_train = np.array(data.MMSI_train)[indices].tolist()
+            data.Xraw_train = data.Xraw_train[indices, :]
+            data.message_bits_train = data.message_bits_train[indices, :]
+            data.message_decoded_train = data.message_decoded_train[indices, :]
+        else: 
+            if verbose: print("\n Warning: Training set not cropped with a time window!")
         # Crop validation set
-        indices = [datetime.timedelta(minutes=self._start) < max(data.timestamp_train)-time < datetime.timedelta(minutes=self._stop) for time in data.timestamp_val]
-        data.timestamp_val = np.array(data.timestamp_val)[indices].tolist()
-        data.MMSI_val = np.array(data.MMSI_val)[indices].tolist()
-        data.Xraw_val = data.Xraw_val[indices, :]
-        data.message_bits_val = data.message_bits_val[indices, :]
-        data.message_decoded_val = data.message_decoded_val[indices, :]
+        if (len(data.timestamp_val)>0 and crop_val):
+            indices = [datetime.timedelta(minutes=self._start) < max(data.timestamp_val)-time < datetime.timedelta(minutes=self._stop) for time in data.timestamp_val]
+            data.timestamp_val = np.array(data.timestamp_val)[indices].tolist()
+            data.MMSI_val = np.array(data.MMSI_val)[indices].tolist()
+            data.Xraw_val = data.Xraw_val[indices, :]
+            data.message_bits_val = data.message_bits_val[indices, :]
+            data.message_decoded_val = data.message_decoded_val[indices, :]
+        else: 
+            if verbose: print("\n Warning: Validation set not cropped with a time window!")
         # Crop test set
-        indices = [datetime.timedelta(minutes=self._start) < max(data.timestamp)-time < datetime.timedelta(minutes=self._stop) for time in data.timestamp]
-        data.timestamp = np.array(data.timestamp)[indices].tolist()
-        data.MMSI = np.array(data.MMSI)[indices].tolist()
-        data.Xraw = data.Xraw[indices, :]
-        data.message_bits = data.message_bits[indices, :]
-        data.message_decoded = data.message_decoded[indices, :]
+        if (len(data.timestamp)>0 and crop_test):
+            indices = [datetime.timedelta(minutes=self._start) < max(data.timestamp)-time < datetime.timedelta(minutes=self._stop) for time in data.timestamp]
+            data.timestamp = np.array(data.timestamp)[indices].tolist()
+            data.MMSI = np.array(data.MMSI)[indices].tolist()
+            data.Xraw = data.Xraw[indices, :]
+            data.message_bits = data.message_bits[indices, :]
+            data.message_decoded = data.message_decoded[indices, :]
+        else: 
+            if verbose: print("\n Warning: Test set not cropped with a time window!")
         return data
 
     def slide_time_window(self, start_new, stop_new):

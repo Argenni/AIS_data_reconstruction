@@ -97,7 +97,7 @@ else:  # or run the computations
                     print(start)
                     print(stop)
                     time_window = TimeWindow(start, stop)
-                    time_window.use_time_window(data)
+                    time_window.use_time_window(data, crop_train=False, crop_val=False, verbose=False)
                     data.X, _, _ = data.normalize(data.Xraw)
                     if (data.Xraw).shape[0] == 0: break
                     else: 
