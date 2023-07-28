@@ -20,7 +20,6 @@ import h5py
 import matplotlib.pyplot as plt
 from sklearn.metrics import f1_score, silhouette_score
 plt.rcParams.update({'font.size': 16})
-import datetime
 import copy
 import os
 import sys
@@ -205,10 +204,10 @@ else:
     if stage == 'clustering':
         if os.path.exists('research_and_results/00_timecomp_'+clustering_algorithm):
             os.remove('research_and_results/00_timecomp_'+clustering_algorithm)
-            file = h5py.File('research_and_results/00_timecomp_'+clustering_algorithm, mode='a')
+        file = h5py.File('research_and_results/00_timecomp_'+clustering_algorithm, mode='a')
     elif stage == 'ad':
         if os.path.exists('research_and_results/00_timecomp_'+ad_algorithm):
             os.remove('research_and_results/00_timecomp_'+ad_algorithm)
-            file = h5py.File('research_and_results/00_timecomp_'+ad_algorithm, mode='a')
+        file = h5py.File('research_and_results/00_timecomp_'+ad_algorithm, mode='a')
     file.create_dataset('OK_vec', data=OK_vec)
     file.close()
