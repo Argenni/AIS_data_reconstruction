@@ -19,7 +19,7 @@ import numpy as np
 import h5py
 import matplotlib.pyplot as plt
 from sklearn.metrics import f1_score, silhouette_score
-plt.rcParams.update({'font.size': 16})
+plt.rcParams.update({'font.size': 14})
 import copy
 import os
 import sys
@@ -33,7 +33,7 @@ from utils.miscellaneous import count_number, Corruption, TimeWindow
 np.random.seed(1)  # For reproducibility
 distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
-ad_algorithm = 'xgboost' # 'rf' or 'xgboost'
+ad_algorithm = 'rf' # 'rf' or 'xgboost'
 stage = 'ad' # 'clustering', 'ad' or 'prediction'
 filename = ['Gdansk.h5', 'Baltic.h5', 'Gibraltar.h5']
 percentages_clust = [0, 5, 10, 20]
@@ -186,13 +186,15 @@ for i in range(2):
         ax[i].plot(windows,OK_vec[percentage_num,:,i])
         legend.append(str(percentages[percentage_num])+"% messages damaged")
     ax[i].set_xlabel("Time frame length [min]")
-    ax[i].legend(legend)
+    ax[i].spines['top'].set_visible(False)
+    ax[i].spines['right'].set_visible(False)
 if stage == 'clustering': 
     ax[0].set_ylabel("Silhouette")
     ax[1].set_ylabel("Correctness coefficient")
 elif stage == 'ad': 
     ax[0].set_ylabel("F1 - messages")
     ax[1].set_ylabel("F1 - fields")
+fig.legend(legend, loc=9)
 fig.show()
 
 # Save the results
