@@ -1,5 +1,6 @@
-# ----------- Library of functions used in clustering phase of AIS message reconstruction ----------
-from sklearn import cluster, metrics
+# ----------- Library of functions used in clustering stage of AIS message reconstruction ----------
+from sklearn.cluster import KMeans, DBSCAN
+from sklearn.metrics import silhouette_score
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
@@ -8,94 +9,104 @@ from utils.miscellaneous import count_number
 
 class Clustering:
     """
-    Class that introduces clustering using either k-means or DBSCAN
+    Class that introduces AIS data clustering using either k-means or DBSCAN
     """
     _epsilon = 3.16
     _minpts = 1
 
     def __init__(self):
         """
-        Class initialization
+        Class initialization (class object creation).
         """
         pass
 
     def run_kmeans(self, X, K):
         """
-        Runs k-means algorithm on a given dataset with Euclidean distance metric
+        Runs k-means algorithm on a given dataset with Euclidean distance metric. \n
         Arguments: 
-        - X - numpy array with dataset to cluster, shape = (num_message, num_features (115))
-        - K - integer scalar, number of clusters
+        - X - numpy array with dataset to cluster, shape=(num_message, num_features (115)),
+        - K - scalar, int, desired number of clusters. \n
         Returns:
-        - idx - list of indices of clusters assigned to each message, len = num_messages
-        - centroids - numpy array with centers of each cluster, shape = (K, num_features (115))
+        - idx - list of indices of clusters assigned to each message, len=num_messages,
+        - centroids - numpy array with centers of each cluster, shape=(K, num_features (115)).
         """
-        kmeans_model = cluster.KMeans(n_clusters=K, n_init=200, max_iter=100, tol=0.001, random_state=0).fit(X)
+        print("Running k-means clustering...")
+        kmeans_model = KMeans(n_clusters=K, n_init=200, max_iter=100, tol=0.001, random_state=0).fit(X)
         idx = kmeans_model.labels_
         centroids = kmeans_model.cluster_centers_
+        print(" Complete.")
         return idx, centroids
 
     def run_DBSCAN(self, X, distance='euclidean', optimize=None):
         """
-        Runs DBSCAN algorithm on a given dataset with given distance metric
+        Runs DBSCAN algorithm on a given dataset with given distance metric. \n
         Arguments: 
-        - X - numpy array with dataset to cluster, shape = (num_message, num_features (115))
-        - distance - single string, distance metric, preferably 'euclidean'
+        - X - numpy array with dataset to cluster, shape=(num_message, num_features (115)),
+        - distance - (optional) string, name of distance metric, default='euclidean',
+        - optimize - (optional) string, name of DBSCAN hyperparameter to optimize, 
+            'epsilon' or 'minpts', default=None (no optimization). \n
         Returns:
-        - idx - list of indices of clusters assigned to each message, len = num_messages
-        - K -integer scalar, number og clusters created by DBSCAN
+        - idx - list of indices of clusters assigned to each message, len=num_messages,
+        - K - scalar, int, number of clusters created by DBSCAN.
         """
         # Optimize hyperparametres if allowed
-        if optimize == 'epsilon': self.optimize(X, distance, parameter='epsilon')
-        elif optimize == 'minpts': self.optimize(X, distance, parameter='minpts')
+        if optimize == 'epsilon': self.optimize(X, distance, hyperparameter='epsilon')
+        elif optimize == 'minpts': self.optimize(X, distance, hyperparameter='minpts')
         # Cluster using DBSCAN
-        DBSCAN_model = cluster.DBSCAN(eps = self._epsilon, min_samples = self._minpts, metric = distance).fit(X)
+        print("Running DBSCAN clustering...")
+        DBSCAN_model = DBSCAN(eps = self._epsilon, min_samples = self._minpts, metric = distance).fit(X)
         idx = DBSCAN_model.labels_
         K, _ = count_number(idx)
+        print(" Complete.")
         return idx, K
 
-    def optimize(self, X, distance, parameter):
+    def optimize(self, X, distance, hyperparameter):
         """
-        Search for optimal epsilon and 
+        Searches for optimal epsilon or minpts value for AIS data clustering using DBSCAN
+        and stores it in self._epsilon or self._minpts. Arguments:
+        - X - numpy array with training dataset, shape=(num_message, num_features (115)),
+        - distance - string, name of distance metric, eg. 'euclidean',
+        - hyperparameter - string, name of DBSCAN hyperparameter to optimize, 'epsilon' or 'minpts'.
         """
         params = [0.01, 0.1, 0.5, 1, 2, 5, 10, 20, 50, 100]
         silhuettes = []
-        print(" Search for optimal " + parameter + "...")
+        print(" Search for optimal " + hyperparameter + "...")
         for param in params:
-            if parameter=='epsilon':
-                DBSCAN_model = cluster.DBSCAN(
+            if hyperparameter=='epsilon':
+                DBSCAN_model = DBSCAN(
                     eps = param, 
                     min_samples = self._minpts, 
                     metric = distance).fit(X)
-            elif parameter=='minpts':
-                DBSCAN_model = cluster.DBSCAN(
+            elif hyperparameter=='minpts':
+                DBSCAN_model = DBSCAN(
                     eps = self._epsilon, 
                     min_samples = param, 
                     metric = distance).fit(X)
             idx = DBSCAN_model.labels_
             if count_number(idx)[0] == 1: silhuettes.append(0)
-            else: silhuettes.append(metrics.silhouette_score(X,idx))
+            else: silhuettes.append(silhouette_score(X,idx))
         # Plot
         fig, ax = plt.subplots()
         ax.plot(params, silhuettes, color='k')
-        ax.set_title("Average silhouettes vs " + parameter)
-        ax.set_xlabel(parameter)
+        ax.set_title("Average silhouettes vs " + hyperparameter)
+        ax.set_xlabel(hyperparameter)
         ax.set_ylabel("Average silhouette")
         fig.show()
         # Save the optimal value
-        if parameter=='epsilon': self._epsilon = int(input("Choose the optimal epsilon: "))
-        elif parameter=='minpts': self._epsilon = int(input("Choose the optimal minpts: "))
+        if hyperparameter=='epsilon': self._epsilon = int(input(" Choose the optimal epsilon: "))
+        elif hyperparameter=='minpts': self._minpts = int(input(" Choose the optimal minpts: "))
 
 
-def calculate_CC(idx,MMSI,MMSI_vec):
+def calculate_CC(idx, MMSI, MMSI_vec):
     """
-    Calculate correctness coefficient - indicator of to which extent:
-    1. each cluster consists of messages from one vessel 
-    2. messages from one vessel are not divided between several clusters
+    Calculates correctness coefficient - indicator of to what extent: \n
+    1. each cluster consists of messages from one vessel,
+    2. messages from one vessel are not divided between several clusters. \n
     Arguments:
-    - idx - list of indices of clusters assigned to each message, len = num_messages
-    - MMSI - list of MMSI identifier from each AIS message, len = num_messages
-    - MMSI_vec - list of unique MMSIs in MMSI list
-    Returns: CC - float scalar, computed correctness coefficient
+    - idx - list of indices of clusters assigned to each message, len=num_messages,
+    - MMSI - list of MMSI identifier from each AIS message, len=num_messages,
+    - MMSI_vec - list of unique MMSIs in MMSI list. \n
+    Returns: CC - scalar, float, computed correctness coefficient.
     """
     if idx.shape[0]==0 or len(MMSI)==0 or len(MMSI_vec)==0:
         return 0

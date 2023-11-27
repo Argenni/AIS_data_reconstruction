@@ -1,4 +1,4 @@
-# ----------- Library of functions used in initialization phase of AIS message reconstruction ----------
+# ----------- Library of functions used in initialization of AIS message reconstruction ----------
 from sklearn import preprocessing
 import numpy as np
 import datetime
@@ -7,12 +7,12 @@ from utils.miscellaneous import count_number
 
 def decode(message_bits):
     """
-    Reads single AIS message in binary from and decodes it into decimal
-    Argument: message_bits - numpy array of AIS messages in binary form (1 column = 1 bit), shape = (num_mesages, num_bits (168))
+    Reads single AIS message in binary from and decodes it into decimal. \n
+    Argument: message_bits - numpy array of AIS messages in binary form (1 column = 1 bit), shape=(num_bits (168),).
     Returns: 
-    - message_decoded - numpy array of AIS message fields decoded from binary to decimal, shape = (1, num_fields (14))
-    - X - numpy array, AIS feature vector (w/o normalization), shape = (1, num_features (115))
-    - MMSI - scalar, MMSI identifier from decoded AIS message
+    - message_decoded - list of AIS message fields decoded from binary to decimal, len=(num_fields (14))
+    - X - numpy array, AIS feature vector (w/o normalization), shape=(num_features (115),)
+    - MMSI - scalar, int, MMSI identifier from decoded AIS message.
     """
     X = np.zeros(115)
     message_decoded = []
@@ -81,9 +81,9 @@ def decode(message_bits):
 
 def encode(message_decoded):
     """
-    Converts single AIS message from decimal form into binary
-    Argument: message_decoded - numpy array of AIS message fields decoded from binary to decimal, shape = (1, num_fields (14))
-    Returns: message_bits - numpy array of AIS messages in binary form (1 column = 1 bit), shape = (num_mesages, num_bits (168))
+    Converts single AIS message from decimal form into binary. \n
+    Argument: message_decoded - list/numpy array of AIS message fields decoded from binary to decimal, shape=(num_fields (14),). \n
+    Returns: message_bits - numpy array of AIS message in binary form (1 column = 1 bit), shape=(num_bits (168),).
     """
     # 0 Encode the message type
     message_string = bin(int(message_decoded[0])).replace('0b', '').zfill(6)
@@ -136,7 +136,7 @@ def encode(message_decoded):
 
 class Data:
     """
-    Class that loads and preprocesses data (normalizes, split into train and test)
+    Class that loads and preprocesses data (normalizes, splits into train and test)
     """
     message_bits_train = []
     message_bits_val = []
@@ -159,11 +159,11 @@ class Data:
 
     def __init__(self, file):
         """
-        Class initializer - reads all important sets from the file
+        Class initialization (class object creation) - reads all important sets from the file.
         Arguments: 
-        file - h5py file object to the file with the dataset
-        train_percentage (optional) - scalar, how much data is to be in train set
-            (default = 70)
+        - file - h5py file object to the file with the dataset,
+        - train_percentage (optional) - scalar, int, how much data is to be in training set
+            (default=70).
         """
         # Load the file and all data (as "test set")
         self.message_bits = np.array(file.get('message_bits'))
@@ -180,13 +180,11 @@ class Data:
 
     def normalize(self, X):
         """
-        Change the data distribution to have mean=0 and std=1
-        Argument: X - dataset to normalize, shape = (num_messages, num_features)
+        Changes the data distribution to have mean=0 and std=1. \n
+        Argument: X - dataset to normalize, shape = (num_messages, num_features). \n
         Returns:
-        - mu - numpy array, vector of means of each feature, 
-            shape = (1, num_features (115))
-        - sigma - numpy array, vector of standard deviations of each feature,
-            shape = (1, num_features (115)) 
+        - mu - numpy array, vector of means of each feature, shape=(num_features (115),),
+        - sigma - numpy array, vector of standard deviations of each feature, shape=(num_features (115),).
         """
         scaler = preprocessing.StandardScaler().fit(X)
         mu = scaler.mean_
@@ -196,10 +194,10 @@ class Data:
 
     def split(self, train_percentage, val_percentage):
         """
-        Split the dataset into train and test set according to given percentage
+        Splits the dataset into train and test set according to given percentage. \n
         Arguments: 
-        - train_percentage - scalar, how much data is to be in train set
-        - val_percentage - scalar, how much data is to be in validation set
+        - train_percentage - scalar, int, how much data is to be in training set.
+        - val_percentage - scalar, int, how much data is to be in validation set.
         """
         np.random.seed(1) #For reproducibility
         # Get the list of all individual trajectories
@@ -246,4 +244,3 @@ class Data:
         self.MMSI = np.array(self.MMSI)[test].tolist()
         self.timestamp_val = np.array(self.timestamp)[val].tolist()
         self.timestamp = np.array(self.timestamp)[test].tolist()
-

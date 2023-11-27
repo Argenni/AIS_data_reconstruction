@@ -1,4 +1,4 @@
-# ----------- Library of functions used in research regarding of AIS message reconstruction ----------
+# ----------- Library of functions used in research regarding AIS message reconstruction ----------
 # --------------------- not necessarily in the main pipeline -----------------------------------------
 import numpy as np
 import matplotlib.pyplot as plt
@@ -11,16 +11,13 @@ from utils.anomaly_detection import AnomalyDetection
 from sklearn.neighbors import LocalOutlierFactor
 
 
-
-# ----------------------- For clustering phase ------------------------------
 def check_cluster_assignment(idx, idx_corr, message_idx):
     """
-    Checks if the corrupted message is assigned together with other messages from its vessel
+    Checks if the corrupted message is assigned together with other messages from its vessel.
     Arguments:
-    - idx - list of indices of clusters assigned to each message, len = num_messages,
-    - idx_corr - list of indices of clusters assigned to each message in a corrupted dataset, 
-        len = num_messages
-    - message_idx - integer scalar, index of a message that was corrupted
+    - idx - list of indices of clusters assigned to each message, len=num_messages,
+    - idx_corr - list of indices of clusters assigned to each message in a dataset, len=num_messages,
+    - message_idx - scalar, int, index of a message that was corrupted.
     """
     idx_before = idx[message_idx]
     idx_now = idx_corr[message_idx]
@@ -39,16 +36,13 @@ def check_cluster_assignment(idx, idx_corr, message_idx):
     return result
 
 
-
-# ------------------- For anomaly detection phase ---------------------------
 def visualize_corrupted_bits(OK_vec_all, titles):
     """
-    Plots the results of damaging certain bits in AIS message
-    Arguments: 
+    Plots the results of damaging certain bits in AIS message on each reconstruction stage. Arguments: 
     - OK_vec_all - numpy array containing percentages of correctness regarding each bit
-        shape = (num_subplots, num_bits)
+        shape = (num_subplots, num_bits),
     - titles - dictionary with titles for each subplot,
-        keys are the number of a subplot {'0':"title_for_first_subplot", ...}
+        keys are the number of a subplot {'0':"title_for_first_subplot", ...}.
     """
     bits = list(range(145))  # create a list of meaningful bits to visualize
     bits.append(148)
@@ -88,7 +82,7 @@ def visualize_corrupted_bits(OK_vec_all, titles):
 class AnomalyDetection_LOF(AnomalyDetection):
     """Class that inherits from Anomaly Detection, for checking the performance of LOF in this stage"""
     
-    def __init__(self, data, wavelet = 'morlet', set='test'):
+    def __init__(self, data, wavelet='morlet', set='test'):
         self._wavelet = wavelet
         if set == 'train': self.outliers = np.zeros((data.X_train.shape[0],3), dtype=int).tolist()
         elif set == 'val': self.outliers = np.zeros((data.X_val.shape[0],3), dtype=int).tolist()
@@ -106,12 +100,11 @@ class AnomalyDetection_LOF(AnomalyDetection):
 
     def detect_standalone_clusters(self, idx, idx_vec, X, message_decoded):
         """
-        Run the entire anomaly detection based on searching for standalone clusters
-        Arguments:
-        - idx - list of number of cluster assigned to each AIS message, len = num_messages
-        - idx_vec - list of uniqe cluster numbers in a dataset
-        - X - numpy array, AIS feature vectors, shape = (num_messages, num_features (115))
-        - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape = (num_mesages, num_fields (14))
+        Runs the entire anomaly detection based on searching for standalone clusters. Arguments:
+        - idx - list of number of cluster assigned to each AIS message, len=num_messages,
+        - idx_vec - list of uniqe cluster numbers in a dataset,
+        - X - numpy array, AIS feature vectors, shape=(num_messages, num_features (115)),
+        - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape=(num_mesages, num_fields (14)).
         """
         # Find standalone clusters
         indices = self._find_standalone_clusters(idx, idx_vec)
@@ -142,11 +135,10 @@ class AnomalyDetection_LOF(AnomalyDetection):
 
     def detect_inside(self, idx, message_decoded, timestamp):
         """
-        Run the anomaly detection for messages inside proper clusters
-        Arguments:
-        - idx - list of number of cluster assigned to each AIS message, len = num_messages
-        - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape = (num_mesages, num_fields (14))
-        - timestamp - list of strings with timestamp of each message, len = num_messages
+        Runs the anomaly detection for messages inside proper clusters. Arguments:
+        - idx - list of number of cluster assigned to each AIS message, len=num_messages,
+        - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape=(num_mesages, num_fields (14)),
+        - timestamp - list of strings with timestamp of each message, len=num_messages.
         """
         # Evaluate identifier fields [2,3,12]
         for field in self.inside_fields2:

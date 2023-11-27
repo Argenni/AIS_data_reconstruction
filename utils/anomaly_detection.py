@@ -1,8 +1,7 @@
-# ----------- Library of functions used in anomaly detection phase of AIS message reconstruction ----------
+# ----------- Library of functions used in anomaly detection stage of AIS message reconstruction ----------
 import numpy as np
 from sklearn.neighbors import KNeighborsClassifier 
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.ensemble import IsolationForest
+from sklearn.ensemble import RandomForestClassifier, IsolationForest
 from xgboost import XGBClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import f1_score
@@ -42,21 +41,20 @@ class AnomalyDetection:
     _ad_algorithm = [] # 'rf' or 'xgboost'
     _wavelet = [] # 'morlet' or 'ricker'
 
-    def __init__(self, data, if_visualize=False, optimize=None, ad_algorithm='xgboost', wavelet = 'morlet', set='test'):
+    def __init__(self, data, if_visualize=False, optimize=None, ad_algorithm='xgboost', wavelet='morlet', set='test'):
         """
-        Class initializer
-        Arguments: 
+        Class initializer. Arguments: \n
         data - object of a Data class, containing all 3 datasets (train, val, test) with:
           X, Xraw, message_bits, message_decoded, MMSI
         if_visualize (optional) - boolean deciding whether to show training performance or not,
             default = False
-        optimize (optional) - string deciding whether to optimize classifier hyperparametres or not,
+        optimize (optional) - string deciding whether to optimize classifier hyperparameters or not,
 	        'max_depth' or 'n_estimators', default = None
         ad_algorithm (optional) - string deciding which anomaly detection classifier to use:
             'rf' or 'xgboost', default = 'xgboost'
         wavelet (optional) - string deciding which wavelet to use while computing cwt in standalone clusters analysis:
             'morlet' or 'ricker' (as available in SciPy), default = 'morlet'
-        test (optional) - string indicating which part of the dataset in self.data to analyse:
+        set (optional) - string indicating which part of the dataset in self.data to analyse:
             'train', 'val' or 'test', default = 'test'
         """
         # Initialize models and necessary variables
@@ -77,7 +75,7 @@ class AnomalyDetection:
         else:
             # otherwise train a classifier from scratch
             self._train_inside_field_classifier()
-        # Show some classifier parametres if allowed
+        # Show some classifier metrics if allowed
         if if_visualize:
             # Calculate the accuracy of the classifiers on the training data
             variables = pickle.load(open('utils/anomaly_detection_files/standalone_'+wavelet+'_inputs.h5', 'rb'))
@@ -107,11 +105,11 @@ class AnomalyDetection:
                 accuracy.append(np.mean(pred == variables[3][i]))
             print("  valset " + str(round(np.mean(accuracy),4)) )
         # Optimize hyperparametres if allowed
-        if optimize == 'max_depth': self._optimize_standalone_cluster_classifier(data, parameter='max_depth')
-        elif optimize == 'n_estimators': self._optimize_standalone_cluster_classifier(data, parameter='n_estimators')
+        if optimize == 'max_depth': self._optimize_standalone_cluster_classifier(data, hyperparameter='max_depth')
+        elif optimize == 'n_estimators': self._optimize_standalone_cluster_classifier(data, hyperparameter='n_estimators')
         elif optimize == 'k': self._optimize_knn(data)
-        elif optimize == 'max_depth2': self._optimize_inside_field_classifier(parameter='max_depth')
-        elif optimize == 'n_estimators2': self._optimize_inside_field_classifier(parameter='n_estimators')
+        elif optimize == 'max_depth2': self._optimize_inside_field_classifier(hyperparameter='max_depth')
+        elif optimize == 'n_estimators2': self._optimize_inside_field_classifier(hyperparameter='n_estimators')
     
 
     ### ---------------------------- Standalone clusters part ---------------------------------
@@ -252,14 +250,14 @@ class AnomalyDetection:
         X.append((np.abs(np.std(with_) - np.std(without)))/(np.std(with_)+1e-6))
         return X
     
-    def _optimize_standalone_cluster_classifier(self, data_original, parameter):
+    def _optimize_standalone_cluster_classifier(self, data_original, hyperparameter):
         """ 
         Choose optimal value of max_depth or n_estimators for a Random Forest/XGBoost classifier
         for standalone clusters
         Arguments: 
         - data_original - object of a Data class, containing all 3 datasets (train, val, test) with:
           X, Xraw, message_bits, message_decoded, MMSI
-        - parameter - string indicating which parameter to optimize: 'max_depth', 'n_estimators'
+        - hyperparameter - string indicating which hyperparameter to optimize: 'max_depth' or 'n_estimators'
         """
         # Check if the file with the field classifier inputs exist
         if not os.path.exists('utils/anomaly_detection_files/standalone_'+self._wavelet+'_inputs.h5'):
@@ -276,31 +274,31 @@ class AnomalyDetection:
         params = [2, 5, 8, 10, 13, 15, 20, 30, 50, 100]
         accuracy_train = []
         accuracy_val = []
-        print(" Search for optimal " + parameter + "...")
+        print(" Search for optimal " + hyperparameter + "...")
         for param in params:
             field_classifier = []
-            if parameter=='max_depth' and self._ad_algorithm=='rf':
+            if hyperparameter=='max_depth' and self._ad_algorithm=='rf':
                 for i in range(len(y_train)):
                     field_classifier.append(RandomForestClassifier(
                         random_state=0, 
                         n_estimators=self._num_estimators_rf, 
                         max_depth=param,
                         ).fit(differences_train[i],y_train[i]))
-            elif parameter == 'n_estimators' and self._ad_algorithm=='rf':
+            elif hyperparameter == 'n_estimators' and self._ad_algorithm=='rf':
                 for i in range(len(y_train)):
                     field_classifier.append(RandomForestClassifier(
                         random_state=0, 
                         n_estimators=param, 
                         max_depth=self._max_depth_rf,
                         ).fit(differences_train[i],y_train[i]))
-            elif parameter=='max_depth' and self._ad_algorithm=='xgboost':
+            elif hyperparameter=='max_depth' and self._ad_algorithm=='xgboost':
                 for i in range(len(y_train)):
                     field_classifier.append(XGBClassifier(
                         random_state=0, 
                         n_estimators=self._num_estimators_xgboost, 
                         max_depth=param,
                         ).fit(differences_train[i],y_train[i]))
-            elif parameter == 'n_estimators' and self._ad_algorithm=='xgboost':
+            elif hyperparameter == 'n_estimators' and self._ad_algorithm=='xgboost':
                 for i in range(len(y_train)):
                     field_classifier.append(XGBClassifier(
                         random_state=0, 
@@ -322,15 +320,15 @@ class AnomalyDetection:
         fig, ax = plt.subplots()
         ax.plot(params, accuracy_train, color='k')
         ax.plot(params, accuracy_val, color='b')
-        ax.set_title("Average accuracy vs " + parameter)
-        ax.set_xlabel(parameter)
+        ax.set_title("Average accuracy vs " + hyperparameter)
+        ax.set_xlabel(hyperparameter)
         ax.set_ylabel("Average accuracy")
         ax.legend(["Training set", "Validation set"])
         fig.show()
         # Retrain the model
-        if parameter == 'max_depth':
+        if hyperparameter == 'max_depth':
             self._max_depth = int(input("Choose the optimal max_depth: "))
-        elif parameter == 'n_estimators':
+        elif hyperparameter == 'n_estimators':
             self._num_estimators = int(input("Choose the optimal n_estimators: "))
         if os.path.exists('utils/anomaly_detection_files/standalone_'+self._wavelet+'_field_classifier_'+self._ad_algorithm+'.h5'):
             os.remove('utils/anomaly_detection_files/standalone_'+self._wavelet+'_field_classifier_'+self._ad_algorithm+'.h5')
@@ -674,11 +672,11 @@ class AnomalyDetection:
         # Save the model
         pickle.dump(self._inside_field_classifier, open('utils/anomaly_detection_files/inside_field_classifier_'+self._ad_algorithm+'.h5', 'ab'))
 
-    def _optimize_inside_field_classifier(self, parameter):
+    def _optimize_inside_field_classifier(self, hyperparameter):
         """ 
         Choose optimal value of max_depth or n_estimators for a Random Forest/XGBoost classifier
         for detecting damaged fields inside proper clusters
-        Argument: parameter - string indicating which parameter to optimize: 'max_depth', 'n_estimators'
+        Argument: hyperparameter - string indicating which hyperparameter to optimize: 'max_depth', 'n_estimators'
         """
         # Check if the file with the field classifier inputs exist
         if not os.path.exists('utils/anomaly_detection_files/inside_field_classifier_inputs.h5'):
@@ -697,10 +695,10 @@ class AnomalyDetection:
         accuracy_train_course = []
         accuracy_val = []
         accuracy_val_course = []
-        print(" Search for optimal " + parameter + "...")
+        print(" Search for optimal " + hyperparameter + "...")
         for param in params:
             field_classifier = []
-            if parameter=='max_depth' and self._ad_algorithm=='rf':
+            if hyperparameter=='max_depth' and self._ad_algorithm=='rf':
                 for i in range(len(y_train)-1):
                     field_classifier.append(RandomForestClassifier(
                         random_state=0, 
@@ -712,7 +710,7 @@ class AnomalyDetection:
                     n_estimators=self._num_estimators2_rf, 
                     max_depth=param,
                     ).fit(x_train[i+1],y_train[i+1]))
-            elif parameter=='n_estimators' and self._ad_algorithm=='rf':
+            elif hyperparameter=='n_estimators' and self._ad_algorithm=='rf':
                 for i in range(len(y_train)-1):
                     field_classifier.append(RandomForestClassifier(
                         random_state=0, 
@@ -724,7 +722,7 @@ class AnomalyDetection:
                     n_estimators=param, 
                     max_depth=int(np.floor(0.8*self._max_depth2_rf)),
                     ).fit(x_train[i+1],y_train[i+1]))
-            elif parameter=='max_depth' and self._ad_algorithm=='xgboost':
+            elif hyperparameter=='max_depth' and self._ad_algorithm=='xgboost':
                 for i in range(len(y_train)-1):
                     field_classifier.append(XGBClassifier(
                         random_state=0, 
@@ -736,7 +734,7 @@ class AnomalyDetection:
                     n_estimators=self._num_estimators2_xgboost, 
                     max_depth=param,
                     ).fit(x_train[i+1],y_train[i+1]))
-            elif parameter=='n_estimators' and self._ad_algorithm=='xgboost':
+            elif hyperparameter=='n_estimators' and self._ad_algorithm=='xgboost':
                 for i in range(len(y_train)-1):
                     field_classifier.append(XGBClassifier(
                         random_state=0, 
@@ -767,17 +765,17 @@ class AnomalyDetection:
         ax.plot(params, accuracy_val, color='b')
         ax.plot(params, accuracy_train_course, color='r')
         ax.plot(params, accuracy_val_course, color='g')
-        ax.set_title("Average f1 vs " + parameter)
-        ax.set_xlabel(parameter)
+        ax.set_title("Average f1 vs " + hyperparameter)
+        ax.set_xlabel(hyperparameter)
         ax.set_ylabel("Average f1")
         ax.legend(["Training set - fields 5,7,8", "Validation set - fields 5,7,8",
                    "Training set - field 9", "Validation set - field 9" ])
         fig.show()
         # Retrain the model
-        if parameter == 'max_depth':
+        if hyperparameter == 'max_depth':
             if self._ad_algorithm=='rf': self._max_depth2_rf = int(input("Choose the optimal max_depth: "))
             elif self._ad_algorithm=='xgboost': self._max_depth2_xgboost = int(input("Choose the optimal max_depth: "))
-        elif parameter == 'n_estimators':
+        elif hyperparameter == 'n_estimators':
             if self._ad_algorithm=='rf': self._num_estimators2_rf = int(input("Choose the optimal n_estimators: "))
             elif self._ad_algorithm=='xgboost': self._num_estimators2_xgboost = int(input("Choose the optimal n_estimators: "))
         if os.path.exists('utils/anomaly_detection_files/inside_field_classifier_'+self._ad_algorithm+'.h5'):

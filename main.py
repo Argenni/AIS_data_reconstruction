@@ -1,20 +1,20 @@
 # ----------------------------------------------- AIS Data Reconstruction ---------------------------------------------
 """"
-Loads prepared AIS data, preprocesses it and starts the reconstruction process:
-1. clustering with DBSCAN or kmeans to distinguish individual trajecotries
-2. for each trajectory, detection of anomalies in it
-3. for each outlier found - prediction of its correct form 
-Requires: Gdansk.h5 (from data_Gdansk.py), Baltic.h5 (from data_Baltic.py) 
- or Gibraltar.h5 (from data_Gibralar.py) with the following datasets:
- - message_bits - numpy array of AIS messages in binary form (1 column = 1 bit), shape = (num_mesages, num_bits (168))
- - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape = (num_mesages, num_fields (14))
- - X - numpy array, AIS feature vectors (w/o normalization), shape = (num_messages, num_features (115))
- - MMSI - list of MMSI identifier from each AIS message, len = num_messages
- - timestamp - list of strings with timestamp of each message, len = num_messages
-Creates:
- - idx - list of indices of clusters assigned to each message, len = num_messages
- - outliers - numpy array with anomaly detection information, shape = (num_messages, 3)
-   (1. column - if a message is outlier, 2. column - proposed correct cluster, 3. column - possibly damaged feature)
+Loads prepared AIS data, preprocesses it and conducts the reconstruction process:
+1. clustering with DBSCAN or kmeans to distinguish individual trajectories,
+2. for each trajectory - detection of anomalies in it,
+3. for each outlier found - prediction of its correct form. \n
+Requires: Gdansk.h5 (from data_Gdansk.py), Baltic.h5 (from data_Baltic.py) or Gibraltar.h5 (from data_Gibralar.py)
+with the following datasets:
+ - message_bits - numpy array, AIS messages in binary form (1 column = 1 bit), shape=(num_mesages, num_bits (168)),
+ - message_decoded - numpy array, AIS messages decoded from binary to decimal, shape=(num_mesages, num_fields (14)),
+ - X - numpy array, AIS feature vectors (w/o normalization), shape=(num_messages, num_features (115)),
+ - MMSI - list of MMSI identifiers from each AIS message, len=num_messages,
+ - timestamp - list of strings with timestamp of each message, len  um_messages. \n
+Creates (saved as .txt):
+ - idx - list of indices of clusters assigned to each message, len=num_messages (clustering.txt),
+ - outliers - numpy array with anomaly detection information, shape=(num_messages, 3) (anomaly_detection.txt)
+   (1. column - if a message is outlier, 2. column - proposed correct cluster, 3. column - possibly damaged field).
 """
 print("\n----------- AIS Data Reconstruction ---------- ")
 
@@ -23,7 +23,7 @@ print("\n----------- Part 0 - Initialization ---------- ")
 # Important imports
 import numpy as np
 import h5py
-from sklearn import metrics
+from sklearn.metrics import silhouette_score
 import sys
 sys.path.append('.')
 from utils.initialization import Data
@@ -44,7 +44,7 @@ wavelet = 'morlet' # 'morlet' or 'ricker'
 print(" Importing files... ")
 file = h5py.File(name='data/Gdansk.h5', mode='r') # Gdansk.h5, Gibraltar.h5 or Baltic.h5
 data = Data(file=file)
-data.split(train_percentage=50, val_percentage=25) # split into train, val and test set
+data.split(train_percentage=50, val_percentage=25) # split into train (50%), val (25%) and test (25%) set
 file.close()
 
 # Preprocess data
@@ -67,19 +67,16 @@ print(" Complete.")
 
 
 # ----------- Part 1 - Clustering ----------------
-print("\n----------- Part 1 - Grouping ---------- ")
+print("\n----------- Part 1 - Clustering ---------- ")
 clustering = Clustering()
 if clustering_algorithm == 'kmeans':
-    print(" Running k-means clustering...")
     idx, centroids = clustering.run_kmeans(X=data.X, K=K)
 elif clustering_algorithm == 'DBSCAN':
-    print(" Running DBSCAN clustering...")
     idx, K = clustering.run_DBSCAN(X=data.X, distance=distance, optimize=None)
-print(" Complete.")
-silhouette = metrics.silhouette_score(data.X,idx)
-print(" Average silhouette: " + str(round(silhouette,2)))
+silhouette = silhouette_score(data.X,idx)
+print("Average silhouette: " + str(round(silhouette,2)))
 CC = calculate_CC(idx, data.MMSI, MMSI_vec)
-print(" Correctness coefficient: " + str(round(CC,4)))
+print("Correctness coefficient: " + str(round(CC,4)))
 visualize_trajectories(
     X=data.Xraw,
     MMSI=idx,
@@ -90,7 +87,7 @@ visualize_trajectories(
 
 # ----------- Part 2 - Anomaly detection ------- 
 print("\n----------- Part 2 - Anomaly detection ---------- ")
-print(" Looking for anomalies...")
+print("Looking for anomalies...")
 outliers = AnomalyDetection(
     data=data,
     if_visualize=True,
@@ -111,7 +108,8 @@ outliers.detect_inside(
     message_decoded=data.message_decoded,
     timestamp=data.timestamp
     )
-print(" Anomalies found: " + str(np.sum(np.array(outliers.outliers, dtype=object)[:,0])))
+print(" Complete.")
+print("Anomalies found: " + str(np.sum(np.array(outliers.outliers, dtype=object)[:,0])))
 visualize_trajectories(
     X=data.Xraw,
     MMSI=np.array(outliers.outliers, dtype=object)[:,0].tolist(),
@@ -120,10 +118,16 @@ visualize_trajectories(
     )
 
 # Save results
+input("\nPress Enter to save results and exit...")
 np.savetxt(
-    'output/output.txt',
+    'output/clustering.txt',
+    np.array(idx, dtype=object), 
+    delimiter=',',
+    fmt='%s',
+    header="Cluster_id")
+np.savetxt(
+    'output/anomaly_detection.txt',
     np.array(outliers.outliers, dtype=object), 
     delimiter=',',
     fmt='%s',
     header="If_outlier, Correct_cluster_id, Damage_fields")
-input("Press Enter to exit...")
