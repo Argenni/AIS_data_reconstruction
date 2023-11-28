@@ -1,4 +1,7 @@
-# ----------- Library of functions used in prediction stage of AIS message reconstruction ----------
+"""
+Functions and classes used in prediction stage of AIS message reconstruction
+"""
+
 import numpy as np
 from xgboost import XGBRegressor
 from sklearn.model_selection import train_test_split

@@ -91,7 +91,7 @@ else:  # or run the computations on the original data
     field_bits = np.array([6, 8, 38, 42, 50, 60, 61, 89, 116, 128, 137, 143, 145, 148])  # range of fields
     bits = np.array(np.arange(50,60).tolist() + np.arange(61,128).tolist())
     for j in range(2): # iterate 2 times: for 1 and 2 bits corrupted
-        corruption = Corruption(data.X,j+1)
+        corruption = Corruption(data.X)
         OK_vec2 = np.zeros((num_experiments, num_metrics))
         np.random.seed(1)
         for i in range(num_experiments):  # For each of the randomly chosen AIS messages

@@ -96,7 +96,7 @@ else:  # or run the computations on the original data
             Xraw_corr = copy.deepcopy(data.Xraw)
             MMSI_corr = copy.deepcopy(data.MMSI)
             message_decoded_corr = copy.deepcopy(data.message_decoded)
-            corruption = Corruption(data.X,1)
+            corruption = Corruption(data.X)
             outliers = AnomalyDetection(data=data, ad_algorithm=ad_algorithm)
             fields = []
             messages = []

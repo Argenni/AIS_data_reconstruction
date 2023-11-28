@@ -79,7 +79,7 @@ else:  # or run the computations on the original data
     # ----------- Part 1 - Computing accuracy ----------
     print(" Corrupting bit by bit...") 
     # Artificially corrupt the dataset
-    corruption = Corruption(data.X,1) 
+    corruption = Corruption(data.X) 
     OK_vec = np.zeros((4,146))
     field_bits = np.array([6, 8, 38, 42, 50, 60, 61, 89, 116, 128, 137, 143, 145, 148])  # range of fields
     for bit in bits:  # For each of AIS message bits

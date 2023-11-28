@@ -1,5 +1,7 @@
-# ----------- Library of functions used in research regarding AIS message reconstruction ----------
-# --------------------- not necessarily in the main pipeline -----------------------------------------
+"""
+Functions used in research regarding AIS message reconstruction, not necessarily in the main pipeline
+"""
+
 import numpy as np
 import matplotlib.pyplot as plt
 plt.rcParams.update({'font.size': 16})

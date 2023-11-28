@@ -1,4 +1,7 @@
-# ----------- Library of functions used in miscellaneous stages of AIS message reconstruction ----------
+"""
+Functions and classes used in miscellaneous stages of AIS message reconstruction
+"""
+
 import numpy as np
 import matplotlib.pyplot as plt
 import datetime

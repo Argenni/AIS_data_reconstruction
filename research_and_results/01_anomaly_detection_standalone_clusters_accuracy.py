@@ -84,7 +84,7 @@ else:  # or run the computations on the original data
     # ----------- Part 1 - Computing accuracy ----------
     print(" Corrupting bit by bit...") 
     # Artificially corrupt the dataset
-    corruption = Corruption(data.X,2) 
+    corruption = Corruption(data.X) 
     OK_vec = np.zeros((8,146))
     baseline = np.zeros((5,146))
     bits = list(range(145))  # create a list of meaningful bits to examine

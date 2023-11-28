@@ -1,13 +1,12 @@
-# -------------------------------- Load, interpret and save Gdansk AIS data ------------------------------------------
 """
-Loads AIS message from ASCII file and prepares input feature vector based on it
-Built for: AIS_data_MMSI_bin_hex.txt file (timestamp, MMSI, long, lat, AIS messages in binary and hex form in ASCII)
+Loads AIS message from ASCII file and prepares input feature vector based on it.
+Built for: AIS_data_MMSI_bin_hex.txt file (timestamp, MMSI, long, lat, AIS messages in binary and hex form in ASCII).
 Creates Gdansk.h5 file with the following datasets: 
- - message_bits - numpy array of AIS messages in binary form (1 column = 1 bit), shape = (num_mesages (805), num_bits (168))
- - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape = (num_mesages (805), num_fields (14))
- - X - numpy array, AIS feature vectors (w/o normalization), shape = (num_messages (805), num_features (115))
- - MMSI - list of MMSI identifier from each AIS message, len = num_messages (805)
- - timestamp - list of strings with timestamp of each message, format '%d-%b-%Y %H:%M:%S', len = num_messages (805)
+ - message_bits - numpy array of AIS messages in binary form (1 column = 1 bit), shape=(num_mesages (805), num_bits (168)),
+ - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape=(num_mesages (805), num_fields (14)),
+ - X - numpy array, AIS feature vectors (w/o normalization), shape=(num_messages (805), num_features (115)),
+ - MMSI - list of MMSI identifier from each AIS message, len=num_messages (805),
+ - timestamp - list of strings with timestamp of each message, format '%d-%b-%Y %H:%M:%S', len=num_messages (805).
 """
 print("\n ------------- Load, interpret and save Gdansk AIS data -------------- ")
 

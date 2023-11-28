@@ -93,7 +93,7 @@ else:  # or run the computations on the original data
     num_metrics = 6 # number of quality metrics to compute
     bits = np.array(np.arange(8,42).tolist() + np.arange(50,60).tolist() + np.arange(61,128).tolist() + np.arange(143,145).tolist())
     for j in range(2): # iterate 2 times: for 1 and 2 bits corrupted
-        corruption = Corruption(data.X,j+1)
+        corruption = Corruption(data.X)
         OK_vec2 = np.zeros((num_experiments, num_metrics))
         baseline2 = np.zeros((num_experiments, num_metrics-1))
         for i in range(num_experiments):  # For each of the randomly chosen AIS messages 

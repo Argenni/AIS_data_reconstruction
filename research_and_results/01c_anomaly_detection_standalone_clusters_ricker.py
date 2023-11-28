@@ -86,7 +86,7 @@ else:  # or run the computations on the original data
         for wav_num in range(len(wavelet)): # iterate for morlet (0) and ricker (1)
             for alg_num in range(len(ad_algorithm)): # iterate for rf (0) and xgboost (1)
                 print(" Corrupting messages: dataset " + str(file_num+1)+"., " + wavelet[wav_num]+", " + ad_algorithm[alg_num]+"...") 
-                corruption = Corruption(data.X_val,1)
+                corruption = Corruption(data.X_val)
                 for i in range(num_experiments):  # For each of the randomly chosen AIS messages 
                     stop = False
                     while not stop:

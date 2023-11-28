@@ -1,4 +1,7 @@
-# ----------- Library of functions used in initialization of AIS message reconstruction ----------
+"""
+Functions and classes used in initialization of AIS message reconstruction
+"""
+
 from sklearn import preprocessing
 import numpy as np
 import datetime

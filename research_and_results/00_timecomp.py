@@ -105,7 +105,7 @@ else:  # or run the computations
                             Xraw_corr = copy.deepcopy(data.Xraw)
                             MMSI_corr = copy.deepcopy(data.MMSI)
                             message_decoded_corr = copy.deepcopy(data.message_decoded)
-                            corruption = Corruption(data.Xraw,1)
+                            corruption = Corruption(data.Xraw)
                             messages = []
                             fields = []
                             num_messages = int(len(data.MMSI)*percentages[percentage_num]/100)

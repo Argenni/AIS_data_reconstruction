@@ -1,14 +1,13 @@
-# -------------------------------- Load, interpret and save Gibraltar AIS data ------------------------------------------
 """
-Loads AIS message from ASCII file and prepares input feature vector based on it
-Built for: decoded_traffic_Gibraltar_Straight_all_ships_2016A_micro_20k_sample_ais_data.csv file 
- (MMSI[0], speedx10[3], long[4], lat[5], course[6], heading[7], timestamp[8])
+Loads AIS message from ASCII file and prepares input feature vector based on it..
+Built for: decoded_traffic_Gibraltar_Straight_all_ships_2016A_micro_20k_sample_ais_data.csv file
+ (MMSI[0], speedx10[3], long[4], lat[5], course[6], heading[7], timestamp[8]).
 Creates Gibraltar.h5 file with the following datasets: 
- - message_bits - numpy array of AIS messages in binary form (1 column = 1 bit), shape = (num_mesages (19999), num_bits (168))
- - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape = (num_mesages (19999), num_fields (14))
- - X - numpy array, AIS feature vectors (w/o normalization), shape = (num_messages (19999), num_features (115))
- - MMSI - list of MMSI identifier from each AIS message, len = num_messages (19999)
- - timestamp - list of strings with timestamp of each message, format '%Y-%m-%d %H:%M:%S', len = num_messages (19999)
+ - message_bits - numpy array of AIS messages in binary form (1 column = 1 bit), shape=(num_mesages (19999), num_bits (168)),
+ - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape=(num_mesages (19999), num_fields (14)),
+ - X - numpy array, AIS feature vectors (w/o normalization), shape=(num_messages (19999), num_features (115)),
+ - MMSI - list of MMSI identifier from each AIS message, len=num_messages (19999),
+ - timestamp - list of strings with timestamp of each message, format '%Y-%m-%d %H:%M:%S', len=num_messages (19999).
 """
 print("\n ------------- Load, interpret and save Gibraltar AIS data -------------- ")
 

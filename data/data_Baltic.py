@@ -1,14 +1,13 @@
-# -------------------------------- Load, interpret and save Baltic AIS data ------------------------------------------
 """
-Loads AIS message from csv file and prepares input feature vector based on it
+Loads AIS message from csv file and prepares input feature vector based on it.
 Built for: decoded_reports_baltic_all_ships_april_2018_micro_20k_sample_ais_data.csv file 
- (timestamp[0], mess_type[2], MMSI[4], long[6], lat[5], position_acc[7], speed[8], course[9])
+ (timestamp[0], mess_type[2], MMSI[4], long[6], lat[5], position_acc[7], speed[8], course[9]).
 Creates Baltic.h5 file with the following datasets: 
- - message_bits - numpy array of AIS messages in binary form (1 column = 1 bit), shape = (num_mesages (19999), num_bits (168))
- - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape = (num_mesages (19999), num_fields (14))
- - X - numpy array, AIS feature vectors (w/o normalization), shape = (num_messages (19999), num_features (115))
- - MMSI - list of MMSI identifier from each AIS message, len = num_messages (19999)
- - timestamp - list of strings with timestamp of each message, format '%d/%m/%Y %H:%M:%S', len = num_messages (19999)
+ - message_bits - numpy array of AIS messages in binary form (1 column = 1 bit), shape=(num_mesages (19999), num_bits (168)),
+ - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape=(num_mesages (19999), num_fields (14)),
+ - X - numpy array, AIS feature vectors (w/o normalization), shape=(num_messages (19999), num_features (115)),
+ - MMSI - list of MMSI identifier from each AIS message, len=num_messages (19999),
+ - timestamp - list of strings with timestamp of each message, format '%d/%m/%Y %H:%M:%S', len=num_messages (19999).
  """
 print("\n ------------- Load, interpret and save Baltic AIS data -------------- ")
 

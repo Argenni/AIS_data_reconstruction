@@ -1,4 +1,7 @@
-# ----------- Library of functions used in clustering stage of AIS message reconstruction ----------
+"""
+Functions and classes used in clustering stage of AIS message reconstruction
+"""
+
 from sklearn.cluster import KMeans, DBSCAN
 from sklearn.metrics import silhouette_score
 import numpy as np

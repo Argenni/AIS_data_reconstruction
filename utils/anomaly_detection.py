@@ -1,4 +1,7 @@
-# ----------- Library of functions used in anomaly detection stage of AIS message reconstruction ----------
+"""
+Functions and classes used in anomaly detection stage of AIS message reconstruction
+"""
+
 import numpy as np
 from sklearn.neighbors import KNeighborsClassifier 
 from sklearn.ensemble import RandomForestClassifier, IsolationForest
@@ -43,19 +46,19 @@ class AnomalyDetection:
 
     def __init__(self, data, if_visualize=False, optimize=None, ad_algorithm='xgboost', wavelet='morlet', set='test'):
         """
-        Class initializer. Arguments: \n
-        data - object of a Data class, containing all 3 datasets (train, val, test) with:
-          X, Xraw, message_bits, message_decoded, MMSI
-        if_visualize (optional) - boolean deciding whether to show training performance or not,
-            default = False
-        optimize (optional) - string deciding whether to optimize classifier hyperparameters or not,
-	        'max_depth' or 'n_estimators', default = None
-        ad_algorithm (optional) - string deciding which anomaly detection classifier to use:
-            'rf' or 'xgboost', default = 'xgboost'
-        wavelet (optional) - string deciding which wavelet to use while computing cwt in standalone clusters analysis:
-            'morlet' or 'ricker' (as available in SciPy), default = 'morlet'
-        set (optional) - string indicating which part of the dataset in self.data to analyse:
-            'train', 'val' or 'test', default = 'test'
+        Class initialization (class object creation). Arguments: \n
+        - data - object of a Data class, containing all 3 datasets (train, val, test) with:
+          X, Xraw, message_bits, message_decoded, MMSI,
+        - if_visualize (optional) - boolean deciding whether to show training performance or not,
+            default=False,
+        - optimize (optional) - string, which classifier hyperparameters to optimize,
+	        'max_depth' or 'n_estimators', default=None,
+        - ad_algorithm (optional) - string, which anomaly detection classifier to use:
+            'rf' or 'xgboost', default='xgboost',
+        - wavelet (optional) - string, which wavelet to use while computing cwt in standalone clusters analysis:
+            'morlet' or 'ricker' (as available in SciPy), default='morlet',
+        - set (optional) - string indicating which part of the dataset in self.data to analyse:
+            'train', 'val' or 'test', default='test'.
         """
         # Initialize models and necessary variables
         self._ad_algorithm = ad_algorithm
@@ -68,7 +71,7 @@ class AnomalyDetection:
             self._field_classifier = pickle.load(open('utils/anomaly_detection_files/standalone_'+wavelet+'_field_classifier_'+ad_algorithm+'.h5', 'rb'))
         else:
             # otherwise train a classifier from scratch
-            self._train_field_classifier(data)
+            self._train_field_classifier()
         if os.path.exists('utils/anomaly_detection_files/inside_field_classifier_'+ad_algorithm+'.h5'):
             # If there is a file with the trained inside clusters field classifier saved, load it
             self._inside_field_classifier = pickle.load(open('utils/anomaly_detection_files/inside_field_classifier_'+ad_algorithm+'.h5', 'rb'))
@@ -105,26 +108,24 @@ class AnomalyDetection:
                 accuracy.append(np.mean(pred == variables[3][i]))
             print("  valset " + str(round(np.mean(accuracy),4)) )
         # Optimize hyperparametres if allowed
-        if optimize == 'max_depth': self._optimize_standalone_cluster_classifier(data, hyperparameter='max_depth')
-        elif optimize == 'n_estimators': self._optimize_standalone_cluster_classifier(data, hyperparameter='n_estimators')
-        elif optimize == 'k': self._optimize_knn(data)
+        if optimize == 'max_depth': self._optimize_standalone_cluster_classifier(hyperparameter='max_depth')
+        elif optimize == 'n_estimators': self._optimize_standalone_cluster_classifier(hyperparameter='n_estimators')
+        elif optimize == 'k': self._optimize_knn()
         elif optimize == 'max_depth2': self._optimize_inside_field_classifier(hyperparameter='max_depth')
         elif optimize == 'n_estimators2': self._optimize_inside_field_classifier(hyperparameter='n_estimators')
     
 
     ### ---------------------------- Standalone clusters part ---------------------------------
-    def _train_field_classifier(self, data_original):
+    def _train_field_classifier(self):
         """ 
         Train a random forest or xgboost to classify which fields of AIS message to correct
-        and save it as pickle in utils/anomaly_detection_files/field_classifier.h5
-        Argument: data_original - object of a Data class, containing all 3 datasets (train, val, test) with:
-          X, Xraw, message_bits, message_decoded, MMSI
+        and save it as pickle in utils/anomaly_detection_files/field_classifier.h5.
         """
         # Check if the file with the field classifier inputs exist
         if not os.path.exists('utils/anomaly_detection_files/standalone_'+self._wavelet+'_inputs.h5'):
             # if not, create a corrupted dataset
             print("  Preparing for training a classifier...")
-            self._create_field_classifier_dataset(data_original=data_original)
+            self._create_field_classifier_dataset()
             print("  Complete.")
         variables = pickle.load(open('utils/anomaly_detection_files/standalone_'+self._wavelet+'_inputs.h5', 'rb'))
         differences = variables[0]
@@ -150,15 +151,16 @@ class AnomalyDetection:
         # Save
         pickle.dump(self._field_classifier, open('utils/anomaly_detection_files/standalone_'+self._wavelet+'_field_classifier_'+self._ad_algorithm+'.h5', 'ab'))
         
-    def _create_field_classifier_dataset(self, data_original):
+    def _create_field_classifier_dataset(self):
         """
         Corrupt random messages, collect the corrupted fields and their differences to create a dataset 
         that a field classifier can learn on and save it as pickle in 
-        utils/anomaly_detection_files/standalone_clusters_inputs.h5
-        Argument: data - object of a Data class, containing all 3 datasets (train, val, test) with:
-          X, Xraw, message_bits, message_decoded, MMSI 
+        utils/anomaly_detection_files/standalone_clusters_inputs.h5.
         """
-        data = copy.deepcopy(data_original)
+        file = h5py.File(name='data/Gdansk.h5', mode='r')
+        data = Data(file=file)
+        data.split(train_percentage=50, val_percentage=25) # split into train, val and test set
+        file.close()
         # Compose a dataset from train and val sets, keep test untouched
         message_bits = np.concatenate((data.message_bits_train, data.message_bits_val), axis=0)
         message_decoded = np.concatenate((data.message_decoded_train, data.message_decoded_val), axis=0)
@@ -166,7 +168,7 @@ class AnomalyDetection:
         field_bits = np.array([6, 8, 38, 42, 50, 60, 61, 89, 116, 128, 137, 143, 145, 148])  # range of fields
         differences =  []
         y = []
-        corruption = Corruption(message_bits,1)
+        corruption = Corruption(message_bits)
         for field in self.fields:  # Corrupt the specified field
             differences_field = []
             y_field = []
@@ -250,7 +252,7 @@ class AnomalyDetection:
         X.append((np.abs(np.std(with_) - np.std(without)))/(np.std(with_)+1e-6))
         return X
     
-    def _optimize_standalone_cluster_classifier(self, data_original, hyperparameter):
+    def _optimize_standalone_cluster_classifier(self, hyperparameter):
         """ 
         Choose optimal value of max_depth or n_estimators for a Random Forest/XGBoost classifier
         for standalone clusters
@@ -263,7 +265,7 @@ class AnomalyDetection:
         if not os.path.exists('utils/anomaly_detection_files/standalone_'+self._wavelet+'_inputs.h5'):
             # if not, create a corrupted dataset
             print("  Preparing for training a classifier...")
-            self._create_field_classifier_dataset(data_original=data_original)
+            self._create_field_classifier_dataset()
             print("  Complete.")
         variables = pickle.load(open('utils/anomaly_detection_files/standalone_'+self._wavelet+'_inputs.h5', 'rb'))
         differences_train = variables[0]
@@ -332,15 +334,18 @@ class AnomalyDetection:
             self._num_estimators = int(input("Choose the optimal n_estimators: "))
         if os.path.exists('utils/anomaly_detection_files/standalone_'+self._wavelet+'_field_classifier_'+self._ad_algorithm+'.h5'):
             os.remove('utils/anomaly_detection_files/standalone_'+self._wavelet+'_field_classifier_'+self._ad_algorithm+'.h5')
-        self._train_field_classifier(data_original)
+        self._train_field_classifier()
 
-    def _optimize_knn(self, data_original):
+    def _optimize_knn(self):
         """ 
         Choose optimal value of k for k-NN classifier for standalone clusters
         Argument: data_original - object of a Data class, containing all 3 datasets (train, val, test) with:
           X, Xraw, message_bits, message_decoded, MMSI
         """
-        data = copy.deepcopy(data_original)
+        file = h5py.File(name='data/Gdansk.h5', mode='r')
+        data = Data(file=file)
+        data.split(train_percentage=50, val_percentage=25) # split into train, val and test set
+        file.close()
         field_bits = np.array([6, 8, 38, 42, 50, 60, 61, 89, 116, 128, 137, 143, 145, 148])  # range of fields
         # Iterate over params to find optimal one
         params = [1,3,5,7,9]            
@@ -350,7 +355,7 @@ class AnomalyDetection:
             accuracy_k = []
             # Try several times
             message_bits = np.concatenate((data.message_bits_train, data.message_bits_val), axis=0)
-            corruption = Corruption(message_bits,1)
+            corruption = Corruption(message_bits)
             for i in range(int(message_bits.shape[0]/10)):
             # Create a corrupted dataset
                 # Compose a dataset from train and val sets, keep test untouched
@@ -575,8 +580,8 @@ class AnomalyDetection:
         y.append([])
         y.append([])
         corruption = []
-        corruption.append(Corruption(message_bits[0],1))
-        corruption.append(Corruption(message_bits[1],1))
+        corruption.append(Corruption(message_bits[0]))
+        corruption.append(Corruption(message_bits[1]))
         for i in [0,1]: # If i==0 add to train, if i==1 to val
             for field in self.inside_fields:
                 samples_field = []
