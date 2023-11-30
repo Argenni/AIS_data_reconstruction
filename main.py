@@ -18,8 +18,8 @@ Creates (saved as .txt):
 """
 print("\n----------- AIS Data Reconstruction ---------- ")
 
-# ----------- Part 0 - Initialization ----------
-print("\n----------- Part 0 - Initialization ---------- ")
+# ----------- Initialization ----------
+print("\n----------- Initialization ---------- ")
 # Important imports
 import numpy as np
 import h5py
