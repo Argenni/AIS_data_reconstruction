@@ -2,10 +2,10 @@
 Analyses the datasets using different time windows and check the performace
 of all stages of AIS message reconstruction. \n
 Requires: Gdansk.h5 / Baltic.h5 / Gibraltar.h5 file with the following datasets (created by data_.py):
- - message_bits - numpy array of AIS messages in binary form (1 column = 1 bit), shape=(num_messages (805), num_bits (168)),
- - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape=(num_messages (805), num_fields (14)),
- - X - numpy array, AIS feature vectors (w/o normalization), shape=(num_messages (805), num_features (115)),
- - MMSI - list of MMSI identifiers from each AIS message, len=num_messages (805). \n
+ - message_bits - numpy array of AIS messages in binary form (1 column = 1 bit), shape=(num_messages, num_bits (168)),
+ - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape=(num_messages, num_fields (14)),
+ - X - numpy array, AIS feature vectors (w/o normalization), shape=(num_messages, num_features (115)),
+ - MMSI - list of MMSI identifiers from each AIS message, len=num_messages. \n
 Creates 03_timecomp_.h5 file, with OK_vec with average: 
  - if clustering: silhouette and CC,
  - if anomaly detection: F1 score of detecting messages and fields.
@@ -34,10 +34,8 @@ clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
 ad_algorithm = 'rf' # 'rf' or 'xgboost'
 stage = 'ad' # 'clustering', 'ad' or 'prediction'
 filename = ['Gdansk.h5', 'Baltic.h5', 'Gibraltar.h5']
-percentages_clust = [0, 5, 10, 20]
-percentages_ad = [5, 10, 20]
-if stage == 'clustering': percentages = percentages_clust
-elif stage == 'ad': percentages = percentages_ad
+if stage == 'clustering': percentages =  [0, 5, 10, 20]
+else: percentages = [5, 10, 20]
 windows = [5, 10, 15, 20, 30, 60, 120, 180, 360]
 # --------------------------------------------------------------------------------
 
