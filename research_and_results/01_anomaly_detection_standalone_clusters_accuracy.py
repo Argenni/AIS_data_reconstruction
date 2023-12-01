@@ -1,8 +1,8 @@
 # ------------------ Examine the anomaly detection of AIS message reconstruction --------------------
-# ---------------------------------- Standalone clusters -------------------------------------------- 
+# ---------------------------------- 1-element clusters -------------------------------------------- 
 """
 Artificially damages each bit of a randomly chosen 20 AIS messages and check if the message is still
- assigned to the same cluster as before, if not, if it forms a standalone cluster (conducts then 
+ assigned to the same cluster as before, if not, if it forms a 1-element cluster (conducts then 
  a procedure to find a right cluster and damaged field to that message)
 Requires: Gdansk.h5 file with the following datasets (created by data_Gdansk.py):
  - message_bits - numpy array of AIS messages in binary form (1 column = 1 bit), shape = (num_messages (805), num_bits (168))
@@ -16,7 +16,7 @@ Creates 01_anomaly_detection_standalone_clusters_Gdansk_.h5 file with OK_vec and
  5. row - mean Jaccard score of field multilabel classification - also in baseline,
  6. row - mean Hamming score of field multilabel classification - also in baseline.
 """
-print("\n----------- AIS Anomaly detection - Standalone clusters accuracy --------- ")
+print("\n----------- AIS Anomaly detection - 1-element clusters accuracy --------- ")
 
 # ----------- Part 0 - Initialization ----------
 # Important imports
@@ -29,7 +29,7 @@ import os
 import sys
 sys.path.append('.')
 from utils.initialization import Data, decode # pylint: disable=import-error
-from utils.clustering import Clustering, check_cluster_assignment
+from utils.clustering import Clustering
 from utils.anomaly_detection import AnomalyDetection, calculate_ad_accuracy
 from utils.miscellaneous import count_number, Corruption  
 from research import visualize_corrupted_bits, check_cluster_assignment
@@ -65,9 +65,9 @@ else:  # or run the computations on the original data
 
     # Preprocess data
     print(" Preprocessing data... ")
-    data.X_train, _, _ = data.normalize(data.Xraw_train)
-    data.X_val, _, _ = data.normalize(data.Xraw_val)
-    data.X, _, _ = data.normalize(data.Xraw)  
+    data.X_train, _, _ = data.standarize(data.Xraw_train)
+    data.X_val, _, _ = data.standarize(data.Xraw_val)
+    data.X, _, _ = data.standarize(data.Xraw)  
 
     # First clustering
     clustering = Clustering()
@@ -82,8 +82,8 @@ else:  # or run the computations on the original data
 
 
     # ----------- Part 1 - Computing accuracy ----------
-    print(" Corrupting bit by bit...") 
-    # Artificially corrupt the dataset
+    print(" Damaging bit by bit...") 
+    # Artificially damage the dataset
     corruption = Corruption(data.X) 
     OK_vec = np.zeros((8,146))
     baseline = np.zeros((5,146))
@@ -95,7 +95,7 @@ else:  # or run the computations on the original data
         OK_vec2 = np.zeros((8,20))  # choose 20 messages
         baseline2 = np.zeros((5,20))
         for j in range(20):  # for each chosen message:
-            # corrupt its ith bit
+            # damage its ith bit
             X_corr = copy.deepcopy(data.Xraw)
             MMSI_corr = copy.deepcopy(data.MMSI)
             message_decoded_corr = copy.deepcopy(data.message_decoded)
@@ -105,23 +105,23 @@ else:  # or run the computations on the original data
             X_corr[message_idx,:] = X_0
             MMSI_corr[message_idx] = MMSI_0
             message_decoded_corr[message_idx,:] = message_decoded_0
-            X_corr, _, _ = data.normalize(X_corr)
+            X_corr, _, _ = data.standarize(X_corr)
             # cluster again to find new cluster assignment
             if clustering_algorithm == 'kmeans':
                 K_corr, _ = count_number(MMSI_corr)
                 idx_corr, _ = clustering.run_kmeans(X=X_corr,K=K_corr)
             elif clustering_algorithm == 'DBSCAN':
                 idx_corr, K_corr = clustering.run_DBSCAN(X=X_corr,distance=distance)
-            # check if the cluster is the same despite corruption
+            # check if the cluster is the same despite the damage
             OK_vec2[0,j] = check_cluster_assignment(
                 idx=idx, 
                 idx_corr=idx_corr, 
                 message_idx=message_idx
                 )
 
-            # Check if the cluster is a standalone cluster
-            outliers = AnomalyDetection(data=data)
-            outliers.detect_standalone_clusters(
+            # Check if the cluster is a 1-element cluster
+            outliers = AnomalyDetection()
+            outliers.detect_in_1element_clusters(
                 idx=idx_corr,
                 idx_vec=range(-1, np.max(idx_corr)+1),
                 X=X_corr,
@@ -136,7 +136,7 @@ else:  # or run the computations on the original data
                 
                 # Check which field is damaged
                 field_bits = np.array([6, 8, 38, 42, 50, 60, 61, 89, 116, 128, 137, 143, 148])  # range of fields
-                field = sum(field_bits <= bit)  # check to which field the corrupted bit belong to
+                field = sum(field_bits <= bit)  # check to which field the damaged bit belong to
                 accuracies = calculate_ad_accuracy([field], outliers.outliers[message_idx][2])
                 OK_vec2[3,j] = accuracies["recall"]
                 OK_vec2[4,j] = accuracies["precision"]
@@ -175,9 +175,9 @@ titles = {
     }
 visualize_corrupted_bits(OK_vec[0:3,:], titles)
 print(" Final cluster assignment accuracy: " + str(round(np.mean(OK_vec[2,:]),2)) + "%")
-print(" Standalone cluster assigment accuracy: " + str(round(np.mean(OK_vec[2,OK_vec[1,:]>0]),2)) + "%")
+print(" 1-element-cluster assigment accuracy: " + str(round(np.mean(OK_vec[2,OK_vec[1,:]>0]),2)) + "%")
 print(" Feature indication recall: " + str(round(np.mean(np.divide(OK_vec[3,OK_vec[1,:]>0],OK_vec[1,OK_vec[1,:]>0]))*100,2)) + "%,"
-+ " baseline: " + str(round(np.mean(np.divide(baseline[0,OK_vec[1,:]>0],OK_vec[1,OK_vec[1,:]>0]))*100,2)) + "%")  # only for standalone clusters
++ " baseline: " + str(round(np.mean(np.divide(baseline[0,OK_vec[1,:]>0],OK_vec[1,OK_vec[1,:]>0]))*100,2)) + "%")  # only for 1-element clusters
 print(" Feature indication precision: " + str(round(np.mean(np.divide(OK_vec[4,OK_vec[1,:]>0],OK_vec[1,OK_vec[1,:]>0]))*100,2)) + "%,"
 + " baseline: " + str(round(np.mean(np.divide(baseline[1,OK_vec[1,:]>0],OK_vec[1,OK_vec[1,:]>0]))*100,2)) + "%")
 print(" Feature indication f1 score: " + str(round(np.mean(np.divide(OK_vec[5,OK_vec[1,:]>0],OK_vec[1,OK_vec[1,:]>0]))*100,2)) + "%,"

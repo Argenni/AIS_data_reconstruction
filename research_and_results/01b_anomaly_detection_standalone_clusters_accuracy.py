@@ -1,8 +1,8 @@
 # ------------------ Examine the anomaly detection of AIS message reconstruction --------------------
-# ---------------------------------- Standalone clusters -------------------------------------------- 
+# ---------------------------------- 1-element clusters -------------------------------------------- 
 """
 Artificially damages random bit of a randomly chosen AIS messages and check the performace
-of standalone clusters anomaly detection phase.
+of 1-element-cluster anomaly detection phase.
 Requires: Gdansk.h5 file with the following datasets (created by data_Gdansk.py):
  - message_bits - numpy array of AIS messages in binary form (1 column = 1 bit), shape = (num_messages (805), num_bits (168))
  - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape = (num_messages (805), num_fields (14))
@@ -16,9 +16,9 @@ Creates 01b_anomaly_detection_standalone_clusters_Gdansk_.h5 file, with OK_vec w
 5. fields to correct classification Jaccard score,
 6. fields to correct classification Hamming score. 
 """
-print("\n----------- AIS Anomaly detection - Standalone clusters accuracy part 2 --------- ")
+print("\n----------- AIS Anomaly detection - 1-element-cluster accuracy part 2 --------- ")
 
-# ----------- Part 0 - Initialization ----------
+# ----------- Initialization ----------
 # Important imports
 import numpy as np
 import h5py
@@ -71,9 +71,9 @@ else:  # or run the computations on the original data
     # Preprocess data
     print(" Preprocessing data... ")
     K, _ = count_number(data.MMSI)  # Count number of groups/ships
-    data.X_train, _, _ = data.normalize(data.Xraw_train)
-    data.X_val, _, _ = data.normalize(data.Xraw_val)
-    data.X, _, _ = data.normalize(data.Xraw)  
+    data.X_train, _, _ = data.standarize(data.Xraw_train)
+    data.X_val, _, _ = data.standarize(data.Xraw_val)
+    data.X, _, _ = data.standarize(data.Xraw)  
 
     # First clustering
     clustering = Clustering()
@@ -87,41 +87,41 @@ else:  # or run the computations on the original data
 
 
     # ----------- Part 1 - Computing accuracy ----------
-    print(" Corrupting messages...") 
-    # Artificially corrupt the dataset
-    num_experiments = 100 # number of messages to randomly choose and corrupt
+    print(" Damaging messages...") 
+    # Artificially damage the dataset
+    num_experiments = 100 # number of messages to randomly choose and damage
     num_metrics = 6 # number of quality metrics to compute
     bits = np.array(np.arange(8,42).tolist() + np.arange(50,60).tolist() + np.arange(61,128).tolist() + np.arange(143,145).tolist())
-    for j in range(2): # iterate 2 times: for 1 and 2 bits corrupted
+    for j in range(2): # iterate 2 times: for 1 and 2 bits damaged
         corruption = Corruption(data.X)
         OK_vec2 = np.zeros((num_experiments, num_metrics))
         baseline2 = np.zeros((num_experiments, num_metrics-1))
         for i in range(num_experiments):  # For each of the randomly chosen AIS messages 
             stop = False
             while not stop:
-                # corrupt its random bit
+                # damage its random bit
                 Xraw_corr = copy.deepcopy(data.Xraw)
                 MMSI_corr = copy.deepcopy(data.MMSI)
                 message_decoded_corr = copy.deepcopy(data.message_decoded)
                 bit_idx = np.random.permutation(bits)[0:j+1].tolist()
                 message_bits_corr, message_idx = corruption.corrupt_bits(message_bits=data.message_bits, bit_idx=bit_idx[0])
-                if j: # if two bits must be corrupted
+                if j: # if two bits must be damaged
                     message_bits_corr, message_idx = corruption.corrupt_bits(message_bits_corr, message_idx=message_idx, bit_idx=bit_idx[1])
                 # put it back to the dataset
                 X_0, MMSI_0, message_decoded_0 = decode(message_bits_corr[message_idx,:])
                 Xraw_corr[message_idx,:] = X_0
                 MMSI_corr[message_idx] = MMSI_0
                 message_decoded_corr[message_idx,:] = message_decoded_0
-                X_corr, _, _ = data.normalize(Xraw_corr)
+                X_corr, _, _ = data.standarize(Xraw_corr)
                 # cluster again to find new cluster assignment
                 K_corr, MMSI_vec_corr = count_number(MMSI_corr)
                 if clustering_algorithm == 'kmeans':
                     idx_corr, _ = clustering.run_kmeans(X=X_corr,K=K_corr)
                 elif clustering_algorithm == 'DBSCAN':
                     idx_corr, K_corr = clustering.run_DBSCAN(X=X_corr,distance=distance)
-                # Check if the cluster is a standalone cluster
-                outliers = AnomalyDetection(data=data, ad_algorithm=ad_algorithm)
-                outliers.detect_standalone_clusters(
+                # Check if the cluster is a 1-element cluster
+                outliers = AnomalyDetection(ad_algorithm=ad_algorithm)
+                outliers.detect_in_1element_clusters(
                     idx=idx_corr,
                     idx_vec=range(-1, np.max(idx_corr)+1),
                     X=X_corr,
@@ -166,7 +166,7 @@ else:  # or run the computations on the original data
                     "Longitude", "Latitude","Course over\nground","True\nheading", 
                     "Special\nmanouvre\nindicator"]
                 fig, ax = plt.subplots(ncols=2, nrows=2)
-                # Plot corrupted fields message by message         
+                # Plot damaged fields message by message         
                 messages = np.zeros_like(corruption.indices_corrupted)
                 messages[message_idx] = 1
                 messages = messages[idx_corr==outliers.outliers[message_idx][1]]
@@ -179,7 +179,7 @@ else:  # or run the computations on the original data
                 ax[0,0].legend(["Original values", "Corrupted value"])
                 # Plot the result of a wavelet transform
                 with_ = message_decoded_corr[idx_corr==outliers.outliers[message_idx][1],7] # from all messages from the determined cluster
-                without = np.delete(message_decoded_corr,message_idx,axis=0)  # and without the corrupted message
+                without = np.delete(message_decoded_corr,message_idx,axis=0)  # and without the damaged message
                 without = without[np.delete(idx_corr,message_idx,axis=0) == outliers.outliers[message_idx][1],7]
                 if len(with_)>1: with_ = abs(with_[1:len(with_)]-with_[0:len(with_)-1]) # compute the derivative
                 scale = max(with_) # normalize
@@ -221,8 +221,8 @@ else:  # or run the computations on the original data
 
 # ----------- Part 2 - Visualization ----------
 print(" Complete.")
-print(" With 1 bit corrupted:")
-print(" - Standalone cluster assigment accuracy: " + str(round(OK_vec_1[0],2)) + "%")
+print(" With 1 bit damaged:")
+print(" - 1-element cluster assigment accuracy: " + str(round(OK_vec_1[0],2)) + "%")
 print(" - Feature indication recall: " + str(round(OK_vec_1[1],2)) + "%,"
 + " baseline: " + str(round(baseline_1[0],2)) + "%")
 print(" - Feature indication precision: " + str(round(OK_vec_1[2],2)) + "%,"
@@ -233,8 +233,8 @@ print(" - Feature indication Jaccard: " + str(round(OK_vec_1[4],2)) + "%,"
 + " baseline: " + str(round(baseline_1[3],2)) + "%")
 print(" - Feature indication Hamming: " + str(round(OK_vec_1[5],2)) + "%,"
 + " baseline: " + str(round(baseline_1[4],2)) + "%")
-print(" With 2 bits corrupted:")
-print(" - Standalone cluster assigment accuracy: " + str(round(OK_vec_2[0],2)) + "%")
+print(" With 2 bits damaged:")
+print(" - 1-element cluster assigment accuracy: " + str(round(OK_vec_2[0],2)) + "%")
 print(" - Feature indication recall: " + str(round(OK_vec_2[1],2)) + "%,"
 + " baseline: " + str(round(baseline_2[0],2)) + "%")
 print(" - Feature indication precision: " + str(round(OK_vec_2[2],2)) + "%,"

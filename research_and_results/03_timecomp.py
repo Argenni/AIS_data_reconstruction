@@ -1,19 +1,17 @@
-# ------------------ Examine the impact of observation time on AIS message reconstruction --------------------
 """
-Analyse the datasets using different time windows and check the performace
-of all stages of AIS message reconstruction.
+Analyses the datasets using different time windows and check the performace
+of all stages of AIS message reconstruction. \n
 Requires: Gdansk.h5 / Baltic.h5 / Gibraltar.h5 file with the following datasets (created by data_.py):
- - message_bits - numpy array of AIS messages in binary form (1 column = 1 bit), shape = (num_messages (805), num_bits (168))
- - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape = (num_messages (805), num_fields (14))
- - X - numpy array, AIS feature vectors (w/o normalization), shape = (num_messages (805), num_features (115))
- - MMSI - list of MMSI identifier from each AIS message, len = num_messages (805)
-Creates 00_timecomp_.h5 file, with OK_vec with average:
+ - message_bits - numpy array of AIS messages in binary form (1 column = 1 bit), shape=(num_messages (805), num_bits (168)),
+ - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape=(num_messages (805), num_fields (14)),
+ - X - numpy array, AIS feature vectors (w/o normalization), shape=(num_messages (805), num_features (115)),
+ - MMSI - list of MMSI identifiers from each AIS message, len=num_messages (805). \n
+Creates 03_timecomp_.h5 file, with OK_vec with average: 
  - if clustering: silhouette and CC,
- - if anomaly detection: F1 score of detecting messages and fields
+ - if anomaly detection: F1 score of detecting messages and fields.
 """
-print("\n----------- AIS message reconstruction - observation time comparison  --------- ")
+print("\n----------- The impact of observation time on AIS message reconstruction  --------- ")
 
-# ----------- Part 0 - Initialization ----------
 # Important imports
 import numpy as np
 import h5py
@@ -41,7 +39,6 @@ percentages_ad = [5, 10, 20]
 if stage == 'clustering': percentages = percentages_clust
 elif stage == 'ad': percentages = percentages_ad
 windows = [5, 10, 15, 20, 30, 60, 120, 180, 360]
-
 # --------------------------------------------------------------------------------
 
 # Decide what to do
@@ -55,9 +52,9 @@ while precomputed != '1' and precomputed != '2':
 print(" Importing files... ")
 if precomputed == '2':  # Load file with precomputed values
     if stage == 'clustering':
-        file = h5py.File(name='research_and_results/00_timecomp_' + clustering_algorithm, mode='r')
+        file = h5py.File(name='research_and_results/03_timecomp_' + clustering_algorithm, mode='r')
     elif stage == 'ad':
-        file = h5py.File(name='research_and_results/00_timecomp_' + ad_algorithm, mode='r')
+        file = h5py.File(name='research_and_results/03_timecomp_' + ad_algorithm, mode='r')
     OK_vec = np.array(file.get('OK_vec'))
     file.close()
 
@@ -97,11 +94,11 @@ else:  # or run the computations
                     print(stop)
                     time_window = TimeWindow(start, stop)
                     time_window.use_time_window(data, crop_train=False, crop_val=False, verbose=False)
-                    data.X, _, _ = data.normalize(data.Xraw)
+                    data.X, _, _ = data.standarize(data.Xraw)
                     if (data.Xraw).shape[0] == 0: break
                     else: 
                         for percentage_num in range(len(percentages)):
-                            # Corrupt data
+                            # Damage data
                             Xraw_corr = copy.deepcopy(data.Xraw)
                             MMSI_corr = copy.deepcopy(data.MMSI)
                             message_decoded_corr = copy.deepcopy(data.message_decoded)
@@ -124,7 +121,7 @@ else:  # or run the computations
                             # Preprocess data
                             _, MMSI_vec = count_number(data.MMSI)                
                             K, _ = count_number(MMSI_corr)  # Count number of groups/ships
-                            Xcorr, _, _ = data.normalize(Xraw_corr) 
+                            Xcorr, _, _ = data.standarize(Xraw_corr) 
                             clustering = Clustering() # perform clustering
                             if clustering_algorithm == 'kmeans':
                                 print(" Running k-means clustering...")
@@ -134,13 +131,13 @@ else:  # or run the computations
                                 idx_corr, K = clustering.run_DBSCAN(X=Xcorr,distance=distance)
                             # Run anomaly detection if needed 
                             if stage == 'ad' or stage == 'prediction':
-                                outliers = AnomalyDetection(data=data, ad_algorithm=ad_algorithm)
-                                outliers.detect_standalone_clusters(
+                                outliers = AnomalyDetection(ad_algorithm=ad_algorithm)
+                                outliers.detect_in_1element_clusters(
                                     idx=idx_corr,
                                     idx_vec=range(-1, np.max(idx_corr)+1),
                                     X=Xcorr,
                                     message_decoded=message_decoded_corr)
-                                outliers.detect_inside(
+                                outliers.detect_in_multielement_clusters(
                                     idx=idx_corr,
                                     message_decoded=message_decoded_corr,
                                     timestamp=data.timestamp)
@@ -204,12 +201,12 @@ else:
     # Save file
     input("Press Enter to save and exit...")
     if stage == 'clustering':
-        if os.path.exists('research_and_results/00_timecomp_'+clustering_algorithm):
-            os.remove('research_and_results/00_timecomp_'+clustering_algorithm)
-        file = h5py.File('research_and_results/00_timecomp_'+clustering_algorithm, mode='a')
+        if os.path.exists('research_and_results/03_timecomp_'+clustering_algorithm):
+            os.remove('research_and_results/03_timecomp_'+clustering_algorithm)
+        file = h5py.File('research_and_results/03_timecomp_'+clustering_algorithm, mode='a')
     elif stage == 'ad':
-        if os.path.exists('research_and_results/00_timecomp_'+ad_algorithm):
-            os.remove('research_and_results/00_timecomp_'+ad_algorithm)
-        file = h5py.File('research_and_results/00_timecomp_'+ad_algorithm, mode='a')
+        if os.path.exists('research_and_results/03_timecomp_'+ad_algorithm):
+            os.remove('research_and_results/03_timecomp_'+ad_algorithm)
+        file = h5py.File('research_and_results/03_timecomp_'+ad_algorithm, mode='a')
     file.create_dataset('OK_vec', data=OK_vec)
     file.close()

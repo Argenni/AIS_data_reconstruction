@@ -181,10 +181,10 @@ class Data:
         elif file.filename == 'data/Baltic.h5':
             self.timestamp = [datetime.datetime.strptime(i, '%d/%m/%Y %H:%M:%S') for i in self.timestamp]
 
-    def normalize(self, X):
+    def standarize(self, X):
         """
         Changes the data distribution to have mean=0 and std=1. \n
-        Argument: X - dataset to normalize, shape = (num_messages, num_features). \n
+        Argument: X - dataset to standarize, shape = (num_messages, num_features). \n
         Returns:
         - mu - numpy array, vector of means of each feature, shape=(num_features (115),),
         - sigma - numpy array, vector of standard deviations of each feature, shape=(num_features (115),).

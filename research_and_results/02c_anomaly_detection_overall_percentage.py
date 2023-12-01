@@ -16,7 +16,7 @@ Creates 02c_anomaly_detection_standalone_clusters_Gdansk_.h5 file, with OK_vec w
 """
 print("\n----------- AIS Anomaly detection - overall accuracy part 2 --------- ")
 
-# ----------- Part 0 - Initialization ----------
+# ----------- Initialization ----------
 # Important imports
 import numpy as np
 import h5py
@@ -66,9 +66,9 @@ else:  # or run the computations on the original data
     # Preprocess data
     print(" Preprocessing data... ")
     K, _ = count_number(data.MMSI)  # Count number of groups/ships
-    data.X_train, _, _ = data.normalize(data.Xraw_train)
-    data.X_val, _, _ = data.normalize(data.Xraw_val)
-    data.X, _, _ = data.normalize(data.Xraw)  
+    data.X_train, _, _ = data.standarize(data.Xraw_train)
+    data.X_val, _, _ = data.standarize(data.Xraw_val)
+    data.X, _, _ = data.standarize(data.Xraw)  
 
     # First clustering
     clustering = Clustering()
@@ -82,8 +82,8 @@ else:  # or run the computations on the original data
 
 
     # ----------- Part 1 - Computing accuracy ----------
-    print(" Corrupting messages...") 
-    # Artificially corrupt the dataset
+    print(" Damaging messages...") 
+    # Artificially damage the dataset
     num_experiments = 10
     percentages = [5, 10]
     num_metrics = 5 # number of quality metrics to compute
@@ -97,12 +97,12 @@ else:  # or run the computations on the original data
             MMSI_corr = copy.deepcopy(data.MMSI)
             message_decoded_corr = copy.deepcopy(data.message_decoded)
             corruption = Corruption(data.X)
-            outliers = AnomalyDetection(data=data, ad_algorithm=ad_algorithm)
+            outliers = AnomalyDetection(ad_algorithm=ad_algorithm)
             fields = []
             messages = []
             num_messages = int(len(data.MMSI)*percentage/100)
             for n in range(num_messages):
-                # Choose 0.05 or 0.1 of all messages and corrupt 2 their random bits
+                # Choose 0.05 or 0.1 of all messages and damage 2 their random bits
                 field = np.random.choice(outliers.inside_fields, size=2, replace=False)
                 fields.append(field)
                 bit_idx = np.random.randint(field_bits[field[0]-1], field_bits[field[0]]-1)
@@ -115,7 +115,7 @@ else:  # or run the computations on the original data
                 Xraw_corr[message_idx,:] = X_0
                 MMSI_corr[message_idx] = MMSI_0
                 message_decoded_corr[message_idx,:] = message_decoded_0
-            X_corr, _, _ = data.normalize(Xraw_corr)
+            X_corr, _, _ = data.standarize(Xraw_corr)
             # cluster again to find new cluster assignment
             K_corr, MMSI_vec_corr = count_number(MMSI_corr)
             if clustering_algorithm == 'kmeans':
@@ -124,13 +124,13 @@ else:  # or run the computations on the original data
                 idx_corr, K_corr = clustering.run_DBSCAN(X=X_corr,distance=distance)
             
             # Perform anomaly detection
-            outliers.detect_standalone_clusters(
+            outliers.detect_in_1element_clusters(
                 idx=idx_corr,
                 idx_vec=range(-1, np.max(idx_corr)+1),
                 X=X_corr,
                 message_decoded=message_decoded_corr,
                 )
-            outliers.detect_inside(
+            outliers.detect_in_multielement_clusters(
                 idx=idx_corr,
                 message_decoded=message_decoded_corr,
                 timestamp=data.timestamp
@@ -158,13 +158,13 @@ else:  # or run the computations on the original data
 
 # ----------- Part 2 - Visualization ----------
 print(" Complete.")
-print(" With 0.05 messages corrupted:")
+print(" With 0.05 messages damaged:")
 print(" - Message indication recall: " + str(round(OK_vec_1[0],2)) + "%")
 print(" - Message indication precision: " + str(round(OK_vec_1[1],2)) + "%")
 print(" - Message indication accuracy: " + str(round(OK_vec_1[2],2)) + "%")
 print(" - Feature indication recall: " + str(round(OK_vec_1[3],2)) + "%")
 print(" - Feature indication precision: " + str(round(OK_vec_1[4],2)) + "%")
-print(" With 0.1 messages corrupted corrupted:")
+print(" With 0.1 messages damaged:")
 print(" - Message indication recall: " + str(round(OK_vec_2[0],2)) + "%")
 print(" - Message indication precision: " + str(round(OK_vec_2[1],2)) + "%")
 print(" - Message indication accuracy: " + str(round(OK_vec_2[2],2)) + "%")

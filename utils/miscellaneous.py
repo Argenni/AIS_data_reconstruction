@@ -62,15 +62,15 @@ class Corruption:
     def __init__(self, X):
         """
         Class initialization (class object creation). \n 
-        Argument: X - numpy array, dataset to corrupt, shape=(num_messages, num_features(115)).
+        Argument: X - numpy array, dataset to damage, shape=(num_messages, num_features(115)).
         """
         self.indices_corrupted = np.zeros(X.shape[0])
 
     def _choose_message(self):
         """
-        Chooses a message to be artificially corrupted (for internal use only). \n
-        Argument: message_bits - numpy array, AIS message in binary form to corrupt, shape=(num_messages, 168). \n
-        Returns: message_idx - scalar, int, index of a message to corrupt.
+        Chooses a message to be artificially damaged (for internal use only). \n
+        Argument: message_bits - numpy array, AIS message in binary form to damage, shape=(num_messages, 168). \n
+        Returns: message_idx - scalar, int, index of a message to damage.
         """
         choose = True
         while choose:
@@ -91,7 +91,7 @@ class Corruption:
 
     def corrupt_bits(self, message_bits, bit_idx, message_idx=None):
         """
-        Corrupts a randomly chosen message by swapping its desired bits. \n
+        Damages a randomly chosen message by swapping its desired bits. \n
         Arguments:
         - message_bits - numpy array, AIS message in binary form to corrupt, shape=(num_messages, 168),
         - bit_idx - scalar, int, index of a bit to corrupt,
@@ -101,7 +101,7 @@ class Corruption:
         - message_idx - scalar, int, index of a corrupted message.
         """
         message_bits_corr = copy.deepcopy(message_bits)
-        # Choose a message to corrupt
+        # Choose a message to damage
         if message_idx is None:
             message_idx = self._choose_message()
         # Create an error seed

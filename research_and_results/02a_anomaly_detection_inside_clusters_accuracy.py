@@ -1,8 +1,8 @@
 # ------------------ Examine the anomaly detection of AIS message reconstruction --------------------
-# ---------------------------------- Inside clusters -------------------------------------------- 
+# ---------------------------------- Multi-element clusters -------------------------------------------- 
 """
 Artificially damages random bit of a randomly chosen AIS message and checks the performace
-of anomaly detection phase inside clusters.
+of anomaly detection multi-element-cluster phase.
 Requires: Gdansk.h5 / Baltic.h5 / Gibraltar.h5 file with the following datasets (created by data_.py):
  - message_bits - numpy array of AIS messages in binary form (1 column = 1 bit), shape = (num_messages (805), num_bits (168))
  - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape = (num_messages (805), num_fields (14))
@@ -16,9 +16,9 @@ Creates 02a_anomaly_detection_standalone_clusters_Gdansk_.h5 file, with OK_vec w
 5. fields to correct classification Jaccard score,
 6. fields to correct classification Hamming score. 
 """
-print("\n----------- AIS Anomaly detection - Inside clusters accuracy part 1 --------- ")
+print("\n----------- AIS Anomaly detection - Multi-element-cluster accuracy part 1 --------- ")
 
-# ----------- Part 0 - Initialization ----------
+# ----------- Initialization ----------
 # Important imports
 import numpy as np
 import h5py
@@ -68,9 +68,9 @@ else:  # or run the computations on the original data
     # Preprocess data
     print(" Preprocessing data... ")
     K, _ = count_number(data.MMSI)  # Count number of groups/ships
-    data.X_train, _, _ = data.normalize(data.Xraw_train)
-    data.X_val, _, _ = data.normalize(data.Xraw_val)
-    data.X, _, _ = data.normalize(data.Xraw)  
+    data.X_train, _, _ = data.standarize(data.Xraw_train)
+    data.X_val, _, _ = data.standarize(data.Xraw_val)
+    data.X, _, _ = data.standarize(data.Xraw)  
 
     # First clustering
     clustering = Clustering()
@@ -84,28 +84,28 @@ else:  # or run the computations on the original data
 
 
     # ----------- Part 1 - Computing accuracy ----------
-    print(" Corrupting messages...") 
-    # Artificially corrupt the dataset
-    num_experiments = 100 # number of messages to randomly choose and corrupt
+    print(" Damaging messages...") 
+    # Artificially damage the dataset
+    num_experiments = 100 # number of messages to randomly choose and damage
     num_metrics = 6 # number of quality metrics to compute
     field_bits = np.array([6, 8, 38, 42, 50, 60, 61, 89, 116, 128, 137, 143, 145, 148])  # range of fields
     bits = np.array(np.arange(50,60).tolist() + np.arange(61,128).tolist())
-    for j in range(2): # iterate 2 times: for 1 and 2 bits corrupted
+    for j in range(2): # iterate 2 times: for 1 and 2 bits damaged
         corruption = Corruption(data.X)
         OK_vec2 = np.zeros((num_experiments, num_metrics))
         np.random.seed(1)
         for i in range(num_experiments):  # For each of the randomly chosen AIS messages
-            outliers = AnomalyDetection(data=data, ad_algorithm=ad_algorithm)
+            outliers = AnomalyDetection(ad_algorithm=ad_algorithm)
             stop = False
             while not stop:
-                # corrupt its random bit
+                # damage its random bit
                 Xraw_corr = copy.deepcopy(data.Xraw)
                 MMSI_corr = copy.deepcopy(data.MMSI)
                 message_decoded_corr = copy.deepcopy(data.message_decoded)
                 field = np.random.choice(outliers.inside_fields, size=2, replace=False)
                 bit_idx = np.random.randint(field_bits[field[0]-1], field_bits[field[0]]-1)
                 message_bits_corr, message_idx = corruption.corrupt_bits(message_bits=data.message_bits, bit_idx=bit_idx)
-                if j: # if two bits must be corrupted
+                if j: # if two bits must be damaged
                     new_bit_idx = np.random.randint(field_bits[field[1]-1], field_bits[field[1]]-1)
                     message_bits_corr, message_idx = corruption.corrupt_bits(message_bits_corr, message_idx=message_idx, bit_idx=new_bit_idx)
                 # put it back to the dataset
@@ -113,7 +113,7 @@ else:  # or run the computations on the original data
                 Xraw_corr[message_idx,:] = X_0
                 MMSI_corr[message_idx] = MMSI_0
                 message_decoded_corr[message_idx,:] = message_decoded_0
-                X_corr, _, _ = data.normalize(Xraw_corr)
+                X_corr, _, _ = data.standarize(Xraw_corr)
                 # cluster again to find new cluster assignment
                 K_corr, MMSI_vec_corr = count_number(MMSI_corr)
                 if clustering_algorithm == 'kmeans':
@@ -127,7 +127,7 @@ else:  # or run the computations on the original data
                 corruption.indices_corrupted[message_idx] = stop
             
             # Perform anomaly detection inside clusters
-            outliers.detect_inside(
+            outliers.detect_in_multielement_clusters(
                 idx=idx_corr,
                 message_decoded=message_decoded_corr,
                 timestamp=data.timestamp
@@ -152,14 +152,14 @@ else:  # or run the computations on the original data
 
 # ----------- Part 2 - Visualization ----------
 print(" Complete.")
-print(" With 1 bit corrupted:")
+print(" With 1 bit damaged:")
 print(" - Message indication accuracy: " + str(round(OK_vec_1[0],2)) + "%")
 print(" - Feature indication recall: " + str(round(OK_vec_1[1],2)) + "%")
 print(" - Feature indication precision: " + str(round(OK_vec_1[2],2)) + "%")
 print(" - Feature indication f1 score: " + str(round(OK_vec_1[3],2)) + "%")
 print(" - Feature indication Jaccard: " + str(round(OK_vec_1[4],2)) + "%")
 print(" - Feature indication Hamming: " + str(round(OK_vec_1[5],2)) + "%")
-print(" With 2 bits corrupted:")
+print(" With 2 bits damaged:")
 print(" - Message indication accuracy: " + str(round(OK_vec_2[0],2)) + "%")
 print(" - Feature indication recall: " + str(round(OK_vec_2[1],2)) + "%,")
 print(" - Feature indication precision: " + str(round(OK_vec_2[2],2)) + "%")

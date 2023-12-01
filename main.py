@@ -1,4 +1,3 @@
-# ----------------------------------------------- AIS Data Reconstruction ---------------------------------------------
 """"
 Loads prepared AIS data, preprocesses it and conducts the reconstruction process:
 1. clustering with DBSCAN or kmeans to distinguish individual trajectories,
@@ -18,6 +17,7 @@ Creates (saved as .txt):
 """
 print("\n----------- AIS Data Reconstruction ---------- ")
 
+# ----------------------------------------------- AIS Data Reconstruction ---------------------------------------------
 # ----------- Initialization ----------
 print("\n----------- Initialization ---------- ")
 # Important imports
@@ -49,7 +49,7 @@ file.close()
 
 # Preprocess data
 print(" Preprocessing data... ")
-time_window = TimeWindow(0, 35)  # apply 25-min time window
+time_window = TimeWindow(0, 35)  # apply 35-min time window
 data = time_window.use_time_window(data)
 K_train, MMSI_vec_train = count_number(data.MMSI_train)
 K_val, MMSI_vec_val = count_number(data.MMSI_val)
@@ -58,15 +58,14 @@ visualize_trajectories(
     X=data.Xraw,
     MMSI=data.MMSI,
     MMSI_vec=MMSI_vec,
-    goal='data_visualization'
-    )
-data.X_train, mu_train, sigma_train = data.normalize(data.Xraw_train)
-data.X_val, mu_val, sigma_val = data.normalize(data.Xraw_val)
-data.X, mu, sigma = data.normalize(data.Xraw)
+    goal='data_visualization')
+data.X_train, mu_train, sigma_train = data.standarize(data.Xraw_train)
+data.X_val, mu_val, sigma_val = data.standarize(data.Xraw_val)
+data.X, mu, sigma = data.standarize(data.Xraw)
 print(" Complete.")
 
 
-# ----------- Part 1 - Clustering ----------------
+# -------------------------- Part 1 - Clustering -------------------------
 print("\n----------- Part 1 - Clustering ---------- ")
 clustering = Clustering()
 if clustering_algorithm == 'kmeans':
@@ -81,42 +80,36 @@ visualize_trajectories(
     X=data.Xraw,
     MMSI=idx,
     MMSI_vec=range(-1, np.max(idx)+1),
-    goal='clustering'
-)
+    goal='clustering')
 
 
-# ----------- Part 2 - Anomaly detection ------- 
+# ------------------------- Part 2 - Anomaly detection --------------------- 
 print("\n----------- Part 2 - Anomaly detection ---------- ")
 print("Looking for anomalies...")
-outliers = AnomalyDetection(
-    data=data,
+ad = AnomalyDetection(
     if_visualize=True,
     optimize=None, # 'max_depth', 'n_estimators', 'k', 'max_depth2', 'n_estimators2', None
     ad_algorithm=ad_algorithm,
-    wavelet=wavelet
-    )
-# Conduct anomaly detection - search for standalone clusters
-outliers.detect_standalone_clusters(
+    wavelet=wavelet)
+ad.detect_in_1element_clusters(
     idx=idx,
     idx_vec=range(-1, np.max(idx)+1),
     X=data.X,
-    message_decoded=data.message_decoded,
-    )
-# Conduct anomaly detection - search inside proper clusters
-outliers.detect_inside(
+    message_decoded=data.message_decoded)
+ad.detect_in_multielement_clusters(
     idx=idx, 
     message_decoded=data.message_decoded,
-    timestamp=data.timestamp
-    )
+    timestamp=data.timestamp)
 print(" Complete.")
-print("Anomalies found: " + str(np.sum(np.array(outliers.outliers, dtype=object)[:,0])))
+print("Anomalies found: " + str(np.sum(np.array(ad.outliers, dtype=object)[:,0])))
 visualize_trajectories(
     X=data.Xraw,
-    MMSI=np.array(outliers.outliers, dtype=object)[:,0].tolist(),
+    MMSI=np.array(ad.outliers, dtype=object)[:,0].tolist(),
     MMSI_vec=[0,1],
-    goal='anomaly_detection'
-    )
+    goal='anomaly_detection')
 
+
+# ------------------ Finalization --------------------
 # Save results
 input("\nPress Enter to save results and exit...")
 np.savetxt(
@@ -127,7 +120,7 @@ np.savetxt(
     header="Cluster_id")
 np.savetxt(
     'output/anomaly_detection.txt',
-    np.array(outliers.outliers, dtype=object), 
+    np.array(ad.outliers, dtype=object), 
     delimiter=',',
     fmt='%s',
     header="If_outlier, Correct_cluster_id, Damage_fields")

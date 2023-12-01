@@ -15,7 +15,7 @@ from sklearn.neighbors import LocalOutlierFactor
 
 def check_cluster_assignment(idx, idx_corr, message_idx):
     """
-    Checks if the corrupted message is assigned together with other messages from its vessel.
+    Checks if the damaged message is assigned together with other messages from its vessel.
     Arguments:
     - idx - list of indices of clusters assigned to each message, len=num_messages,
     - idx_corr - list of indices of clusters assigned to each message in a dataset, len=num_messages,
@@ -82,34 +82,42 @@ def visualize_corrupted_bits(OK_vec_all, titles):
     fig.show()
 
 class AnomalyDetection_LOF(AnomalyDetection):
-    """Class that inherits from Anomaly Detection, for checking the performance of LOF in this stage"""
+    """
+    Class that inherits from Anomaly Detection for checking the performance of LOF in this stage.
+    """
     
-    def __init__(self, data, wavelet='morlet', set='test'):
+    def __init__(self, wavelet='morlet'):
+        """
+        Class initialization (class object creation). Argument:
+         wavelet (optional) - string, which wavelet to use while computing cwt in 1-element clusters analysis:
+            'morlet' or 'ricker' (as available in SciPy), default='morlet'.
+        """
         self._wavelet = wavelet
-        if set == 'train': self.outliers = np.zeros((data.X_train.shape[0],3), dtype=int).tolist()
-        elif set == 'val': self.outliers = np.zeros((data.X_val.shape[0],3), dtype=int).tolist()
-        else: self.outliers = np.zeros((data.X.shape[0],3), dtype=int).tolist()
         self.k = 5
+        self.outliers = []
 
-    def _train_field_classifier(self): pass
-    def _create_field_classifier_dataset(self): pass
-    def _optimize_standalone_cluster_classifier(self): pass
+    def _train_1element_classifier(self): pass
+    def _create_1element_classifier_dataset(self): pass
+    def _optimize_1element_classifier(self): pass
     def _optimize_knn(self): pass
-    def _create_inside_field_classifier_dataset(self): pass
-    def _train_inside_field_classifier(self): pass
-    def _optimize_inside_field_classifier(self): pass
+    def _create_multielement_classifier_dataset(self): pass
+    def _train_multielement_classifier(self): pass
+    def _optimize_multielement_classifier(self): pass
     def _find_damaged_fields(self): pass
 
-    def detect_standalone_clusters(self, idx, idx_vec, X, message_decoded):
+    def detect_in_1element_clusters(self, idx, idx_vec, X, message_decoded):
         """
-        Runs the entire anomaly detection based on searching for standalone clusters. Arguments:
+        Runs the entire anomaly detection based on searching for 1-element clusters. Arguments:
         - idx - list of number of cluster assigned to each AIS message, len=num_messages,
         - idx_vec - list of uniqe cluster numbers in a dataset,
         - X - numpy array, AIS feature vectors, shape=(num_messages, num_features (115)),
         - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape=(num_mesages, num_fields (14)).
         """
-        # Find standalone clusters
-        indices = self._find_standalone_clusters(idx, idx_vec)
+        # Initialize
+        if len(self.outliers)==0 or len(self.outliers)!=X.shape[0]:
+            self.outliers = np.zeros((X.shape[0],3), dtype=int).tolist()
+        # Find 1-element clusters
+        indices = self._find_1element_clusters(idx, idx_vec)
         for i in indices:
             idx_new = copy.deepcopy(idx)
             # Mark those points as outliers
@@ -135,13 +143,16 @@ class AnomalyDetection_LOF(AnomalyDetection):
             if self.outliers[i][2] != 0:
                 if len(self.outliers[i][2])>=np.floor(len(self.fields)/2): self.outliers[i][0] = 0
 
-    def detect_inside(self, idx, message_decoded, timestamp):
+    def detect_in_multielement_clusters(self, idx, message_decoded, timestamp):
         """
-        Runs the anomaly detection for messages inside proper clusters. Arguments:
+        Runs the anomaly detection for messages inside multi-element clusters. Arguments:
         - idx - list of number of cluster assigned to each AIS message, len=num_messages,
         - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape=(num_mesages, num_fields (14)),
         - timestamp - list of strings with timestamp of each message, len=num_messages.
         """
+        # Initialize
+        if len(self.outliers)==0 or len(self.outliers)!=message_decoded.shape[0]:
+            self.outliers = np.zeros((message_decoded.shape[0],3), dtype=int).tolist()
         # Evaluate identifier fields [2,3,12]
         for field in self.inside_fields2:
             _, idx_vec = count_number(idx)
@@ -167,7 +178,7 @@ class AnomalyDetection_LOF(AnomalyDetection):
         for field in range(len(self.inside_fields)):
             samples = []
             for message_idx in range(message_decoded.shape[0]):
-                samples.append(self.compute_inside_sample(message_decoded, idx, message_idx, timestamp, self.inside_fields[field]))
+                samples.append(self.compute_multielement_sample(message_decoded, idx, message_idx, timestamp, self.inside_fields[field]))
             clf = LocalOutlierFactor()
             pred.append(np.round(clf.fit_predict(samples)))
         for message_idx in range(message_decoded.shape[0]):

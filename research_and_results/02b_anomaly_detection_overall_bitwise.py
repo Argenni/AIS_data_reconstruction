@@ -16,7 +16,7 @@ Creates 02b_anomaly_detection_overall_bitwise_Gdansk_.h5 file, with OK_vec with:
 """
 print("\n----------- AIS Anomaly detection - overall accuracy part 1 --------- ")
 
-# ----------- Part 0 - Initialization ----------
+# ----------- Initialization ----------
 # Important imports
 import numpy as np
 import h5py
@@ -71,14 +71,14 @@ else:  # or run the computations on the original data
     # Preprocess data
     print(" Preprocessing data... ")
     K, _ = count_number(data.MMSI)  # Count number of groups/ships
-    data.X_train, _, _ = data.normalize(data.Xraw_train)
-    data.X_val, _, _ = data.normalize(data.Xraw_val)
-    data.X, _, _ = data.normalize(data.Xraw)  
+    data.X_train, _, _ = data.standarize(data.Xraw_train)
+    data.X_val, _, _ = data.standarize(data.Xraw_val)
+    data.X, _, _ = data.standarize(data.Xraw)  
 
 
     # ----------- Part 1 - Computing accuracy ----------
-    print(" Corrupting bit by bit...") 
-    # Artificially corrupt the dataset
+    print(" Damaging bit by bit...") 
+    # Artificially damage the dataset
     corruption = Corruption(data.X) 
     OK_vec = np.zeros((4,146))
     field_bits = np.array([6, 8, 38, 42, 50, 60, 61, 89, 116, 128, 137, 143, 145, 148])  # range of fields
@@ -87,9 +87,9 @@ else:  # or run the computations on the original data
         corruption.reset()
         OK_vec2 = np.zeros((4,20))  # choose 20 messages
         mask[bit] = 1
-        field = sum(field_bits <= bit)  # check to which field the corrupted bit belong to
+        field = sum(field_bits <= bit)  # check to which field the damaged bit belong to
         for j in range(20):  # for each chosen message:
-            # corrupt its ith bit
+            # damage its ith bit
             X_corr = copy.deepcopy(data.Xraw)
             MMSI_corr = copy.deepcopy(data.MMSI)
             message_decoded_corr = copy.deepcopy(data.message_decoded)
@@ -99,7 +99,7 @@ else:  # or run the computations on the original data
             X_corr[message_idx,:] = X_0
             MMSI_corr[message_idx] = MMSI_0
             message_decoded_corr[message_idx,:] = message_decoded_0
-            X_corr, _, _ = data.normalize(X_corr)
+            X_corr, _, _ = data.standarize(X_corr)
             # cluster
             clustering = Clustering()
             if clustering_algorithm == 'kmeans':
@@ -108,14 +108,14 @@ else:  # or run the computations on the original data
             elif clustering_algorithm == 'DBSCAN':
                 idx_corr, K_corr = clustering.run_DBSCAN(X=X_corr,distance=distance)
 
-            outliers = AnomalyDetection(data=data, ad_algorithm=ad_algorithm)
-            outliers.detect_standalone_clusters(
+            outliers = AnomalyDetection(ad_algorithm=ad_algorithm)
+            outliers.detect_in_1element_clusters(
                 idx=idx_corr,
                 idx_vec=range(-1, np.max(idx_corr)+1),
                 X=X_corr,
                 message_decoded=message_decoded_corr
                 )
-            outliers.detect_inside(
+            outliers.detect_in_multielement_clusters(
                 idx=idx_corr,
                 message_decoded=message_decoded_corr,
                 timestamp=data.timestamp

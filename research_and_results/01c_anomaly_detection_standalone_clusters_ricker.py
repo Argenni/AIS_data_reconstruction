@@ -1,8 +1,8 @@
 # ------------------ Examine the anomaly detection of AIS message reconstruction --------------------
-# ---------------------------------- Standalone clusters -------------------------------------------- 
+# ---------------------------------- 1-element clusters -------------------------------------------- 
 """
 Artificially damages random bit of a randomly chosen AIS messages and compare the performace
-of standalone clusters anomaly detection phase using Morlet and Ricker wavelet.
+of 1-element-cluster anomaly detection phase using Morlet and Ricker wavelet.
 Requires: Gdansk/Baltic/Gibraltar.h5 files with the following datasets (created by data_.py):
  - message_bits - numpy array of AIS messages in binary form (1 column = 1 bit), shape = (num_messages (805), num_bits (168))
  - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape = (num_messages (805), num_fields (14))
@@ -10,9 +10,9 @@ Requires: Gdansk/Baltic/Gibraltar.h5 files with the following datasets (created 
  - MMSI - list of MMSI identifier from each AIS message, len = num_messages (805)
 Creates 01c_anomaly_detection_standalone_clusters_ricker.h5 file, with OK_vec with classification f1 scores.
 """
-print("\n---- AIS Anomaly detection - Standalone clusters accuracy part 3 - Morlet vs Ricker -------- ")
+print("\n---- AIS Anomaly detection - 1-element-cluster accuracy part 3 - Morlet vs Ricker -------- ")
 
-# ----------- Part 0 - Initialization ----------
+# ----------- Initialization ----------
 # Important imports
 import numpy as np
 import h5py
@@ -56,8 +56,8 @@ if precomputed == '2':  # Load file with precomputed values
 
 else:  # or run the computations on the original data
     # ----------- Part 1 - Computing accuracy ----------
-    # Artificially corrupt the dataset
-    num_experiments = 100 # number of messages to randomly choose and corrupt
+    # Artificially damage the dataset
+    num_experiments = 100 # number of messages to randomly choose and damage
     bits = np.array(np.arange(8,42).tolist() + np.arange(50,60).tolist() + np.arange(61,128).tolist() + np.arange(143,145).tolist())
     OK_vec2 = np.zeros((num_experiments, len(wavelet), len(ad_algorithm), len(filename)))
    
@@ -71,8 +71,8 @@ else:  # or run the computations on the original data
         # Preprocess data
         print(" Preprocessing data... ")
         K, _ = count_number(data.MMSI_val)  # Count number of groups/ships
-        data.X_train, _, _ = data.normalize(data.Xraw_train)
-        data.X_val, _, _ = data.normalize(data.Xraw_val) 
+        data.X_train, _, _ = data.standarize(data.Xraw_train)
+        data.X_val, _, _ = data.standarize(data.Xraw_val) 
         # First clustering
         clustering = Clustering()
         if clustering_algorithm == 'kmeans':
@@ -85,12 +85,12 @@ else:  # or run the computations on the original data
         
         for wav_num in range(len(wavelet)): # iterate for morlet (0) and ricker (1)
             for alg_num in range(len(ad_algorithm)): # iterate for rf (0) and xgboost (1)
-                print(" Corrupting messages: dataset " + str(file_num+1)+"., " + wavelet[wav_num]+", " + ad_algorithm[alg_num]+"...") 
+                print(" Damaging messages: dataset " + str(file_num+1)+"., " + wavelet[wav_num]+", " + ad_algorithm[alg_num]+"...") 
                 corruption = Corruption(data.X_val)
                 for i in range(num_experiments):  # For each of the randomly chosen AIS messages 
                     stop = False
                     while not stop:
-                        # corrupt its random bit
+                        # damage its random bit
                         Xraw_corr = copy.deepcopy(data.Xraw_val)
                         MMSI_corr = copy.deepcopy(data.MMSI_val)
                         message_decoded_corr = copy.deepcopy(data.message_decoded_val)
@@ -102,20 +102,18 @@ else:  # or run the computations on the original data
                         Xraw_corr[message_idx,:] = X_0
                         MMSI_corr[message_idx] = MMSI_0
                         message_decoded_corr[message_idx,:] = message_decoded_0
-                        X_corr, _, _ = data.normalize(Xraw_corr)
+                        X_corr, _, _ = data.standarize(Xraw_corr)
                         # cluster again to find new cluster assignment
                         K_corr, MMSI_vec_corr = count_number(MMSI_corr)
                         if clustering_algorithm == 'kmeans':
                             idx_corr, _ = clustering.run_kmeans(X=X_corr,K=K_corr)
                         elif clustering_algorithm == 'DBSCAN':
                             idx_corr, K_corr = clustering.run_DBSCAN(X=X_corr,distance=distance)
-                        # Check if the cluster is a standalone cluster
-                        outliers = AnomalyDetection(
-                            data=data, 
+                        # Check if the cluster is a 1-element cluster
+                        outliers = AnomalyDetection( 
                             ad_algorithm=ad_algorithm[alg_num], 
-                            wavelet=wavelet[wav_num],
-                            set='val')
-                        outliers.detect_standalone_clusters(
+                            wavelet=wavelet[wav_num])
+                        outliers.detect_in_1element_clusters(
                             idx=idx_corr,
                             idx_vec=range(-1, np.max(idx_corr)+1),
                             X=X_corr,

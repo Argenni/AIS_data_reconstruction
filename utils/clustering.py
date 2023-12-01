@@ -12,7 +12,7 @@ from utils.miscellaneous import count_number
 
 class Clustering:
     """
-    Class that introduces AIS data clustering using either k-means or DBSCAN
+    Class that introduces AIS data clustering using either k-means or DBSCAN.
     """
     _epsilon = 3.16
     _minpts = 1

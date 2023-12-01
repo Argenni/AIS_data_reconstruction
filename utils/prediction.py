@@ -25,11 +25,9 @@ class Prediction:
     _max_depth = 7
     _num_estimators = 20
     
-    def __init__(self, data, if_visualize=False, optimize=None, prediction_algorithm='xgboost'):
+    def __init__(self, if_visualize=False, optimize=None, prediction_algorithm='xgboost'):
         """
         Class initialization (class object creation). Arguments:
-        - data - object of a Data class, containing all 3 datasets (train, val, test) with:
-          X, Xraw, message_bits, message_decoded, MMSI,
         - if_visualize (optional) - boolean deciding whether to show training performance or not,
             default=False,
         - optimize (optional) - string, name of regressor hyperparameter to optimize, 
@@ -47,7 +45,7 @@ class Prediction:
         # Show some regressor metrics if allowed
         if if_visualize:
             # Calculate the MSE of the regressor on the training and validation data
-            variables = pickle.load(open('utils/prediciton_files/inputs.h5', 'rb'))
+            variables = pickle.load(open('utils/prediciton_files/dataset_'+self._prediction_algorithm+'.h5', 'rb'))
             print(" Average MSE of regressor:")
             mse = []
             for i in range(len(variables[1])):
@@ -66,15 +64,15 @@ class Prediction:
     def _train_regressor(self):
         """
         Trains a regressor that will be used in prediction phase of AIS data reconstruction
-        and saves it as pickle in utils/prediction_files/regressor.h5 and in self._regressor.
+        and saves it as pickle in utils/prediction_files/regressor_.h5 and in self._regressor.
         """
         # Check if the file with the regressor inputs exist
-        if not os.path.exists('utils/prediction_files/inputs.h5'):
+        if not os.path.exists('utils/prediction_files/dataset_'+self._prediction_algorithm+'.h5'):
             # if not, create a corrupted dataset
             print(" Preparing for training a regressor...")
             self._create_regressor_dataset()
             print(" Complete.")
-        variables = pickle.load(open('utils/prediction_files/inputs.h5', 'rb'))
+        variables = pickle.load(open('utils/prediction_files/dataset'+self._prediction_algorithm+'.h5', 'rb'))
         # Train one classifier for each class
         print(" Training a regressor...")
         self._regressor = []
@@ -86,7 +84,7 @@ class Prediction:
     def _create_regressor_dataset(self):
         """
         Creates a dataset that a regressor for prediciton phase of AIS data reconstruction will be trained on
-        and saves it as pickle in utils/prediction_files/inputs.h5.
+        and saves it as pickle in utils/prediction_files/dataset_.h5.
         """
         # Import files
         file = h5py.File(name='data/Baltic.h5', mode='r')
@@ -112,7 +110,7 @@ class Prediction:
         timestamp.append(np.concatenate((data1.timestamp_val, data2.timestamp_val), axis=0))
         # !!!!!!!!!!!!!!!!!!!!
         variables = []
-        pickle.dump(variables, open('utils/prediction_files/inputs.h5', 'ab'))
+        pickle.dump(variables, open('utils/prediction_files/dataset_'+self._prediction_algorithm+'.h5', 'ab'))
 
     def _optimize_regressor(self, hyperparameter):
         pass
