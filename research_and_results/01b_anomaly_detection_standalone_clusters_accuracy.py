@@ -1,5 +1,3 @@
-# ------------------ Examine the anomaly detection of AIS message reconstruction --------------------
-# ---------------------------------- 1-element clusters -------------------------------------------- 
 """
 Artificially damages random bit of a randomly chosen AIS messages and check the performace
 of 1-element-cluster anomaly detection phase.

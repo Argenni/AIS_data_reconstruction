@@ -117,14 +117,12 @@ class AnomalyDetection:
         # Check if the file with the field classifier dataset exist
         if not os.path.exists('utils/anomaly_detection_files/1element_'+self._wavelet+'_dataset.h5'):
             # if not, create a damaged dataset
-            print("  Preparing for training a classifier...")
             self._create_1element_classifier_dataset()
-            print("  Complete.")
         variables = pickle.load(open('utils/anomaly_detection_files/1element_'+self._wavelet+'_dataset.h5', 'rb'))
         differences = variables[0]
         y = variables[1]
         # Train one classifier for each class (field)
-        print("  Training an anomaly detector...")
+        print("  Training a 1-element-cluster classifier...")
         self._field_classifier = []
         for i in range(len(y)):
             if self._ad_algorithm == 'rf':
@@ -150,6 +148,7 @@ class AnomalyDetection:
         that a 1-element-cluster classifier can learn on and saves it as pickle in 
         utils/anomaly_detection_files/1element_dataset.h5.
         """
+        print("  Preparing for training a 1-element-cluster classifier...")
         file = h5py.File(name='data/Gdansk.h5', mode='r')
         data = Data(file=file)
         data.split(train_percentage=50, val_percentage=25) # split into train, val and test set
@@ -211,6 +210,7 @@ class AnomalyDetection:
         # Save file with the inputs for the classifier
         variables = [differences_train, y_train, differences_val, y_val]
         pickle.dump(variables, open('utils/anomaly_detection_files/1element_'+self._wavelet+'_dataset.h5', 'ab'))
+        print("  Complete.")
 
     def compute_fields_diff(self, message_decoded, idx, message_idx, field):
         """
@@ -248,17 +248,13 @@ class AnomalyDetection:
     def _optimize_1element_classifier(self, hyperparameter):
         """ 
         Chooses optimal value of max_depth or n_estimators for a Random Forest/XGBoost classifier
-        for 1-element-cluster anomaly detection. Arguments: 
-        - data_original - object of a Data class, containing all 3 datasets (train, val, test) with:
-          X, Xraw, message_bits, message_decoded, MMSI,
-        - hyperparameter - string indicating which hyperparameter to optimize: 'max_depth' or 'n_estimators'.
+        for 1-element-cluster anomaly detection. \n 
+        Argument: hyperparameter - string indicating which hyperparameter to optimize: 'max_depth' or 'n_estimators'.
         """
         # Check if the file with the classifier dataset exist
         if not os.path.exists('utils/anomaly_detection_files/1element_'+self._wavelet+'_dataset.h5'):
             # if not, create a damaged dataset
-            print("  Preparing for training a classifier...")
             self._create_1element_classifier_dataset()
-            print("  Complete.")
         variables = pickle.load(open('utils/anomaly_detection_files/1element_'+self._wavelet+'_dataset.h5', 'rb'))
         differences_train = variables[0]
         y_train = variables[1]
@@ -268,7 +264,7 @@ class AnomalyDetection:
         params = [2, 5, 8, 10, 13, 15, 20, 30, 50, 100]
         accuracy_train = []
         accuracy_val = []
-        print(" Search for optimal " + hyperparameter + "...")
+        print(" Searching for optimal " + hyperparameter + "...")
         for param in params:
             field_classifier = []
             if hyperparameter=='max_depth' and self._ad_algorithm=='rf':
@@ -340,7 +336,7 @@ class AnomalyDetection:
         # Iterate over params to find optimal one
         params = [1,3,5,7,9]            
         accuracy = []
-        print(" Search for optimal k...")
+        print(" Searching for optimal k...")
         for param in params:
             accuracy_k = []
             # Try several times
@@ -394,6 +390,7 @@ class AnomalyDetection:
         - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape=(num_mesages, num_fields (14)).
         """
         # Initialize
+        print("Looking for anomalies in 1-element clusters...")
         if len(self.outliers)==0 or len(self.outliers)!=X.shape[0]:
             self.outliers = np.zeros((X.shape[0],3), dtype=int).tolist()
         # Find 1-element clusters
@@ -409,6 +406,7 @@ class AnomalyDetection:
             self.outliers[i][2] = self._find_damaged_fields(message_decoded, idx_new, i)
             # If around half of fields are classified abnormal, that message is not an outlier
             if len(self.outliers[i][2])>=np.floor(len(self.fields)/2): self.outliers[i][0] = 0
+        print("Complete. ")
 
     def _find_1element_clusters(self, idx, idx_vec):
         """
@@ -541,6 +539,7 @@ class AnomalyDetection:
         Requires Baltic.h5 and Gibraltar.h5 files, containing all 3 datasets (train, val, test) with:
           X, Xraw, message_bits, message_decoded, MMSI.
         """
+        print("  Preparing for training a multi-element-cluster classifier...")
         file = h5py.File(name='data/Baltic.h5', mode='r')
         data1 = Data(file=file)
         data1.split(train_percentage=50, val_percentage=25) # split into train, val and test set
@@ -622,6 +621,7 @@ class AnomalyDetection:
         # Save file with the inputs for the classifier
         variables = [x[0], y[0], x[1], y[1]]
         pickle.dump(variables, open('utils/anomaly_detection_files/multielement_dataset.h5', 'ab'))
+        print("  Complete.")
 
     def _train_multielement_classifier(self):
         """
@@ -631,10 +631,9 @@ class AnomalyDetection:
         # Check if the file with the training data exist
         if not os.path.exists('utils/anomaly_detection_files/multielement_dataset.h5'):
             # if not, create a damaged dataset
-            print("  Preparing for training multi-element-cluster classifier...")
             self._create_multielement_classifier_dataset()
-            print("  Complete.")
         variables = pickle.load(open('utils/anomaly_detection_files/multielement_dataset.h5', 'rb'))
+        print("  Training a multi-element-cluster classifier...")
         for i in range(len(self.inside_fields)):
             if self._ad_algorithm=='rf':
                 if self.inside_fields[i] != 9:
@@ -664,6 +663,7 @@ class AnomalyDetection:
                         n_estimators=self._num_estimators2_xgboost, 
                         max_depth=int(np.floor(0.8*self._max_depth2_xgboost))
                         ).fit(variables[0][i],variables[1][i]))
+        print("  Complete. ")
         # Save the model
         pickle.dump(self._inside_field_classifier, open('utils/anomaly_detection_files/multielement_classifier_'+self._ad_algorithm+'.h5', 'ab'))
 
@@ -676,9 +676,7 @@ class AnomalyDetection:
         # Check if the file with the field classifier inputs exist
         if not os.path.exists('utils/anomaly_detection_files/multielement_dataset.h5'):
             # if not, create a damaged dataset
-            print("  Preparing for training a classifier...")
             self._create_multielement_classifier_dataset()
-            print("  Complete.")
         variables = pickle.load(open('utils/anomaly_detection_files/multielement_dataset.h5', 'rb'))
         x_train = variables[0]
         y_train = variables[1]
@@ -690,7 +688,7 @@ class AnomalyDetection:
         accuracy_train_course = []
         accuracy_val = []
         accuracy_val_course = []
-        print(" Search for optimal " + hyperparameter + "...")
+        print(" Searching for optimal " + hyperparameter + "...")
         for param in params:
             field_classifier = []
             if hyperparameter=='max_depth' and self._ad_algorithm=='rf':
@@ -785,6 +783,7 @@ class AnomalyDetection:
         - timestamp - list of strings with timestamp of each message, len=num_messages.
         """
         # Initialize
+        print("Looking for anomalies in multi-element clusters...")
         if len(self.outliers)==0 or len(self.outliers)!=message_decoded.shape[0]:
             self.outliers = np.zeros((message_decoded.shape[0],3), dtype=int).tolist()
         # Evaluate identifier fields [2,3,12]
@@ -824,6 +823,7 @@ class AnomalyDetection:
                     self.outliers[message_idx][1] = idx[message_idx]
                     if self.outliers[message_idx][2]==0: self.outliers[message_idx][2] = fields
                     else: self.outliers[message_idx][2] = self.outliers[message_idx][2] + fields
+        print("Complete. ")
 
        
 def calculate_ad_accuracy(real, predictions):

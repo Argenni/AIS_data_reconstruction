@@ -124,20 +124,18 @@ else:  # or run the computations
                             Xcorr, _, _ = data.standarize(Xraw_corr) 
                             clustering = Clustering() # perform clustering
                             if clustering_algorithm == 'kmeans':
-                                print(" Running k-means clustering...")
                                 idx_corr, centroids = clustering.run_kmeans(X=Xcorr,K=K)
                             elif clustering_algorithm == 'DBSCAN':
-                                print(" Running DBSCAN clustering...")
                                 idx_corr, K = clustering.run_DBSCAN(X=Xcorr,distance=distance)
                             # Run anomaly detection if needed 
                             if stage == 'ad' or stage == 'prediction':
-                                outliers = AnomalyDetection(ad_algorithm=ad_algorithm)
-                                outliers.detect_in_1element_clusters(
+                                ad = AnomalyDetection(ad_algorithm=ad_algorithm)
+                                IsADirectoryError.detect_in_1element_clusters(
                                     idx=idx_corr,
                                     idx_vec=range(-1, np.max(idx_corr)+1),
                                     X=Xcorr,
                                     message_decoded=message_decoded_corr)
-                                outliers.detect_in_multielement_clusters(
+                                ad.detect_in_multielement_clusters(
                                     idx=idx_corr,
                                     message_decoded=message_decoded_corr,
                                     timestamp=data.timestamp)
@@ -146,12 +144,12 @@ else:  # or run the computations
                                 measure1[file_num][percentage_num][window_num].append(silhouette_score(idx_corr))
                                 measure1[file_num][percentage_num][window_num].append(calculate_CC(idx_corr, data.MMSI, MMSI_vec))
                             elif stage == 'ad':
-                                pred = np.array([outliers.outliers[n][0] for n in range(len(outliers.outliers))], dtype=int)
+                                pred = np.array([ad.outliers[n][0] for n in range(len(ad.outliers))], dtype=int)
                                 true = np.array(corruption.indices_corrupted, dtype=int)
                                 measure1[file_num][percentage_num][window_num].append(f1_score(true, pred))
                                 f1 =[]
                                 for n in range(num_messages):
-                                    accuracy = calculate_ad_accuracy(fields[n], outliers.outliers[messages[n]][2])
+                                    accuracy = calculate_ad_accuracy(fields[n], ad.outliers[messages[n]][2])
                                     f1.append(accuracy["f1"])
                                 measure2[file_num][percentage_num][window_num].append(np.mean(f1))
                             if percentage_num==0: slides[window_num,file_num] = slides[window_num,file_num]+1

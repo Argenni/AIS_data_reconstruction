@@ -85,7 +85,6 @@ visualize_trajectories(
 
 # ------------------------- Part 2 - Anomaly detection --------------------- 
 print("\n----------- Part 2 - Anomaly detection ---------- ")
-print("Looking for anomalies...")
 ad = AnomalyDetection(
     if_visualize=True,
     optimize=None, # 'max_depth', 'n_estimators', 'k', 'max_depth2', 'n_estimators2', None
@@ -100,7 +99,6 @@ ad.detect_in_multielement_clusters(
     idx=idx, 
     message_decoded=data.message_decoded,
     timestamp=data.timestamp)
-print(" Complete.")
 print("Anomalies found: " + str(np.sum(np.array(ad.outliers, dtype=object)[:,0])))
 visualize_trajectories(
     X=data.Xraw,

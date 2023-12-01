@@ -69,9 +69,7 @@ class Prediction:
         # Check if the file with the regressor inputs exist
         if not os.path.exists('utils/prediction_files/dataset_'+self._prediction_algorithm+'.h5'):
             # if not, create a corrupted dataset
-            print(" Preparing for training a regressor...")
             self._create_regressor_dataset()
-            print(" Complete.")
         variables = pickle.load(open('utils/prediction_files/dataset'+self._prediction_algorithm+'.h5', 'rb'))
         # Train one classifier for each class
         print(" Training a regressor...")
@@ -86,6 +84,7 @@ class Prediction:
         Creates a dataset that a regressor for prediciton phase of AIS data reconstruction will be trained on
         and saves it as pickle in utils/prediction_files/dataset_.h5.
         """
+        print(" Preparing for training a regressor...")
         # Import files
         file = h5py.File(name='data/Baltic.h5', mode='r')
         data1 = Data(file=file)
@@ -111,9 +110,28 @@ class Prediction:
         # !!!!!!!!!!!!!!!!!!!!
         variables = []
         pickle.dump(variables, open('utils/prediction_files/dataset_'+self._prediction_algorithm+'.h5', 'ab'))
+        print(" Complete.")
 
     def _optimize_regressor(self, hyperparameter):
-        pass
+        """ 
+        Chooses optimal value of hyperparameters for prediction stage. \n
+        Argument: hyperparameter - string indicating which hyperparameter to optimize: 
+        'max_depth' or 'n_estimators'.
+        """
+        # Check if the file with the classifier dataset exist
+        if not os.path.exists('utils/prediction_files/dataset_'+self._prediction_algorithm+'.h5'):
+            # if not, create a damaged dataset
+            self._create_regressor_dataset()
+        variables = pickle.load(open('utils/prediction_files/dataset_'+self._prediction_algorithm+'.h5', 'rb'))
+        print(" Searching for optimal " + hyperparameter + "...")
+        # !!!!!!!!!!!!!!!!!!
+        print(" Complete. ")
+         # Retrain the model
+        if hyperparameter == 'max_depth': self._max_depth = int(input("Choose the optimal max_depth: "))
+        elif hyperparameter == 'n_estimators': self._num_estimators = int(input("Choose the optimal n_estimators: "))
+        if os.path.exists('utils/prediction_files/regressor_'+self._prediction_algorithm+'.h5'):
+            os.remove('utils/prediction_files/regressor_'+self._prediction_algorithm+'.h5')
+        self._train_regressor()
 
     def reconstruct_data(self):
         pass
