@@ -174,11 +174,11 @@ class Data:
         self.Xraw = np.array(file.get('X'))
         self.MMSI = np.array(file.get('MMSI')).tolist()
         self.timestamp = np.array(file.get('timestamp').asstr()).tolist()
-        if file.filename == 'data/Gdansk.h5':
+        if file.filename == 'data/Gdansk.h5' or file.filename == 'data\Gdansk.h5':
             self.timestamp = [datetime.datetime.strptime(i, '%d-%b-%Y %H:%M:%S') for i in self.timestamp]
-        elif file.filename == 'data/Gibraltar.h5':
+        elif file.filename == 'data/Gibraltar.h5' or file.filename == 'data\Gibraltar.h5':
             self.timestamp = [datetime.datetime.strptime(i, '%Y-%m-%d %H:%M:%S') for i in self.timestamp]
-        elif file.filename == 'data/Baltic.h5':
+        elif file.filename == 'data/Baltic.h5' or file.filename == 'data\Baltic.h5':
             self.timestamp = [datetime.datetime.strptime(i, '%d/%m/%Y %H:%M:%S') for i in self.timestamp]
 
     def standarize(self, X):

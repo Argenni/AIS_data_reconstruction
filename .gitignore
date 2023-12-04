@@ -1,4 +1,4 @@
 /.vscode/launch.json
 /.vscode/settings.json
-/utils/__pycache__/*
-/research_and_results/__pycache__/*
+/utils/__pycache__/
+/research_and_results/__pycache__/
