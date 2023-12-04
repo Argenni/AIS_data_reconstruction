@@ -16,12 +16,14 @@ class Clustering:
     """
     _epsilon = 3.16
     _minpts = 1
+    _verbose = []
 
-    def __init__(self):
+    def __init__(self, verbose=False):
         """
-        Class initialization (class object creation).
+        Class initialization (class object creation). \n
+        Argument: verbose (optional) - Boolean, whether to print running logs or not, default=False
         """
-        pass
+        self._verbose = verbose
 
     def run_kmeans(self, X, K):
         """
@@ -33,11 +35,11 @@ class Clustering:
         - idx - list of indices of clusters assigned to each message, len=num_messages,
         - centroids - numpy array with centers of each cluster, shape=(K, num_features (115)).
         """
-        print("Running k-means clustering...")
+        if self._verbose: print("Running k-means clustering...")
         kmeans_model = KMeans(n_clusters=K, n_init=200, max_iter=100, tol=0.001, random_state=0).fit(X)
         idx = kmeans_model.labels_
         centroids = kmeans_model.cluster_centers_
-        print(" Complete.")
+        if self._verbose: print(" Complete.")
         return idx, centroids
 
     def run_DBSCAN(self, X, distance='euclidean', optimize=None):
@@ -53,17 +55,17 @@ class Clustering:
         - K - scalar, int, number of clusters created by DBSCAN.
         """
         # Optimize hyperparametres if allowed
-        if optimize == 'epsilon': self.optimize(X, distance, hyperparameter='epsilon')
-        elif optimize == 'minpts': self.optimize(X, distance, hyperparameter='minpts')
+        if optimize == 'epsilon': self._optimize_DBSCAN(X, distance, hyperparameter='epsilon')
+        elif optimize == 'minpts': self._optimize_DBSCAN(X, distance, hyperparameter='minpts')
         # Cluster using DBSCAN
-        print("Running DBSCAN clustering...")
+        if self._verbose: print("Running DBSCAN clustering...")
         DBSCAN_model = DBSCAN(eps = self._epsilon, min_samples = self._minpts, metric = distance).fit(X)
         idx = DBSCAN_model.labels_
         K, _ = count_number(idx)
-        print(" Complete.")
+        if self._verbose:print(" Complete.")
         return idx, K
 
-    def optimize(self, X, distance, hyperparameter):
+    def _optimize_DBSCAN(self, X, distance, hyperparameter):
         """
         Searches for optimal epsilon or minpts value for AIS data clustering using DBSCAN
         and stores it in self._epsilon or self._minpts. Arguments:

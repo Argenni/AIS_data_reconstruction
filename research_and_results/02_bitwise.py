@@ -33,7 +33,6 @@ clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
 ad_algorithm = 'rf' # 'rf' or 'xgboost'
 # --------------------------------------------------------------------------------
 
-
 # Create a list of meaningful bits to examine
 field_bits = np.array([6, 8, 38, 42, 50, 60, 61, 89, 116, 128, 137, 143, 145, 148])  # range of fields
 mask = []
@@ -58,9 +57,9 @@ while precomputed != '1' and precomputed != '2':
 print(" Importing files... ")
 if precomputed == '2':  # Load file with precomputed values
     if stage == 'clustering':
-        file = h5py.File(name='research_and_results/02_bitwise_' + clustering_algorithm, mode='r')
+        file = h5py.File(name='research_and_results/02_bitwise_'+clustering_algorithm+'.h5', mode='r')
     elif stage == 'ad':
-        file = h5py.File(name='research_and_results/02_bitwise_' + ad_algorithm, mode='r')
+        file = h5py.File(name='research_and_results/02_bitwise_'+ad_algorithm+'.h5', mode='r')
     OK_vec = np.array(file.get('OK_vec'))
     file.close()
 
@@ -85,9 +84,7 @@ else:  # or run the computations on the original data
         idx, K = clustering.run_DBSCAN(X=data.X,distance=distance)
     print(" Complete.")
 
-    # ---------------- Part 1 - Run computations -------------------
     print(" Damaging bit by bit...") 
-    # Artificially damage the dataset
     corruption = Corruption(data.X) 
     OK_vec = np.zeros((3,146))
     for bit in bits:  # For each of AIS message bits
@@ -145,7 +142,7 @@ else:  # or run the computations on the original data
         else: OK_vec[:,145] = np.mean(OK_vec2, axis=1)*100
 
 
-# ----------- Part 2 - Visualization ----------
+# Visualization
 print(" Complete.")
 if stage == 'clustering': 
     titles = {
@@ -199,18 +196,18 @@ fig.legend([
 fig.show()
 
 
+# Save results
 if precomputed == '2':
     input("Press Enter to exit...")
 else:
-    # Save file
     input("Press Enter to save and exit...")
     if stage == 'clustering':
-        if os.path.exists('research_and_results/02_bitwise_'+clustering_algorithm):
-            os.remove('research_and_results/02_bitwise_'+clustering_algorithm)
-        file = h5py.File('research_and_results/02_bitwise_'+clustering_algorithm, mode='a')
+        if os.path.exists('research_and_results/02_bitwise_'+clustering_algorithm+'.h5'):
+            os.remove('research_and_results/02_bitwise_'+clustering_algorithm+'.h5')
+        file = h5py.File('research_and_results/02_bitwise_'+clustering_algorithm+'.h5', mode='a')
     elif stage == 'ad':
-        if os.path.exists('research_and_results/02_bitwise_'+ad_algorithm):
-            os.remove('research_and_results/02_bitwise_'+ad_algorithm)
-        file = h5py.File('research_and_results/02_bitwise_'+ad_algorithm, mode='a')
+        if os.path.exists('research_and_results/02_bitwise_'+ad_algorithm+'.h5'):
+            os.remove('research_and_results/02_bitwise_'+ad_algorithm+'.h5')
+        file = h5py.File('research_and_results/02_bitwise_'+ad_algorithm+'.h5', mode='a')
     file.create_dataset('OK_vec', data=OK_vec)
     file.close()

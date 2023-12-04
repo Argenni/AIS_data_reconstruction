@@ -112,7 +112,7 @@ class AnomalyDetection_LOF(AnomalyDetection):
         if len(self.outliers)==0 or len(self.outliers)!=message_decoded.shape[0]:
             self.outliers = np.zeros((message_decoded.shape[0],3), dtype=int).tolist()
         # Evaluate identifier fields [2,3,12]
-        for field in self.inside_fields2:
+        for field in self.fields_static:
             _, idx_vec = count_number(idx)
             for i in idx_vec:
                 messages_idx = (np.where(np.array(idx)==i)[0]).tolist()
@@ -133,17 +133,17 @@ class AnomalyDetection_LOF(AnomalyDetection):
                                     self.outliers[message_idx][2] = self.outliers[message_idx][2] + [field]
         # Evaluate regular fields [5,7,8,9]
         pred = []
-        for field in range(len(self.inside_fields)):
+        for field in range(len(self.fields_dynamic)):
             samples = []
             for message_idx in range(message_decoded.shape[0]):
-                samples.append(self.compute_multielement_sample(message_decoded, idx, message_idx, timestamp, self.inside_fields[field]))
+                samples.append(self.compute_multielement_sample(message_decoded, idx, message_idx, timestamp, self.fields_dynamic[field]))
             clf = LocalOutlierFactor()
             pred.append(np.round(clf.fit_predict(samples)))
         for message_idx in range(message_decoded.shape[0]):
             if len(np.where(np.array(idx)==idx[message_idx])[0])>2:
                 fields = []
-                for i in range(len(self.inside_fields)):
-                    if pred[i][message_idx]==-1: fields.append(self.inside_fields[i])
+                for i in range(len(self.fields_dynamic)):
+                    if pred[i][message_idx]==-1: fields.append(self.fields_dynamic[i])
                 if len(fields):
                     self.outliers[message_idx][0] = 1
                     self.outliers[message_idx][1] = idx[message_idx]
@@ -211,7 +211,7 @@ else:  # or run the computations on the original data
             num_messages = int(len(data.MMSI)*percentage/100)
             for n in range(num_messages):
                 # Choose 0.05 or 0.1 of all messages and damage 2 their random bits
-                field = np.random.choice(ad.inside_fields, size=2, replace=False)
+                field = np.random.choice(ad.fields_dynamic, size=2, replace=False)
                 fields.append(field)
                 bit_idx = np.random.randint(field_bits[field[0]-1], field_bits[field[0]]-1)
                 message_bits_corr, message_idx = corruption.corrupt_bits(message_bits=data.message_bits, bit_idx=bit_idx)

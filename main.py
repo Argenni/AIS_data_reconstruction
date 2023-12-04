@@ -67,7 +67,7 @@ print(" Complete.")
 
 # -------------------------- Part 1 - Clustering -------------------------
 print("\n----------- Part 1 - Clustering ---------- ")
-clustering = Clustering()
+clustering = Clustering(verbose=True)
 if clustering_algorithm == 'kmeans':
     idx, centroids = clustering.run_kmeans(X=data.X, K=K)
 elif clustering_algorithm == 'DBSCAN':
@@ -86,7 +86,7 @@ visualize_trajectories(
 # ------------------------- Part 2 - Anomaly detection --------------------- 
 print("\n----------- Part 2 - Anomaly detection ---------- ")
 ad = AnomalyDetection(
-    if_visualize=True,
+    verbose=True,
     optimize=None, # 'max_depth', 'n_estimators', 'k', 'max_depth2', 'n_estimators2', None
     ad_algorithm=ad_algorithm,
     wavelet=wavelet)

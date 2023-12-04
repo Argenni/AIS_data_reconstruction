@@ -24,26 +24,30 @@ class Prediction:
     _regressor = []
     _max_depth = 7
     _num_estimators = 20
+    _verbose = []
     
-    def __init__(self, if_visualize=False, optimize=None, prediction_algorithm='xgboost'):
+    def __init__(self, verbose=False, optimize=None, prediction_algorithm='xgboost'):
         """
         Class initialization (class object creation). Arguments:
-        - if_visualize (optional) - boolean deciding whether to show training performance or not,
-            default=False,
+        - verbose (optional) - Boolean, whether to print running logs or not, default=False,
         - optimize (optional) - string, name of regressor hyperparameter to optimize, 
             'max_depth' or 'n_estimators', default=None (no optimization),
         - prediction_algorithm (optional) - string deciding which model to use, default = 'xgboost'.
         """
         # Initialize models and necessary variables
         self._prediction_algorithm = prediction_algorithm
+        self._verbose = verbose
         if os.path.exists('utils/prediction_files/regressor'+prediction_algorithm+'.h5'):
             # If there is a file with the trained standalone clusters field classifier saved, load it
             self._regressor = pickle.load(open('utils/prediction_files/regressor_'+prediction_algorithm+'.h5', 'rb'))
         else:
             # otherwise train a classifier from scratch
             self._train_regressor()
+        # Optimize hyperparametres if allowed
+        if optimize == 'max_depth': self._optimize_regressor(hyperparameter='max_depth')
+        elif optimize == 'n_estimators': self._optimize_regressor(hyperparameter='n_estimators')
         # Show some regressor metrics if allowed
-        if if_visualize:
+        if self._verbose:
             # Calculate the MSE of the regressor on the training and validation data
             variables = pickle.load(open('utils/prediciton_files/dataset_'+self._prediction_algorithm+'.h5', 'rb'))
             print(" Average MSE of regressor:")
@@ -57,9 +61,6 @@ class Prediction:
                 pred = self._regressor[i].predict(variables[2][i])
                 mse.append(mean_squared_error(variables[3][i],pred))
             print("  valset: " + str(round(np.mean(mse),4)))
-        # Optimize hyperparametres if allowed
-        if optimize == 'max_depth': self._optimize_regressor(hyperparameter='max_depth')
-        elif optimize == 'n_estimators': self._optimize_regressor(hyperparameter='n_estimators')
 
     def _train_regressor(self):
         """

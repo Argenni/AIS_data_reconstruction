@@ -28,8 +28,8 @@ class AnomalyDetection:
     outliers = []  # list with anomaly detection information, shape = (num_messages, 3)
     #  (1. column - if a message is outlier, 2. column - proposed correct cluster, 3. column - possibly damaged fields)
     fields = [2,3,5,7,8,9,12]
-    inside_fields = [5,7,8,9]
-    inside_fields2 = [2,3,12]
+    fields_dynamic = [5,7,8,9]
+    fields_static = [2,3,12]
     _field_classifier = []
     _num_estimators_rf = 15
     _max_depth_rf = 5
@@ -43,12 +43,12 @@ class AnomalyDetection:
     _inside_field_classifier = []
     _ad_algorithm = [] # 'rf' or 'xgboost'
     _wavelet = [] # 'morlet' or 'ricker'
+    _verbose = []
 
-    def __init__(self, if_visualize=False, optimize=None, ad_algorithm='xgboost', wavelet='morlet'):
+    def __init__(self, verbose=False, optimize=None, ad_algorithm='xgboost', wavelet='morlet'):
         """
         Class initialization (class object creation). Arguments: \n
-        - if_visualize (optional) - boolean deciding whether to show training performance or not,
-            default=False,
+        - verbose (optional) - Boolean, whether to print running logs or not, default=False,
         - optimize (optional) - string, which classifier hyperparameters to optimize,
 	        'max_depth' or 'n_estimators', default=None,
         - ad_algorithm (optional) - string, which anomaly detection classifier to use:
@@ -59,6 +59,7 @@ class AnomalyDetection:
         # Initialize models and necessary variables
         self._ad_algorithm = ad_algorithm
         self._wavelet = wavelet
+        self._verbose = verbose
         if os.path.exists('utils/anomaly_detection_files/1element_'+wavelet+'_classifier_'+ad_algorithm+'.h5'):
             # If there is a file with the trained 1-element-cluster field classifier saved, load it
             self._field_classifier = pickle.load(open('utils/anomaly_detection_files/1element_'+wavelet+'_classifier_'+ad_algorithm+'.h5', 'rb'))
@@ -71,8 +72,14 @@ class AnomalyDetection:
         else:
             # otherwise train a classifier from scratch
             self._train_multielement_classifier()
+        # Optimize hyperparametres if allowed
+        if optimize == 'max_depth': self._optimize_1element_classifier(hyperparameter='max_depth')
+        elif optimize == 'n_estimators': self._optimize_1element_classifier(hyperparameter='n_estimators')
+        elif optimize == 'k': self._optimize_knn()
+        elif optimize == 'max_depth2': self._optimize_multielement_classifier(hyperparameter='max_depth')
+        elif optimize == 'n_estimators2': self._optimize_multielement_classifier(hyperparameter='n_estimators')
         # Show some classifier metrics if allowed
-        if if_visualize:
+        if self._verbose:
             # Calculate the accuracy of the classifiers on the training data
             variables = pickle.load(open('utils/anomaly_detection_files/1element_'+wavelet+'_dataset.h5', 'rb'))
             print(" Average accuracy of 1-element-cluster classifier:")
@@ -100,12 +107,6 @@ class AnomalyDetection:
                 pred = self._inside_field_classifier[i].predict(variables[2][i])
                 accuracy.append(np.mean(pred == variables[3][i]))
             print("  valset " + str(round(np.mean(accuracy),4)) )
-        # Optimize hyperparametres if allowed
-        if optimize == 'max_depth': self._optimize_1element_classifier(hyperparameter='max_depth')
-        elif optimize == 'n_estimators': self._optimize_1element_classifier(hyperparameter='n_estimators')
-        elif optimize == 'k': self._optimize_knn()
-        elif optimize == 'max_depth2': self._optimize_multielement_classifier(hyperparameter='max_depth')
-        elif optimize == 'n_estimators2': self._optimize_multielement_classifier(hyperparameter='n_estimators')
     
 
     ### ---------------------------- 1-element clusters analysis ---------------------------------
@@ -390,7 +391,7 @@ class AnomalyDetection:
         - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape=(num_mesages, num_fields (14)).
         """
         # Initialize
-        print("Looking for anomalies in 1-element clusters...")
+        if self._verbose: print("Looking for anomalies in 1-element clusters...")
         if len(self.outliers)==0 or len(self.outliers)!=X.shape[0]:
             self.outliers = np.zeros((X.shape[0],3), dtype=int).tolist()
         # Find 1-element clusters
@@ -406,7 +407,7 @@ class AnomalyDetection:
             self.outliers[i][2] = self._find_damaged_fields(message_decoded, idx_new, i)
             # If around half of fields are classified abnormal, that message is not an outlier
             if len(self.outliers[i][2])>=np.floor(len(self.fields)/2): self.outliers[i][0] = 0
-        print("Complete. ")
+        if self._verbose: print("Complete. ")
 
     def _find_1element_clusters(self, idx, idx_vec):
         """
@@ -572,7 +573,7 @@ class AnomalyDetection:
         corruption.append(Corruption(message_bits[0]))
         corruption.append(Corruption(message_bits[1]))
         for i in [0,1]: # If i==0 add to train, if i==1 to val
-            for field in self.inside_fields:
+            for field in self.fields_dynamic:
                 samples_field = []
                 y_field = []
                 for message_idx in range(message_bits[i].shape[0]):
@@ -586,7 +587,7 @@ class AnomalyDetection:
                             bit_idx=bit_idx,
                             message_idx=message_idx)
                         if message_idx%2: # For odd idx, damage another bit
-                            new_fields = copy.deepcopy(self.inside_fields)
+                            new_fields = copy.deepcopy(self.fields_dynamic)
                             new_fields.remove(field)
                             new_field = np.random.choice(new_fields)
                             new_bit_idx = np.random.randint(field_bits[new_field-1], field_bits[new_field]-1)
@@ -634,9 +635,9 @@ class AnomalyDetection:
             self._create_multielement_classifier_dataset()
         variables = pickle.load(open('utils/anomaly_detection_files/multielement_dataset.h5', 'rb'))
         print("  Training a multi-element-cluster classifier...")
-        for i in range(len(self.inside_fields)):
+        for i in range(len(self.fields_dynamic)):
             if self._ad_algorithm=='rf':
-                if self.inside_fields[i] != 9:
+                if self.fields_dynamic[i] != 9:
                     self._inside_field_classifier.append(RandomForestClassifier(
                         random_state=0,
                         criterion='entropy',
@@ -651,7 +652,7 @@ class AnomalyDetection:
                         max_depth=int(np.floor(0.8*self._max_depth2_rf))
                         ).fit(variables[0][i],variables[1][i]))
             else:
-                if self.inside_fields[i] != 9:
+                if self.fields_dynamic[i] != 9:
                     self._inside_field_classifier.append(XGBClassifier(
                         random_state=0,
                         n_estimators=self._num_estimators2_xgboost, 
@@ -783,11 +784,11 @@ class AnomalyDetection:
         - timestamp - list of strings with timestamp of each message, len=num_messages.
         """
         # Initialize
-        print("Looking for anomalies in multi-element clusters...")
+        if self._verbose: print("Looking for anomalies in multi-element clusters...")
         if len(self.outliers)==0 or len(self.outliers)!=message_decoded.shape[0]:
             self.outliers = np.zeros((message_decoded.shape[0],3), dtype=int).tolist()
         # Evaluate identifier fields [2,3,12]
-        for field in self.inside_fields2:
+        for field in self.fields_static:
             _, idx_vec = count_number(idx)
             for i in idx_vec:
                 messages_idx = (np.where(np.array(idx)==i)[0]).tolist()
@@ -808,22 +809,22 @@ class AnomalyDetection:
                                     self.outliers[message_idx][2] = self.outliers[message_idx][2] + [field]
         # Evaluate regular fields [5,7,8,9]
         pred = []
-        for field in range(len(self.inside_fields)):
+        for field in range(len(self.fields_dynamic)):
             samples = []
             for message_idx in range(message_decoded.shape[0]):
-                samples.append(self.compute_multielement_sample(message_decoded, idx, message_idx, timestamp, self.inside_fields[field]))
+                samples.append(self.compute_multielement_sample(message_decoded, idx, message_idx, timestamp, self.fields_dynamic[field]))
             pred.append(np.round(self._inside_field_classifier[field].predict(samples)))
         for message_idx in range(message_decoded.shape[0]):
             if len(np.where(np.array(idx)==idx[message_idx])[0])>2:
                 fields = []
-                for i in range(len(self.inside_fields)):
-                    if pred[i][message_idx]: fields.append(self.inside_fields[i])
+                for i in range(len(self.fields_dynamic)):
+                    if pred[i][message_idx]: fields.append(self.fields_dynamic[i])
                 if len(fields):
                     self.outliers[message_idx][0] = 1
                     self.outliers[message_idx][1] = idx[message_idx]
                     if self.outliers[message_idx][2]==0: self.outliers[message_idx][2] = fields
                     else: self.outliers[message_idx][2] = self.outliers[message_idx][2] + fields
-        print("Complete. ")
+        if self._verbose: print("Complete. ")
 
        
 def calculate_ad_accuracy(real, predictions):

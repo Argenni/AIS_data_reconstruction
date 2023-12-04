@@ -101,7 +101,7 @@ else:  # or run the computations on the original data
                 Xraw_corr = copy.deepcopy(data.Xraw)
                 MMSI_corr = copy.deepcopy(data.MMSI)
                 message_decoded_corr = copy.deepcopy(data.message_decoded)
-                field = np.random.choice(outliers.inside_fields, size=2, replace=False)
+                field = np.random.choice(outliers.fields_dynamic, size=2, replace=False)
                 bit_idx = np.random.randint(field_bits[field[0]-1], field_bits[field[0]]-1)
                 message_bits_corr, message_idx = corruption.corrupt_bits(message_bits=data.message_bits, bit_idx=bit_idx)
                 if j: # if two bits must be damaged

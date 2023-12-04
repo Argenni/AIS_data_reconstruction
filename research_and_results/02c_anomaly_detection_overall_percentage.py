@@ -103,7 +103,7 @@ else:  # or run the computations on the original data
             num_messages = int(len(data.MMSI)*percentage/100)
             for n in range(num_messages):
                 # Choose 0.05 or 0.1 of all messages and damage 2 their random bits
-                field = np.random.choice(outliers.inside_fields, size=2, replace=False)
+                field = np.random.choice(outliers.fields_dynamic, size=2, replace=False)
                 fields.append(field)
                 bit_idx = np.random.randint(field_bits[field[0]-1], field_bits[field[0]]-1)
                 message_bits_corr, message_idx = corruption.corrupt_bits(message_bits=data.message_bits, bit_idx=bit_idx)

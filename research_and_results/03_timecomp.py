@@ -33,7 +33,6 @@ distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
 ad_algorithm = 'rf' # 'rf' or 'xgboost'
 stage = 'ad' # 'clustering', 'ad' or 'prediction'
-filename = ['Gdansk.h5', 'Baltic.h5', 'Gibraltar.h5']
 if stage == 'clustering': percentages =  [0, 5, 10, 20]
 else: percentages = [5, 10, 20]
 windows = [5, 10, 15, 20, 30, 60, 120, 180, 360]
@@ -50,13 +49,14 @@ while precomputed != '1' and precomputed != '2':
 print(" Importing files... ")
 if precomputed == '2':  # Load file with precomputed values
     if stage == 'clustering':
-        file = h5py.File(name='research_and_results/03_timecomp_' + clustering_algorithm, mode='r')
+        file = h5py.File(name='research_and_results/03_timecomp_' + clustering_algorithm+'.h5', mode='r')
     elif stage == 'ad':
-        file = h5py.File(name='research_and_results/03_timecomp_' + ad_algorithm, mode='r')
+        file = h5py.File(name='research_and_results/03_timecomp_' + ad_algorithm+'.h5', mode='r')
     OK_vec = np.array(file.get('OK_vec'))
     file.close()
 
 else:  # or run the computations
+    filename = ['Gdansk.h5', 'Baltic.h5', 'Gibraltar.h5']
     bits = np.array(np.arange(8,42).tolist() + np.arange(50,60).tolist() + np.arange(61,128).tolist() + np.arange(143,145).tolist())
     field_bits = np.array([6, 8, 38, 42, 50, 60, 61, 89, 116, 128, 137, 143, 145, 148])  # range of fields
     measure1 = []
@@ -128,7 +128,7 @@ else:  # or run the computations
                             # Run anomaly detection if needed 
                             if stage == 'ad' or stage == 'prediction':
                                 ad = AnomalyDetection(ad_algorithm=ad_algorithm)
-                                IsADirectoryError.detect_in_1element_clusters(
+                                ad.detect_in_1element_clusters(
                                     idx=idx_corr,
                                     idx_vec=range(-1, np.max(idx_corr)+1),
                                     X=Xcorr,
@@ -194,15 +194,14 @@ fig.show()
 if precomputed == '2':
     input("Press Enter to exit...")
 else:
-    # Save file
     input("Press Enter to save and exit...")
     if stage == 'clustering':
-        if os.path.exists('research_and_results/03_timecomp_'+clustering_algorithm):
-            os.remove('research_and_results/03_timecomp_'+clustering_algorithm)
-        file = h5py.File('research_and_results/03_timecomp_'+clustering_algorithm, mode='a')
+        if os.path.exists('research_and_results/03_timecomp_'+clustering_algorithm+'.h5'):
+            os.remove('research_and_results/03_timecomp_'+clustering_algorithm+'.h5')
+        file = h5py.File('research_and_results/03_timecomp_'+clustering_algorithm+'.h5', mode='a')
     elif stage == 'ad':
-        if os.path.exists('research_and_results/03_timecomp_'+ad_algorithm):
-            os.remove('research_and_results/03_timecomp_'+ad_algorithm)
-        file = h5py.File('research_and_results/03_timecomp_'+ad_algorithm, mode='a')
+        if os.path.exists('research_and_results/03_timecomp_'+ad_algorithm+'.h5'):
+            os.remove('research_and_results/03_timecomp_'+ad_algorithm+'.h5')
+        file = h5py.File('research_and_results/03_timecomp_'+ad_algorithm+'.h5', mode='a')
     file.create_dataset('OK_vec', data=OK_vec)
     file.close()
