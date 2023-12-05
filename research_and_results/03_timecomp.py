@@ -46,7 +46,7 @@ while precomputed != '1' and precomputed != '2':
         print("Unrecognizable answer.")
 
 # Load data
-print(" Importing files... ")
+print(" Initialization... ")
 if precomputed == '2':  # Load file with precomputed values
     if stage == 'clustering':
         file = h5py.File(name='research_and_results/03_timecomp_' + clustering_algorithm+'.h5', mode='r')
@@ -57,7 +57,11 @@ if precomputed == '2':  # Load file with precomputed values
 
 else:  # or run the computations
     filename = ['Gdansk.h5', 'Baltic.h5', 'Gibraltar.h5']
-    bits = np.array(np.arange(8,42).tolist() + np.arange(50,60).tolist() + np.arange(61,128).tolist() + np.arange(143,145).tolist())
+    if stage=='clustering':
+        bits = list(range(145))  
+        bits.append(148)
+    else:
+        bits = np.array(np.arange(8,42).tolist() + np.arange(50,60).tolist() + np.arange(61,128).tolist() + np.arange(143,145).tolist())
     field_bits = np.array([6, 8, 38, 42, 50, 60, 61, 89, 116, 128, 137, 143, 145, 148])  # range of fields
     measure1 = []
     measure2 = []
@@ -73,9 +77,12 @@ else:  # or run the computations
         data_original = Data(file)
         data_original.split(train_percentage=50, val_percentage=25)
         file.close()
+        data.X_train, _, _ = data.standarize(data.Xraw_train)
+        data.X_val, _, _ = data.standarize(data.Xraw_val)
         overall_time = max(data_original.timestamp)-min(data_original.timestamp)
         overall_time = overall_time.seconds/60
-        for window_num in range(len(windows)):   
+        for window_num in range(len(windows)):
+            print(" Analysing: dataset " + str(file_num+1)+"., time window " + str(windows[window_num]) +" min...") 
             for percentage_num in range(len(percentages)):        
                 measure1[file_num][percentage_num].append([]) # Third index - for window
                 measure2[file_num][percentage_num].append([])
@@ -172,6 +179,7 @@ else:  # or run the computations
             OK_vec[percentage_num,window_num,1] = np.sum(cum_measures[1,percentage_num,window_num,:])/cum_slides[window_num]     
 
 # Visualize
+print(" Complete.")
 fig, ax = plt.subplots(nrows=2)
 for i in range(2):
     legend = []

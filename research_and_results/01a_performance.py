@@ -51,11 +51,11 @@ while precomputed != '1' and precomputed != '2':
         print("Unrecognizable answer.")
 
 # Load data
-print(" Importing files... ")
+print(" Initialization... ")
 if precomputed == '2':  # Load file with precomputed values
-    if stage == 'clustering': file = h5py.File(name='research_and_results/01a_performance_clustering', mode='r')
-    elif stage == 'ad_1element': file = h5py.File(name='research_and_results/01a_performance_1element_' + ad_algorithm, mode='r')
-    elif stage == 'ad_multielement': file = h5py.File(name='research_and_results/01a_performance_multielement_' + ad_algorithm, mode='r')
+    if stage == 'clustering': file = h5py.File(name='research_and_results/01a_performance_clustering.h5', mode='r')
+    elif stage == 'ad_1element': file = h5py.File(name='research_and_results/01a_performance_1element_' + ad_algorithm + '.h5', mode='r')
+    elif stage == 'ad_multielement': file = h5py.File(name='research_and_results/01a_performance_multielement_' + ad_algorithm+ '.h5', mode='r')
     OK_vec = np.array(file.get('OK_vec'))
     file.close()
 
@@ -73,13 +73,12 @@ else:  # or run the computations
         # Load the data from the right file
         file = h5py.File(name='data/' + filename[file_num], mode='r')
         data = Data(file)
-        data.split(train_percentage=50, val_percentage=25)
+        if stage != 'clustering': 
+            data.split(train_percentage=50, val_percentage=25)
+            data.X_train, _, _ = data.standarize(data.Xraw_train)
+            data.X_val, _, _ = data.standarize(data.Xraw_val)
         file.close()
-
-        # Preprocess data
-        print(" Preprocessing data... ")
         data.X, _, _ = data.standarize(data.Xraw) 
-
         # First clustering
         clustering = Clustering()
         K = []
@@ -95,8 +94,9 @@ else:  # or run the computations
             idx.append(idx_DBSCAN)            
         print(" Complete.")
 
-        # Damage data
+        # Damage data 
         for num_bit in range(num_bits[stage]):
+            print(" Damaging one message at a time - " + str(file_num+1) + ". dataset, " + str(num_bit+1) + " damaged bits...")
             corruption = Corruption(data.X)
             np.random.seed(1) # for reproducibility
             for i in range(num_experiment[stage]):
@@ -108,14 +108,18 @@ else:  # or run the computations
                     Xraw_corr = copy.deepcopy(data.Xraw)
                     MMSI_corr = copy.deepcopy(data.MMSI)
                     message_decoded_corr = copy.deepcopy(data.message_decoded)
+                    message_bits_corr = copy.deepcopy(data.message_bits)
                     # choose random bits to damage
                     if stage=='ad_multielement':
-                        field = np.random.choice(ad.fields_dynamic, size=num_bit+1, replace=False)
+                        field = np.random.choice(ad.fields_dynamic, size=num_bit+1, replace=False).tolist()
                         bit_idx = [np.random.randint(field_bits[field[j]-1], field_bits[field[j]]-1) for j in len(field)]
-                    else: bit_idx = np.random.choice(bits, size=num_bit+1, replace=False)
-                    # perform actual damage
+                    else: bit_idx = np.random.choice(bits, size=num_bit+1, replace=False).tolist()
+                    # perform actual damage of randomly chosen message
+                    message_idx = corruption.choose_message()
                     for bit in bit_idx:
-                        message_bits_corr, message_idx = corruption.corrupt_bits(message_bits=data.message_bits, bit_idx=bit)
+                        message_bits_corr, _ = corruption.corrupt_bits(
+                            message_bits=message_bits_corr, 
+                            bit_idx=bit, message_idx=message_idx)
                     # put it back to the dataset
                     X_0, MMSI_0, message_decoded_0 = decode(message_bits_corr[message_idx,:])
                     Xraw_corr[message_idx,:] = X_0
@@ -235,15 +239,39 @@ else:  # or run the computations
         
 
 # Visualisation
+print(" Complete.")
 if stage=='clustering': 
     fig, ax = plt.subplots()
-    ax.plot(np.arange(OK_vec.shape[1]), OK_vec[0,:,0], color='r')
-    ax.plot(np.arange(OK_vec.shape[1]), OK_vec[0,:,1], color='b')
+    ax.plot(np.arange(OK_vec.shape[1])+1, OK_vec[0,:,0], color='r')
+    ax.plot(np.arange(OK_vec.shape[1])+1, OK_vec[0,:,1], color='b')
     #ax.set_title("Percentage of correctly assigned messages vs amount of damaged bits")
     ax.set_xlabel("Amount of damaged bits")
-    ax.set_ylabel("Percentage of correctly assigned messages")
+    ax.set_ylabel("Percentage of correctly assigned messages [%]")
     ax.legend(["DBSCAN", "k-means"])
     fig.show()
+if stage == 'ad_1element' or stage == 'ad_multielement':
+    print("For "+ ad_algorithm + ", with 1 bit damaged:")
+    print("- Recall - Gdansk: " + str(round(OK_vec[0,0,0],2)) + "%, Baltic: " + str(round(OK_vec[1,0,0],2)) + "%, Gibraltar: "
+    + str(round(OK_vec[2,0,0],2)) + "%")
+    print("- Precision - Gdansk: " + str(round(OK_vec[0,0,1],2)) + "%, Baltic: " + str(round(OK_vec[1,0,1],2)) + "%, Gibraltar: "
+    + str(round(OK_vec[2,0,1],2)) + "%")
+    print("- Jaccard - Gdansk: " + str(round(OK_vec[0,0,2],2)) + "%, Baltic: " + str(round(OK_vec[1,0,2],2)) + "%, Gibraltar: "
+    + str(round(OK_vec[2,0,2],2)) + "%")
+    print("- Hamming - Gdansk: " + str(round(OK_vec[0,0,3],2)) + "%, Baltic: " + str(round(OK_vec[1,0,3],2)) + "%, Gibraltar: "
+    + str(round(OK_vec[2,0,3],2)) + "%")
+    if stage == 'ad_1element': print("- Cluster assignment accuracy - Gdansk: " + str(round(OK_vec[0,0,4],2)) + "%, Baltic: " 
+    + str(round(OK_vec[1,0,4],2)) + "%, Gibraltar: " + str(round(OK_vec[2,0,4],2)) + "%")
+    print("For "+ ad_algorithm + ", with 2 bits damaged:")
+    print("- Recall - Gdansk: " + str(round(OK_vec[0,1,0],2)) + "%, Baltic: " + str(round(OK_vec[1,1,0],2)) + "%, Gibraltar: "
+    + str(round(OK_vec[2,1,0],2)) + "%")
+    print("- Precision - Gdansk: " + str(round(OK_vec[0,1,1],2)) + "%, Baltic: " + str(round(OK_vec[1,1,1],2)) + "%, Gibraltar: "
+    + str(round(OK_vec[2,1,1],2)) + "%")
+    print("- Jaccard - Gdansk: " + str(round(OK_vec[0,1,2],2)) + "%, Baltic: " + str(round(OK_vec[1,1,2],2)) + "%, Gibraltar: "
+    + str(round(OK_vec[2,1,2],2)) + "%")
+    print("- Hamming - Gdansk: " + str(round(OK_vec[0,1,3],2)) + "%, Baltic: " + str(round(OK_vec[1,1,3],2)) + "%, Gibraltar: "
+    + str(round(OK_vec[2,1,3],2)) + "%")
+    if stage == 'ad_1element': print("- Cluster assignment accuracy - Gdansk: " + str(round(OK_vec[0,1,4],2)) + "%, Baltic: " 
+    + str(round(OK_vec[1,1,4],2)) + "%, Gibraltar: " + str(round(OK_vec[2,1,4],2)) + "%")
 
 
 # Save results
@@ -254,7 +282,7 @@ else:
     if stage == 'clustering':
         if os.path.exists('research_and_results/01a_performance_clustering.h5'):
             os.remove('research_and_results/01a_performance_clustering.h5')
-        file = h5py.File('research_and_results/01a_01a_performance_clustering.h5', mode='a')
+        file = h5py.File('research_and_results/01a_performance_clustering.h5', mode='a')
     elif stage == 'ad_1element':
         if os.path.exists('research_and_results/01a_performance_1element_'+ad_algorithm+'.h5'):
             os.remove('research_and_results/01a_performance_1element_'+ad_algorithm+'.h5')

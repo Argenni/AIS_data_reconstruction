@@ -66,7 +66,7 @@ class Corruption:
         """
         self.indices_corrupted = np.zeros(X.shape[0])
 
-    def _choose_message(self):
+    def choose_message(self):
         """
         Chooses a message to be artificially damaged (for internal use only). \n
         Argument: message_bits - numpy array, AIS message in binary form to damage, shape=(num_messages, 168). \n
@@ -103,7 +103,7 @@ class Corruption:
         message_bits_corr = copy.deepcopy(message_bits)
         # Choose a message to damage
         if message_idx is None:
-            message_idx = self._choose_message()
+            message_idx = self.choose_message()
         # Create an error seed
         seed = np.zeros(message_bits.shape[1],dtype=int)
         seed[bit_idx]=1

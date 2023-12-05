@@ -54,7 +54,7 @@ while precomputed != '1' and precomputed != '2':
         print("Unrecognizable answer.")
 
 # Load data
-print(" Importing files... ")
+print(" Initialization... ")
 if precomputed == '2':  # Load file with precomputed values
     if stage == 'clustering':
         file = h5py.File(name='research_and_results/02_bitwise_'+clustering_algorithm+'.h5', mode='r')
@@ -68,13 +68,10 @@ else:  # or run the computations on the original data
     data = Data(file)
     data.split(train_percentage=50, val_percentage=25)
     file.close()
-
    # Preprocess data
-    print(" Preprocessing data... ")
     data.X_train, _, _ = data.standarize(data.Xraw_train)
     data.X_val, _, _ = data.standarize(data.Xraw_val)
     data.X, _, _ = data.standarize(data.Xraw)  
-
     # First clustering
     clustering = Clustering()
     if clustering_algorithm == 'kmeans':
@@ -157,9 +154,9 @@ elif stage == 'ad':
     '0':"Correctly detected damaged messages - recall [%]", 
     '1':"Correctly detected damaged fields - recall [%]", 
     '2':"Correctly detected damaged fields - precision [%]"}
-    print(" Message indication recall: " + str(round(np.mean(OK_vec[0,mask==1]),2)) + "%")
-    print(" Feature indication recall: " + str(round(np.mean(OK_vec[1,mask==1]),2)) + "%")
-    print(" Feature indication precision: " + str(round(np.mean(OK_vec[2,mask==1]),2)) + "%")
+    print(" Recall (message): " + str(round(np.mean(OK_vec[0,mask==1]),2)) + "%")
+    print(" Recall (field): " + str(round(np.mean(OK_vec[1,mask==1]),2)) + "%")
+    print(" Precision (field): " + str(round(np.mean(OK_vec[2,mask==1]),2)) + "%")
 
 bits = list(range(145))  # create a list of meaningful bits to visualize
 bits.append(148)

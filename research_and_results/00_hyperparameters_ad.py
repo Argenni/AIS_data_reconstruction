@@ -42,12 +42,10 @@ while precomputed != '1' and precomputed != '2':
         print("Unrecognizable answer.")
 
 # Load data
-print(" Importing files... ")
+print(" Initialization... ")
 if precomputed == '2':  # Load file with precomputed values
     file = h5py.File(
-        name='research_and_results/00_hyperparameters_ad_wavelet.h5',
-        mode='r'
-        )
+        name='research_and_results/00_hyperparameters_ad_wavelet.h5', mode='r')
     OK_vec = np.array(file.get('OK_vec'))
     file.close()
 
@@ -58,17 +56,15 @@ else:  # or run the computations on the original data
     OK_vec2 = np.zeros((num_experiments, len(wavelet), len(ad_algorithm), len(filename)))
    
     for file_num in range(len(filename)): # iterate for each dataset: 0-Gdansk, 1-Baltic, 2-Gibraltar
-        print(" Importing dataset...") 
         # Import the dataset
         file = h5py.File(name='data/' + filename[file_num], mode='r')
         data = Data(file)
         data.split(train_percentage=50, val_percentage=25)
         file.close()
         # Preprocess data
-        print(" Preprocessing data... ")
         K, _ = count_number(data.MMSI_val)  # Count number of groups/ships
         data.X_train, _, _ = data.standarize(data.Xraw_train)
-        data.X_val, _, _ = data.standarize(data.Xraw_val) 
+        data.X_val, _, _ = data.standarize(data.Xraw_val)
         # First clustering
         clustering = Clustering()
         if clustering_algorithm == 'kmeans': idx, centroids = clustering.run_kmeans(X=data.X_val,K=K)
@@ -76,7 +72,7 @@ else:  # or run the computations on the original data
         
         for wav_num in range(len(wavelet)): # iterate for morlet (0) and ricker (1)
             for alg_num in range(len(ad_algorithm)): # iterate for rf (0) and xgboost (1)
-                print(" Damaging messages: dataset " + str(file_num+1)+"., " + wavelet[wav_num]+", " + ad_algorithm[alg_num]+"...") 
+                print(" Analysing: dataset " + str(file_num+1)+"., " + wavelet[wav_num]+", " + ad_algorithm[alg_num]+"...") 
                 corruption = Corruption(data.X_val)
                 for i in range(num_experiments):  # For each of the randomly chosen AIS messages 
                     stop = False
