@@ -35,8 +35,8 @@ from utils.miscellaneous import count_number, Corruption
 np.random.seed(1)  # For reproducibility
 distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
-ad_algorithm = 'rf' # 'rf', 'xgboost' or 'threshold' (only for 1-element-cluster anomaly detection) 
-stage = 'ad_1element' # 'clustering', 'ad_1element', 'ad_multielement'
+ad_algorithm = 'xgboost' # 'rf', 'xgboost' or 'threshold' (only for 1-element-cluster anomaly detection) 
+stage = 'ad_multielement' # 'clustering', 'ad_1element', 'ad_multielement'
 num_metrics = {'clustering':2, 'ad_1element':5, 'ad_multielement':4}
 num_bits = {'clustering':10, 'ad_1element':2, 'ad_multielement':2}
 num_experiment = {'clustering':50, 'ad_1element':100, 'ad_multielement':10}
@@ -73,11 +73,11 @@ else:  # or run the computations
         # Load the data from the right file
         file = h5py.File(name='data/' + filename[file_num], mode='r')
         data = Data(file)
+        file.close()
         if stage != 'clustering': 
             data.split(train_percentage=50, val_percentage=25)
             data.X_train, _, _ = data.standarize(data.Xraw_train)
             data.X_val, _, _ = data.standarize(data.Xraw_val)
-        file.close()
         data.X, _, _ = data.standarize(data.Xraw) 
         # First clustering
         clustering = Clustering()
@@ -112,7 +112,7 @@ else:  # or run the computations
                     # choose random bits to damage
                     if stage=='ad_multielement':
                         field = np.random.choice(ad.fields_dynamic, size=num_bit+1, replace=False).tolist()
-                        bit_idx = [np.random.randint(field_bits[field[j]-1], field_bits[field[j]]-1) for j in len(field)]
+                        bit_idx = [np.random.randint(field_bits[field[j]-1], field_bits[field[j]]-1) for j in range(len(field))]
                     else: bit_idx = np.random.choice(bits, size=num_bit+1, replace=False).tolist()
                     # perform actual damage of randomly chosen message
                     message_idx = corruption.choose_message()
@@ -143,7 +143,7 @@ else:  # or run the computations
                         # Check if the cluster is a 1-element cluster
                         ad.detect_in_1element_clusters(
                             idx=idx_corr[0],
-                            idx_vec=range(-1, np.max(idx_corr)+1),
+                            idx_vec=range(-1, np.max(idx_corr[0])+1),
                             X=X_corr,
                             message_decoded=message_decoded_corr)
                         # if so, stop searching
@@ -153,7 +153,7 @@ else:  # or run the computations
                     elif stage=='ad_multielement':
                         # Check if the cluster is inside a proper cluster: if so, stop searching
                         if check_cluster_assignment(idx[0], idx_corr[0], message_idx):
-                            stop = sum(idx_corr==idx_corr[message_idx])>2
+                            stop = sum(idx_corr[0]==idx_corr[0][message_idx])>2
                         # if not, allow this message to be chosen again
                         corruption.indices_corrupted[message_idx] = stop
                     else: stop = True

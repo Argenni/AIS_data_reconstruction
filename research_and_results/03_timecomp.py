@@ -32,7 +32,7 @@ np.random.seed(1)  # For reproducibility
 distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
 ad_algorithm = 'rf' # 'rf' or 'xgboost'
-stage = 'ad' # 'clustering', 'ad' or 'prediction'
+stage = 'clustering' # 'clustering', 'ad' or 'prediction'
 if stage == 'clustering': percentages =  [0, 5, 10, 20]
 else: percentages = [5, 10, 20]
 windows = [5, 10, 15, 20, 30, 60, 120, 180, 360]
@@ -75,10 +75,11 @@ else:  # or run the computations
         # Load the data from the right file
         file = h5py.File(name='data/' + filename[file_num], mode='r')
         data_original = Data(file)
-        data_original.split(train_percentage=50, val_percentage=25)
         file.close()
-        data.X_train, _, _ = data.standarize(data.Xraw_train)
-        data.X_val, _, _ = data.standarize(data.Xraw_val)
+        if stage!='clustering':
+            data_original.split(train_percentage=50, val_percentage=25)
+            data_original.X_train, _, _ = data_original.standarize(data_original.Xraw_train)
+            data_original.X_val, _, _ = data_original.standarize(data_original.Xraw_val)
         overall_time = max(data_original.timestamp)-min(data_original.timestamp)
         overall_time = overall_time.seconds/60
         for window_num in range(len(windows)):
@@ -95,8 +96,6 @@ else:  # or run the computations
                 while stop <= overall_time:
                     # Select only messages from the given time window
                     data = copy.deepcopy(data_original)
-                    print(start)
-                    print(stop)
                     time_window = TimeWindow(start, stop)
                     time_window.use_time_window(data, crop_train=False, crop_val=False, verbose=False)
                     data.X, _, _ = data.standarize(data.Xraw)
@@ -146,7 +145,7 @@ else:  # or run the computations
                                     timestamp=data.timestamp)
                             # Compute quality measures
                             if stage == 'clustering':
-                                measure1[file_num][percentage_num][window_num].append(silhouette_score(idx_corr))
+                                measure1[file_num][percentage_num][window_num].append(silhouette_score(Xcorr, idx_corr))
                                 measure1[file_num][percentage_num][window_num].append(calculate_CC(idx_corr, data.MMSI, MMSI_vec))
                             elif stage == 'ad':
                                 pred = np.array([ad.outliers[n][0] for n in range(len(ad.outliers))], dtype=int)
