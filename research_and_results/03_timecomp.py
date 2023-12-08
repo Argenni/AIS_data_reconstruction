@@ -30,8 +30,8 @@ from utils.miscellaneous import count_number, Corruption, TimeWindow
 # ----------------------------!!! EDIT HERE !!! ---------------------------------  
 np.random.seed(1)  # For reproducibility
 distance = 'euclidean'
-clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
-ad_algorithm = 'rf' # 'rf' or 'xgboost'
+clustering_algorithm = 'kmeans'  # 'kmeans' or 'DBSCAN'
+ad_algorithm = 'xgboost' # 'rf' or 'xgboost'
 stage = 'clustering' # 'clustering', 'ad' or 'prediction'
 if stage == 'clustering': percentages =  [0, 5, 10, 20]
 else: percentages = [5, 10, 20]
@@ -56,7 +56,7 @@ if precomputed == '2':  # Load file with precomputed values
     file.close()
 
 else:  # or run the computations
-    filename = ['Gdansk.h5', 'Baltic.h5', 'Gibraltar.h5']
+    filename = ['Gdansk.h5']#, 'Baltic.h5', 'Gibraltar.h5']
     if stage=='clustering':
         bits = list(range(145))  
         bits.append(148)
@@ -97,7 +97,7 @@ else:  # or run the computations
                     # Select only messages from the given time window
                     data = copy.deepcopy(data_original)
                     time_window = TimeWindow(start, stop)
-                    time_window.use_time_window(data, crop_train=False, crop_val=False, verbose=False)
+                    data = time_window.use_time_window(data, crop_train=False, crop_val=False, verbose=False)
                     data.X, _, _ = data.standarize(data.Xraw)
                     if (data.Xraw).shape[0] == 0: break
                     else: 
@@ -124,7 +124,7 @@ else:  # or run the computations
                                 message_decoded_corr[message_idx,:] = message_decoded_0
                             # Preprocess data
                             _, MMSI_vec = count_number(data.MMSI)                
-                            K, _ = count_number(MMSI_corr)  # Count number of groups/ships
+                            K, MMSI_corr_vec = count_number(MMSI_corr)  # Count number of groups/ships
                             Xcorr, _, _ = data.standarize(Xraw_corr) 
                             clustering = Clustering() # perform clustering
                             if clustering_algorithm == 'kmeans':
@@ -132,7 +132,7 @@ else:  # or run the computations
                             elif clustering_algorithm == 'DBSCAN':
                                 idx_corr, K = clustering.run_DBSCAN(X=Xcorr,distance=distance)
                             # Run anomaly detection if needed 
-                            if stage == 'ad' or stage == 'prediction':
+                            if stage != 'clustering':
                                 ad = AnomalyDetection(ad_algorithm=ad_algorithm)
                                 ad.detect_in_1element_clusters(
                                     idx=idx_corr,
@@ -146,7 +146,7 @@ else:  # or run the computations
                             # Compute quality measures
                             if stage == 'clustering':
                                 measure1[file_num][percentage_num][window_num].append(silhouette_score(Xcorr, idx_corr))
-                                measure1[file_num][percentage_num][window_num].append(calculate_CC(idx_corr, data.MMSI, MMSI_vec))
+                                measure2[file_num][percentage_num][window_num].append(calculate_CC(idx_corr, MMSI_corr, MMSI_corr_vec))
                             elif stage == 'ad':
                                 pred = np.array([ad.outliers[n][0] for n in range(len(ad.outliers))], dtype=int)
                                 true = np.array(corruption.indices_corrupted, dtype=int)
