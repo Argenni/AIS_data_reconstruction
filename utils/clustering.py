@@ -102,50 +102,50 @@ class Clustering:
         elif hyperparameter=='minpts': self._minpts = int(input(" Choose the optimal minpts: "))
 
 
-def calculate_CC(idx, MMSI, MMSI_vec):
+def calculate_CC(idx, MMSI, MMSI_vec, if_all=False):
     """
     Calculates correctness coefficient - indicator of to what extent: \n
-    1. each cluster consists of messages from one vessel,
-    2. messages from one vessel are not divided between several clusters. \n
+    1. each cluster consists of messages from one vessel (CHC),
+    2. messages from one vessel are not divided between several clusters (VHC). \n
     Arguments:
     - idx - list of indices of clusters assigned to each message, len=num_messages,
     - MMSI - list of MMSI identifier from each AIS message, len=num_messages,
-    - MMSI_vec - list of unique MMSIs in MMSI list. \n
-    Returns: CC - scalar, float, computed correctness coefficient.
+    - MMSI_vec - list of unique MMSIs in MMSI list,
+    - if_all (optional) - Boolean, whether to return also VHC and CHC (default=False). \n
+    Returns: 
+    - CC - scalar, float, computed correctness coefficient,
+    - CHC - scalar, float, computed clusters' homogeneity coefficient,
+    - VHC - scalar, float, computed vessels' homogeneity coefficient.
     """
     if idx.shape[0]==0 or len(MMSI)==0 or len(MMSI_vec)==0:
         return 0
-    # Compute clusters' homogeneity coefficient
-    accuracy_MMSI_vec1 = []
-    accuracy_MMSI_vec2 = []
-    for i in MMSI_vec:  # For each MMSI value
-        same = idx[np.array(MMSI)==i]  # check which clusters consists of data from that MMSI
-        _, clusters = count_number(same)  # count how many such clusters there is
-        volume = []
-        for j in clusters:  # count the volume of each of those clusters
-            volume.append(np.sum(np.where(same==j,1,0)))
-        accuracy_MMSI_vec1.append(np.max(volume)/np.sum(volume))  # find the modal cluster and count the fraction of messages from that MMSI in that cluster
-        accuracy_MMSI_vec2.append(np.sum(volume))
-    accuracy_MMSI = np.sum(
-        np.multiply(accuracy_MMSI_vec1,accuracy_MMSI_vec2))/np.sum(accuracy_MMSI_vec2
-        )  # Calculate the weighted average
     # Compute vessels' homogeneity coefficient
-    accuracy_clust_vec1 = []
-    accuracy_clust_vec2 = []
-    for i in range(np.min(idx),np.max(idx)):  # For each cluster
-        same = np.array(MMSI)[idx==i]  # check which MMSI that cluster consists of 
+    VHC_vec1 = []
+    VHC_vec2 = []
+    for id in MMSI_vec:  # For each MMSI value
+        same = idx[np.array(MMSI)==id]  # check which clusters consists of data from that MMSI
+        _, clusters = count_number(same)  # count how many such clusters there is
+        volume = [] # count the volume of each of those clusters
+        for cluster in clusters: volume.append(np.sum(np.where(same==cluster,1,0)))
+        VHC_vec1.append(np.max(volume)/np.sum(volume))  # find the modal cluster and count the fraction of messages from that MMSI in that cluster
+        VHC_vec2.append(np.sum(volume))
+    VHC = np.sum(np.multiply(VHC_vec1,VHC_vec2))/np.sum(VHC_vec2) # Calculate the weighted average
+    # Compute clusters' homogeneity coefficient
+    CHC_vec1 = []
+    CHC_vec2 = []
+    for id in range(np.min(idx),np.max(idx)):  # For each cluster
+        same = np.array(MMSI)[idx==id]  # check which MMSI that cluster consists of 
         _, MMSIs = count_number(same)  # count how many such MMSIs there is
-        volume = []
-        for j in MMSIs:  # count the volume of each of those MMSIs
-            volume.append(np.sum(np.where(same==j,1,0)))
-        accuracy_clust_vec1.append(np.max(volume)/np.sum(volume))  # find the modal MMSI and count the fraction of messages from that MMSI in that cluster
-        accuracy_clust_vec2.append(np.sum(volume))
-    accuracy_clust = np.sum(
-        np.multiply(accuracy_clust_vec1,accuracy_clust_vec2))/np.sum(accuracy_clust_vec2
-        )  # Calculate the weighted average   
+        volume = [] # count the volume of each of those MMSIs
+        for MMSI_ in MMSIs:  volume.append(np.sum(np.where(same==MMSI_,1,0)))
+        CHC_vec1.append(np.max(volume)/np.sum(volume))  # find the modal MMSI and count the fraction of messages from that MMSI in that cluster
+        CHC_vec2.append(np.sum(volume))
+    # Calculate the weighted average
+    CHC = np.sum(np.multiply(CHC_vec1, CHC_vec2))/np.sum(CHC_vec2)   
     # Compute correctness coefficient as a F1 score
-    CC = 2*accuracy_clust*accuracy_MMSI/(accuracy_clust+accuracy_MMSI)
-    return CC
+    CC = 2*CHC*VHC/(CHC+VHC)
+    if if_all: return CC, CHC, VHC
+    else: return CC
 
 def check_cluster_assignment(idx, idx_corr, message_idx):
     """
