@@ -6,6 +6,7 @@ from sklearn import preprocessing
 import numpy as np
 import datetime
 from utils.miscellaneous import count_number
+import copy 
 
 
 def decode(message_bits):
@@ -189,10 +190,12 @@ class Data:
         - mu - numpy array, vector of means of each feature, shape=(num_features (115),),
         - sigma - numpy array, vector of standard deviations of each feature, shape=(num_features (115),).
         """
-        scaler = preprocessing.StandardScaler().fit(X)
-        mu = scaler.mean_
-        sigma = scaler.scale_
-        X_norm = scaler.transform(X)
+        if X.shape[0]:
+            scaler = preprocessing.StandardScaler().fit(X)
+            mu = scaler.mean_
+            sigma = scaler.scale_
+            X_norm = scaler.transform(X)
+        else: X_norm = X
         return X_norm, mu, sigma
 
     def split(self, train_percentage, val_percentage):
