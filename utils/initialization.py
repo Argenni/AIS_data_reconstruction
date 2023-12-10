@@ -195,7 +195,10 @@ class Data:
             mu = scaler.mean_
             sigma = scaler.scale_
             X_norm = scaler.transform(X)
-        else: X_norm = X
+        else: 
+            X_norm = X
+            mu = 0
+            sigma = 0
         return X_norm, mu, sigma
 
     def split(self, train_percentage, val_percentage):
