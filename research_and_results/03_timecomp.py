@@ -56,7 +56,7 @@ if precomputed == '2':  # Load file with precomputed values
     file.close()
 
 else:  # or run the computations
-    filename = ['Gdansk.h5']#, 'Baltic.h5', 'Gibraltar.h5']
+    filename = ['Gdansk.h5', 'Baltic.h5', 'Gibraltar.h5']
     if stage=='clustering':
         bits = list(range(145))  
         bits.append(148)
