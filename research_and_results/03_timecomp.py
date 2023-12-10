@@ -30,9 +30,9 @@ from utils.miscellaneous import count_number, Corruption, TimeWindow
 # ----------------------------!!! EDIT HERE !!! ---------------------------------  
 np.random.seed(1)  # For reproducibility
 distance = 'euclidean'
-clustering_algorithm = 'kmeans'  # 'kmeans' or 'DBSCAN'
+clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
 ad_algorithm = 'xgboost' # 'rf' or 'xgboost'
-stage = 'clustering' # 'clustering', 'ad' or 'prediction'
+stage = 'ad' # 'clustering', 'ad' or 'prediction'
 if stage == 'clustering': percentages =  [0, 5, 10, 20]
 else: percentages = [5, 10, 20]
 windows = [5, 10, 15, 20, 30, 60, 120, 180, 360]

@@ -444,11 +444,13 @@ class AnomalyDetection:
         """
         # Define the right clusters for outlying point
         outliers = np.zeros((X.shape[0]),dtype=int)
+        pred = 0
         for i in indices: outliers[i] = 1
-        knn = KNeighborsClassifier(n_neighbors=5)  # Find the closest 5 points to the outliers (except other outliers)
-        knn.fit(X[outliers!=1,:], idx[outliers!= 1])  # the cluster that those points belong
-        pred = knn.predict(X[message_idx,:].reshape(1,-1))
-        return pred[0] # is potentially the right cluster for the outlier
+        knn = KNeighborsClassifier(n_neighbors=5)
+        if X[outliers!=1,:].shape[0]>1:  # Find the closest 5 points to the outliers (except other outliers)
+            knn.fit(X[outliers!=1,:], idx[outliers!= 1])  # the cluster that those points belong
+            pred = knn.predict(X[message_idx,:].reshape(1,-1))[0]
+        return pred # is potentially the right cluster for the outlier
 
     def _find_damaged_fields(self, message_decoded, idx, message_idx):
         """
