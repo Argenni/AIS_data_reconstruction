@@ -196,9 +196,9 @@ class Data:
             sigma = scaler.scale_
             X_norm = scaler.transform(X)
         else: 
-            X_norm = X
-            mu = 0
-            sigma = 0
+            X_norm = copy.deepcopy(X)
+            mu = None
+            sigma = None
         return X_norm, mu, sigma
 
     def split(self, train_percentage, val_percentage):

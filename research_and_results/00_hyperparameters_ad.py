@@ -112,7 +112,7 @@ else:  # or run the computations on the original data
                     # and check which cluster that message should be assigned to
                     idx_corr[message_idx] = ad.outliers[message_idx][1]               
                     # Check which fields are damaged
-                    field = [sum(field_bits <= bit) for bit in np.sort(bit_idx)]
+                    field = list(set([sum(field_bits <= bit) for bit in np.sort(bit_idx)]))
                     accuracies = calculate_ad_accuracy(field, ad.outliers[message_idx][2])
                     OK_vec2[i,wav_num,alg_num,file_num] = accuracies["f1"]
     OK_vec = np.mean(OK_vec2, axis=0)*100

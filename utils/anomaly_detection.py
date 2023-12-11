@@ -401,8 +401,11 @@ class AnomalyDetection:
             # Mark those points as outliers
             self.outliers[i][0] = 1
             # Find the correct clusters for that points
-            self.outliers[i][1] = self._find_correct_cluster(X, idx_new, i, indices)
-            idx_new[i] = self.outliers[i][1]
+            cluster = self._find_correct_cluster(X, idx_new, i, indices)
+            if cluster is None: self.outliers[i][0] = 0
+            else: 
+                self.outliers[i][1] = cluster
+                idx_new[i] = self.outliers[i][1]
             # Find the damaged fields to correct
             self.outliers[i][2] = self._find_damaged_fields(message_decoded, idx_new, i)
             # If around half of fields are classified abnormal, that message is not an outlier
@@ -442,14 +445,14 @@ class AnomalyDetection:
         - indices - list of indices of potential outliers in a dataset. \n
         Returns: integer scalar, index of a potentially correct cluster that point should belong to.
         """
-        # Define the right clusters for outlying point
         outliers = np.zeros((X.shape[0]),dtype=int)
-        pred = 0
         for i in indices: outliers[i] = 1
-        knn = KNeighborsClassifier(n_neighbors=5 if X[outliers!=1,:].shape[0]>5 else X[outliers!=1,:].shape[0])
-        if X[outliers!=1,:].shape[0]>1:  # Find the closest 5 points to the outliers (except other outliers)
-            knn.fit(X[outliers!=1,:], idx[outliers!= 1])  # the cluster that those points belong
-            pred = knn.predict(X[message_idx,:].reshape(1,-1))[0]
+        pred = None
+        if X.shape[0]-sum(outliers)>0:
+            k = self._k if X.shape[0]-sum(outliers)>=self._k else X.shape[0]-sum(outliers)
+            knn = KNeighborsClassifier(n_neighbors=k)
+            knn.fit(X[outliers!=1,:], idx[outliers!= 1]) # Find the closest k points to the outliers (except other outliers)
+            pred = knn.predict(X[message_idx,:].reshape(1,-1))[0] # the cluster that those points belong
         return pred # is potentially the right cluster for the outlier
 
     def _find_damaged_fields(self, message_decoded, idx, message_idx):
@@ -838,16 +841,19 @@ def calculate_ad_accuracy(real, predictions):
     Returns: accuracies - dictionary containing the computed metrics:
     "jaccard", "hamming", "recall", "precision", "f1"
     """
-    if type(predictions)==0: predictions = [] 
-    if type(predictions)==list:
-        # Calculate Jaccard metric 
+    if predictions==0: predictions = [] 
+    if type(predictions)!=list: predictions = list(predictions)
+    # Calculate Jaccard metric 
+    if len(set(real).union(set(predictions))):
         jaccard = len(set(real).intersection(set(predictions)))/len(set(real).union(set(predictions)))
-        # Calculate Hamming metric
-        real_vec = np.zeros((14), dtype=bool)
-        for field in real: real_vec[field] = True
-        pred_vec = np.zeros((14), dtype=bool)
-        for pred in predictions: pred_vec[pred] = True
-        hamming = np.mean(np.bitwise_not(np.bitwise_xor(real_vec, pred_vec)))
+    else: jaccard = 0
+    # Calculate Hamming metric
+    real_vec = np.zeros((14), dtype=bool)
+    for field in real: real_vec[field] = True
+    pred_vec = np.zeros((14), dtype=bool)
+    for pred in predictions: pred_vec[pred] = True
+    hamming = np.mean(np.bitwise_not(np.bitwise_xor(real_vec, pred_vec)))
+    if len(predictions) and len(real):
         # Calculate recall - percentage of how many damaged fields were predicted
         recall = []
         for real_0 in real:
@@ -857,17 +863,20 @@ def calculate_ad_accuracy(real, predictions):
         precision = []
         for pred_0 in predictions:
             precision.append(pred_0 in real)
-        if len(precision): precision = np.mean(precision)
-        else: precision = 0
-        # Calculate F1 score
-        if (precision+recall): f1 = 2*precision*recall/(precision+recall)
-        else: f1 = 0
-        # Gather all
-        accuracies = {
-            "jaccard": jaccard,
-            "hamming": hamming,
-            "recall": recall,
-            "precision": precision,
-            "f1": f1 }
-        return accuracies
-    elif predictions==0: return {"jaccard": 0, "hamming": 0, "recall": 0, "precision": 0, "f1": 0}
+        precision = np.mean(precision)
+    if (not len(real) and len(predictions)) or (len(real) and not len(predictions)):
+        recall = 0
+        precision = 0
+    if not len(real) and not len(predictions):
+        recall = 1
+        precision = 1
+    # Calculate F1 score
+    f1 = 2*precision*recall/(precision+recall) if (precision+recall) else 0
+    # Gather all
+    accuracies = {
+        "jaccard": jaccard,
+        "hamming": hamming,
+        "recall": recall,
+        "precision": precision,
+        "f1": f1 } 
+    return accuracies

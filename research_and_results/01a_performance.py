@@ -160,7 +160,7 @@ else:  # or run the computations
                 # End experiment
                 if stage=='ad_1element': 
                     idx_corr[0][message_idx] = ad.outliers[message_idx][1]
-                    field = [sum(field_bits <= bit) for bit in np.sort(bit_idx)]
+                    field = list(set([sum(field_bits <= bit) for bit in np.sort(bit_idx)]))
                     pred = ad.outliers[message_idx][2]
                     if ad_algorithm=='threshold':
                         pred = []

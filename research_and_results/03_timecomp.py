@@ -109,10 +109,11 @@ else:  # or run the computations
                             corruption = Corruption(data.Xraw)
                             messages = []
                             fields = []
-                            num_messages = int(len(data.MMSI)*percentages[percentage_num]/100)
+                            num_messages = int(np.ceil(len(data.MMSI)*percentages[percentage_num]/100))
+                            if num_messages>len(data.MMSI): num_messages = num_messages -1 
                             for n in range(num_messages):
                                 bits_corr = np.random.choice(bits, size=2, replace=False)
-                                field = [sum(field_bits <= bit) for bit in np.sort(bits_corr)]
+                                field = list(set([sum(field_bits <= bit) for bit in np.sort(bits_corr)]))
                                 fields.append(field)
                                 message_bits_corr, message_idx = corruption.corrupt_bits(message_bits=data.message_bits, bit_idx=bits_corr[0])
                                 message_bits_corr, message_idx = corruption.corrupt_bits(message_bits_corr, message_idx=message_idx, bit_idx=bits_corr[1])
@@ -128,7 +129,7 @@ else:  # or run the computations
                             Xcorr, _, _ = data.standarize(Xraw_corr) 
                             clustering = Clustering() # perform clustering
                             if clustering_algorithm == 'kmeans':
-                                idx_corr, centroids = clustering.run_kmeans(X=Xcorr,K=K)
+                                idx_corr, _ = clustering.run_kmeans(X=Xcorr,K=K)
                             elif clustering_algorithm == 'DBSCAN':
                                 idx_corr, K = clustering.run_DBSCAN(X=Xcorr,distance=distance)
                             # Run anomaly detection if needed 
@@ -156,7 +157,7 @@ else:  # or run the computations
                                     accuracy = calculate_ad_accuracy(fields[n], ad.outliers[messages[n]][2])
                                     f1.append(accuracy["f1"])
                                 measure2[file_num][percentage_num][window_num].append(np.mean(f1))
-                            if percentage_num==0: slides[window_num,file_num] = slides[window_num,file_num]+1
+                        slides[window_num,file_num] = slides[window_num,file_num]+1
                     # Slide the time window
                     if windows[window_num] == 5: 
                         start = start + windows[window_num]
@@ -174,8 +175,10 @@ else:  # or run the computations
             for file_num in range(len(filename)):
                 cum_measures[0,percentage_num,window_num,file_num] = np.sum(measure1[file_num][percentage_num][window_num])
                 cum_measures[1,percentage_num,window_num,file_num] = np.sum(measure2[file_num][percentage_num][window_num])
-            OK_vec[percentage_num,window_num,0] = np.sum(cum_measures[0,percentage_num,window_num,:])/cum_slides[window_num] 
-            OK_vec[percentage_num,window_num,1] = np.sum(cum_measures[1,percentage_num,window_num,:])/cum_slides[window_num]     
+            if cum_slides[window_num]:
+                OK_vec[percentage_num,window_num,0] = np.sum(cum_measures[0,percentage_num,window_num,:])/cum_slides[window_num] 
+                OK_vec[percentage_num,window_num,1] = np.sum(cum_measures[1,percentage_num,window_num,:])/cum_slides[window_num]     
+
 
 # Visualize
 print(" Complete.")
