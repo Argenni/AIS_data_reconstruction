@@ -406,10 +406,10 @@ class AnomalyDetection:
             else: 
                 self.outliers[i][1] = cluster
                 idx_new[i] = self.outliers[i][1]
-            # Find the damaged fields to correct
-            self.outliers[i][2] = self._find_damaged_fields(message_decoded, idx_new, i)
-            # If around half of fields are classified abnormal, that message is not an outlier
-            if len(self.outliers[i][2])>=np.floor(len(self.fields)/2): self.outliers[i][0] = 0
+                # Find the damaged fields to correct
+                self.outliers[i][2] = self._find_damaged_fields(message_decoded, idx_new, i)
+                # If around half of fields are classified abnormal, that message is not an outlier
+                if len(self.outliers[i][2])>=np.floor(len(self.fields)/2): self.outliers[i][0] = 0
         if self._verbose: print("Complete. ")
 
     def _find_1element_clusters(self, idx, idx_vec):
