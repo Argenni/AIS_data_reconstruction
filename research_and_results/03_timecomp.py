@@ -147,7 +147,7 @@ else:  # or run the computations
                             # Compute quality measures
                             if stage == 'clustering':
                                 measure1[file_num][percentage_num][window_num].append(silhouette_score(Xcorr, idx_corr))
-                                measure2[file_num][percentage_num][window_num].append(calculate_CC(idx_corr, MMSI_corr, MMSI_corr_vec))
+                                measure2[file_num][percentage_num][window_num].append(calculate_CC(idx_corr, data.MMSI, MMSI_vec))
                             elif stage == 'ad':
                                 pred = np.array([ad.outliers[n][0] for n in range(len(ad.outliers))], dtype=int)
                                 true = np.array(corruption.indices_corrupted, dtype=int)
