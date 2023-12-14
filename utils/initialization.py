@@ -5,8 +5,9 @@ Functions and classes used in initialization of AIS message reconstruction
 from sklearn import preprocessing
 import numpy as np
 import datetime
-from utils.miscellaneous import count_number
+from utils.miscellaneous import TimeWindow
 import copy 
+import h5py
 
 
 def decode(message_bits):
@@ -160,16 +161,15 @@ class Data:
     timestamp_train = []
     timestamp_val = []
     timestamp = []
+    filename = []
 
     def __init__(self, file):
         """
-        Class initialization (class object creation) - reads all important sets from the file.
-        Arguments: 
-        - file - h5py file object to the file with the dataset,
-        - train_percentage (optional) - scalar, int, how much data is to be in training set
-            (default=70).
+        Class initialization (class object creation) - reads all important sets from the file. \n
+        Argument: file - h5py file object to the file with the dataset.
         """
         # Load the file and all data (as "test set")
+        self.filename = file.filename
         self.message_bits = np.array(file.get('message_bits'))
         self.message_decoded = np.array(file.get('message_decoded'))
         self.Xraw = np.array(file.get('X'))
@@ -209,47 +209,47 @@ class Data:
         - val_percentage - scalar, int, how much data is to be in validation set.
         """
         np.random.seed(1) #For reproducibility
-        # Get the list of all individual trajectories
-        K, MMSI_vec = count_number(self.MMSI)
-        # Shuffle them
-        MMSI_vec = np.random.permutation(MMSI_vec)
-        # Take given percentage of them
-        threshold = int(np.round(K*train_percentage/100))
-        train = np.zeros((len(self.MMSI)), dtype=bool)
-        for i in range(threshold):
-            # Get indices of messages from each trajectory
-            indices = np.array(self.MMSI) == MMSI_vec[i]
-            # as a train set
-            train =np.bitwise_or(train, indices)
-        # Val_test set is everything not in train set
-        val_test = np.bitwise_not(train)
-        # Apply to all variables
-        self.message_bits_train = self.message_bits[train, :]
-        self.message_bits = self.message_bits[val_test, :]
-        self.message_decoded_train = self.message_decoded[train, :]
-        self.message_decoded = self.message_decoded[val_test, :]
-        self.Xraw_train = self.Xraw[train, :]
-        self.Xraw = self.Xraw[val_test, :]
-        self.MMSI_train = np.array(self.MMSI)[train].tolist()
-        self.MMSI = np.array(self.MMSI)[val_test].tolist()
-        self.timestamp_train = np.array(self.timestamp)[train].tolist()
-        self.timestamp = np.array(self.timestamp)[val_test].tolist()
-        # Repeat the whole process to split into val and test
-        K, MMSI_vec = count_number(self.MMSI)
-        MMSI_vec = np.random.permutation(MMSI_vec)
-        threshold = int(np.floor(K*val_percentage/(100-train_percentage)))
-        val = np.zeros((len(self.MMSI)), dtype=bool)
-        for i in range(threshold):
-            indices = np.array(self.MMSI) == MMSI_vec[i]
-            val = np.bitwise_or(val, indices)
-        test = np.bitwise_not(val)
-        self.message_bits_val = self.message_bits[val, :]
-        self.message_bits = self.message_bits[test, :]
-        self.message_decoded_val = self.message_decoded[val, :]
-        self.message_decoded = self.message_decoded[test, :]
-        self.Xraw_val = self.Xraw[val, :]
-        self.Xraw = self.Xraw[test, :]
-        self.MMSI_val = np.array(self.MMSI)[val].tolist()
-        self.MMSI = np.array(self.MMSI)[test].tolist()
-        self.timestamp_val = np.array(self.timestamp)[val].tolist()
-        self.timestamp = np.array(self.timestamp)[test].tolist()
+        file = h5py.File(name=self.filename, mode='r')
+        data_original = Data(file)
+        file.close()
+        # Get the time span to divide the dataset with respect to time
+        overall_time = max(self.timestamp)-min(self.timestamp)
+        overall_time = overall_time.seconds/60
+        # First division - extract the training set
+        threshold_train = int(np.round(overall_time*train_percentage/100))
+        time_window = TimeWindow(start=0, stop=threshold_train)
+        data = time_window.use_time_window(
+            data_original = data_original, 
+            crop_train=False, 
+            crop_val=False,
+            verbose=False)
+        self.message_bits_train = data.message_bits
+        self.message_decoded_train = data.message_decoded
+        self.Xraw_train = data.Xraw
+        self.MMSI_train = data.MMSI
+        self.timestamp_train = data.timestamp
+        # Second division - extract the validation set
+        threshold_val = threshold_train + int(np.round(overall_time*val_percentage/100))
+        time_window = TimeWindow(start=threshold_train, stop=threshold_val)
+        data = time_window.use_time_window(
+            data_original = data_original, 
+            crop_train=False, 
+            crop_val=False,
+            verbose=False)
+        self.message_bits_val = data.message_bits
+        self.message_decoded_val = data.message_decoded
+        self.Xraw_val = data.Xraw
+        self.MMSI_val = data.MMSI
+        self.timestamp_val = data.timestamp
+        # Last division - extract the test set
+        time_window = TimeWindow(start=threshold_val, stop=overall_time+1)
+        data = time_window.use_time_window(
+            data_original = data_original, 
+            crop_train=False, 
+            crop_val=False,
+            verbose=False)
+        self.message_bits = data.message_bits
+        self.message_decoded = data.message_decoded
+        self.Xraw = data.Xraw
+        self.MMSI = data.MMSI
+        self.timestamp = data.timestamp

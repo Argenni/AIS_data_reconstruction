@@ -145,7 +145,7 @@ class TimeWindow:
         data = copy.deepcopy(data_original)
         # Crop train set
         if (len(data.timestamp_train)>0 and crop_train):
-            indices = [datetime.timedelta(minutes=self._start) < max(data.timestamp_train)-time < datetime.timedelta(minutes=self._stop) for time in data.timestamp_train]
+            indices = [datetime.timedelta(minutes=self._start) <= max(data.timestamp_train)-time < datetime.timedelta(minutes=self._stop) for time in data.timestamp_train]
             data.timestamp_train = np.array(data.timestamp_train)[indices].tolist()
             data.MMSI_train = np.array(data.MMSI_train)[indices].tolist()
             data.Xraw_train = data.Xraw_train[indices, :]
@@ -155,7 +155,7 @@ class TimeWindow:
             if verbose: print("\n Warning: Training set not cropped with a time window!")
         # Crop validation set
         if (len(data.timestamp_val)>0 and crop_val):
-            indices = [datetime.timedelta(minutes=self._start) < max(data.timestamp_val)-time < datetime.timedelta(minutes=self._stop) for time in data.timestamp_val]
+            indices = [datetime.timedelta(minutes=self._start) <= max(data.timestamp_val)-time < datetime.timedelta(minutes=self._stop) for time in data.timestamp_val]
             data.timestamp_val = np.array(data.timestamp_val)[indices].tolist()
             data.MMSI_val = np.array(data.MMSI_val)[indices].tolist()
             data.Xraw_val = data.Xraw_val[indices, :]
@@ -165,7 +165,7 @@ class TimeWindow:
             if verbose: print("\n Warning: Validation set not cropped with a time window!")
         # Crop test set
         if (len(data.timestamp)>0 and crop_test):
-            indices = [datetime.timedelta(minutes=self._start) < max(data.timestamp)-time < datetime.timedelta(minutes=self._stop) for time in data.timestamp]
+            indices = [datetime.timedelta(minutes=self._start) <= max(data.timestamp)-time < datetime.timedelta(minutes=self._stop) for time in data.timestamp]
             data.timestamp = np.array(data.timestamp)[indices].tolist()
             data.MMSI = np.array(data.MMSI)[indices].tolist()
             data.Xraw = data.Xraw[indices, :]
