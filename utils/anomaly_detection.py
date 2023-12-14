@@ -31,15 +31,15 @@ class AnomalyDetection:
     fields_dynamic = [5,7,8,9]
     fields_static = [2,3,12]
     _field_classifier = []
-    _num_estimators_rf = 15
-    _max_depth_rf = 5
-    _num_estimators_xgboost = 12
+    _num_estimators_rf = 20
+    _max_depth_rf = 2
+    _num_estimators_xgboost = 7
     _max_depth_xgboost = 2
     _num_estimators2_rf = 15
     _max_depth2_rf = 15
     _num_estimators2_xgboost = 20
     _max_depth2_xgboost = 7
-    _k = 5
+    _k = 3
     _inside_field_classifier = []
     _ad_algorithm = [] # 'rf' or 'xgboost'
     _wavelet = [] # 'morlet' or 'ricker'
@@ -318,9 +318,11 @@ class AnomalyDetection:
         fig.show()
         # Retrain the model
         if hyperparameter == 'max_depth':
-            self._max_depth = int(input("Choose the optimal max_depth: "))
+            if self._ad_algorithm == 'rf': self._max_depth_rf = int(input("Choose the optimal max_depth: "))
+            elif self._ad_algorithm == 'xgboost': self._max_depth_xgboost = int(input("Choose the optimal max_depth: "))
         elif hyperparameter == 'n_estimators':
-            self._num_estimators = int(input("Choose the optimal n_estimators: "))
+            if self._ad_algorithm == 'rf': self._num_estimators_rf = int(input("Choose the optimal n_estimators: "))
+            elif self._ad_algorithm == 'xgboost': self._num_estimators_xgboost = int(input("Choose the optimal n_estimators: "))
         if os.path.exists('utils/anomaly_detection_files/1element_'+self._wavelet+'_classifier_'+self._ad_algorithm+'.h5'):
             os.remove('utils/anomaly_detection_files/1element_'+self._wavelet+'_classifier_'+self._ad_algorithm+'.h5')
         self._train_1element_classifier()
@@ -354,6 +356,7 @@ class AnomalyDetection:
                 # Choose a bit to damage (based on a range of the field)
                 bit = np.random.randint(field_bits[field-1], field_bits[field]-1)
                 # Damage that bit in a randomly chosen message
+                np.random.seed(1)
                 message_bits_corr, message_idx = corruption.corrupt_bits(
                     message_bits=message_bits,
                     bit_idx=bit) 

@@ -35,7 +35,7 @@ from utils.miscellaneous import count_number, Corruption
 np.random.seed(1)  # For reproducibility
 distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
-ad_algorithm = 'LOF' # 'rf', 'xgboost' or 'LOF'
+ad_algorithm = 'xgboost' # 'rf', 'xgboost' or 'LOF'
 stage = 'ad' # 'clustering' or 'ad'
 num_metrics = {'clustering':5, 'ad':4}
 num_experiments = {'clustering':1, 'ad':10}
