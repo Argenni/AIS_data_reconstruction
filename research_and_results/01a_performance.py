@@ -36,7 +36,7 @@ np.random.seed(1)  # For reproducibility
 distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
 ad_algorithm = 'xgboost' # 'rf', 'xgboost' or 'threshold' (only for 1-element-cluster anomaly detection) 
-stage = 'ad_multielement' # 'clustering', 'ad_1element', 'ad_multielement'
+stage = 'ad' # 'clustering', 'ad_1element', 'ad_multielement'
 num_metrics = {'clustering':2, 'ad_1element':5, 'ad_multielement':4}
 num_bits = {'clustering':10, 'ad_1element':2, 'ad_multielement':2}
 num_experiment = {'clustering':50, 'ad_1element':100, 'ad_multielement':10}

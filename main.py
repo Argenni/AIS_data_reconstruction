@@ -36,7 +36,7 @@ from utils.miscellaneous import count_number, visualize_trajectories, TimeWindow
 np.random.seed(1) #For reproducibility
 distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
-ad_algorithm = 'rf' # 'rf' or 'xgboost'
+ad_algorithm = 'xgboost' # 'rf' or 'xgboost'
 wavelet = 'morlet' # 'morlet' or 'ricker'
 #--------------------------------------------------------------------------------
 

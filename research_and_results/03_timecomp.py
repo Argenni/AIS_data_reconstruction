@@ -35,7 +35,7 @@ ad_algorithm = 'xgboost' # 'rf' or 'xgboost'
 stage = 'clustering' # 'clustering', 'ad' or 'prediction'
 if stage == 'clustering': percentages =  [0, 5, 10, 20]
 else: percentages = [5, 10, 20]
-windows = [5, 10, 15, 20, 30, 60, 120, 180, 360]
+windows = [5, 10, 15, 20, 30, 60, 120]
 # --------------------------------------------------------------------------------
 
 # Decide what to do
@@ -87,10 +87,10 @@ else:  # or run the computations
             for percentage_num in range(len(percentages)):        
                 measure1[file_num][percentage_num].append([]) # Third index - for window
                 measure2[file_num][percentage_num].append([])
-            if windows[window_num] > overall_time: 
-                measure1[file_num][percentage_num][window_num].append(0)
-                measure2[file_num][percentage_num][window_num].append(0)
-            else: 
+                if windows[window_num] > overall_time: 
+                    measure1[file_num][percentage_num][window_num].append(0)
+                    measure2[file_num][percentage_num][window_num].append(0)
+            if windows[window_num] <= overall_time: 
                 start = 0
                 stop = start + windows[window_num]
                 while stop <= overall_time:
@@ -99,8 +99,7 @@ else:  # or run the computations
                     time_window = TimeWindow(start, stop)
                     data = time_window.use_time_window(data, crop_train=False, crop_val=False, verbose=False)
                     data.X, _, _ = data.standarize(data.Xraw)
-                    if (data.Xraw).shape[0] == 0: break
-                    else: 
+                    if (data.Xraw).shape[0]>1:
                         for percentage_num in range(len(percentages)):
                             # Damage data
                             Xraw_corr = copy.deepcopy(data.Xraw)
@@ -146,7 +145,9 @@ else:  # or run the computations
                                     timestamp=data.timestamp)
                             # Compute quality measures
                             if stage == 'clustering':
-                                measure1[file_num][percentage_num][window_num].append(silhouette_score(Xcorr, idx_corr))
+                                if count_number(idx_corr)[0]<Xcorr.shape[0]:
+                                    measure1[file_num][percentage_num][window_num].append(silhouette_score(Xcorr, idx_corr))
+                                else: measure1[file_num][percentage_num][window_num].append(1)
                                 measure2[file_num][percentage_num][window_num].append(calculate_CC(idx_corr, data.MMSI, MMSI_vec))
                             elif stage == 'ad':
                                 pred = np.array([ad.outliers[n][0] for n in range(len(ad.outliers))], dtype=int)

@@ -36,7 +36,7 @@ class Clustering:
         - centroids - numpy array with centers of each cluster, shape=(K, num_features (115)).
         """
         if self._verbose: print("Running k-means clustering...")
-        kmeans_model = KMeans(n_clusters=K, n_init=200, max_iter=100, tol=0.001, random_state=0).fit(X)
+        kmeans_model = KMeans(n_clusters=K, n_init=10, max_iter=100, tol=0.001, random_state=0).fit(X)
         idx = kmeans_model.labels_
         centroids = kmeans_model.cluster_centers_
         if self._verbose: print(" Complete.")

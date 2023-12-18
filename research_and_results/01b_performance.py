@@ -309,7 +309,7 @@ else:
     input("Press Enter to save and exit...")
     if stage == 'clustering':
         if os.path.exists('research_and_results/01b_performance_'+clustering_algorithm+'.h5'):
-            os.remove('research_and_results/001b_performance_'+clustering_algorithm+'.h5')
+            os.remove('research_and_results/01b_performance_'+clustering_algorithm+'.h5')
         file = h5py.File('research_and_results/01b_performance_'+clustering_algorithm+'.h5', mode='a')
     elif stage == 'ad':
         if os.path.exists('research_and_results/01b_performance_'+ad_algorithm+'.h5'):
