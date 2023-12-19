@@ -29,7 +29,7 @@ sys.path.append('.')
 from utils.initialization import Data, decode # pylint: disable=import-error
 from utils.clustering import Clustering, calculate_CC
 from utils.anomaly_detection import AnomalyDetection, calculate_ad_accuracy
-from utils.miscellaneous import count_number, Corruption
+from utils.miscellaneous import count_number, visualize_trajectories, Corruption
 
 # ----------------------------!!! EDIT HERE !!! ---------------------------------  
 np.random.seed(1)  # For reproducibility
@@ -192,6 +192,16 @@ else:  # or run the computations
         elif clustering_algorithm == 'DBSCAN': idx, K = clustering.run_DBSCAN(X=data.X, distance=distance)
 
         if stage == 'clustering':
+            visualize_trajectories(
+                X=data.Xraw,
+                MMSI=data.MMSI,
+                MMSI_vec=MMSI_vec,
+                goal='data_visualization')
+            visualize_trajectories(
+                X=data.Xraw,
+                MMSI=idx,
+                MMSI_vec=range(-1, np.max(idx)+1),
+                goal='clustering')
             # Compute results of clustering
             OK_vec[file_num, 0, 0, 0] = K
             OK_vec[file_num, 0, 1, 0] = silhouette_score(data.X, idx)

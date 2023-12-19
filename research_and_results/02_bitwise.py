@@ -28,9 +28,9 @@ from utils.miscellaneous import count_number, Corruption
 # ----------------------------!!! EDIT HERE !!! ---------------------------------  
 np.random.seed(1)  # For reproducibility
 distance = 'euclidean'
-stage = 'ad' # 'clustering', 'ad' or 'prediction'
+stage = 'clustering' # 'clustering', 'ad' or 'prediction'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
-ad_algorithm = 'rf' # 'rf' or 'xgboost'
+ad_algorithm = 'xgboost' # 'rf' or 'xgboost'
 # --------------------------------------------------------------------------------
 
 # Create a list of meaningful bits to examine
