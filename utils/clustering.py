@@ -133,7 +133,7 @@ def calculate_CC(idx, MMSI, MMSI_vec, if_all=False):
     # Compute clusters' homogeneity coefficient
     CHC_vec1 = []
     CHC_vec2 = []
-    for id in range(np.min(idx),np.max(idx)):  # For each cluster
+    for id in range(np.min(idx),np.max(idx)+1):  # For each cluster
         same = np.array(MMSI)[idx==id]  # check which MMSI that cluster consists of 
         _, MMSIs = count_number(same)  # count how many such MMSIs there is
         volume = [] # count the volume of each of those MMSIs
