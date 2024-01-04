@@ -34,7 +34,7 @@ from utils.miscellaneous import count_number, visualize_trajectories, TimeWindow
 # ----------------------------!!! EDIT HERE !!! --------------------------------- 
 # Specify some important configuration
 np.random.seed(1) #For reproducibility
-distance = 'sqeuclidean'
+distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
 ad_algorithm = 'xgboost' # 'rf' or 'xgboost'
 wavelet = 'morlet' # 'morlet' or 'ricker'
@@ -71,7 +71,7 @@ clustering = Clustering(verbose=True)
 if clustering_algorithm == 'kmeans':
     idx, centroids = clustering.run_kmeans(X=data.X, K=K)
 elif clustering_algorithm == 'DBSCAN':
-    idx, K = clustering.run_DBSCAN(X=data.X, distance=distance, optimize='epsilon', MMSI=data.MMSI)
+    idx, K = clustering.run_DBSCAN(X=data.X, distance=distance, optimize='minpts', MMSI=data.MMSI)
 silhouette = silhouette_score(data.X,idx)
 print("Average silhouette: " + str(round(silhouette,2)))
 CC = calculate_CC(idx, data.MMSI, MMSI_vec)

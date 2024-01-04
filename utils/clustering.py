@@ -14,7 +14,7 @@ class Clustering:
     """
     Class that introduces AIS data clustering using either k-means or DBSCAN.
     """
-    _epsilon = 10
+    _epsilon = 3.16
     _minpts = 1
     _verbose = []
 
@@ -75,7 +75,7 @@ class Clustering:
         - distance - string, name of distance metric, eg. 'euclidean',
         - hyperparameter - string, name of DBSCAN hyperparameter to optimize, 'epsilon' or 'minpts'.
         """
-        params = [0.01, 0.1, 0.5, 1, 2, 5, 10, 20, 50, 100]
+        params = [1, 2, 5, 10, 20, 50, 100]
         silhouettes = []
         CCs = []
         clusters = []
@@ -83,7 +83,7 @@ class Clustering:
         for param in params:
             if hyperparameter=='epsilon':
                 DBSCAN_model = DBSCAN(
-                    eps = param, 
+                    eps = np.sqrt(param), 
                     min_samples = self._minpts, 
                     metric = distance).fit(X)
             elif hyperparameter=='minpts':
@@ -116,7 +116,7 @@ class Clustering:
         ax[2].set_ylabel("No. clusters")
         fig.show()
         # Save the optimal value
-        if hyperparameter=='epsilon': self._epsilon = int(input(" Choose the optimal epsilon: "))
+        if hyperparameter=='epsilon': self._epsilon = np.round(np.sqrt(float(input(" Choose the optimal epsilon: "))),2)
         elif hyperparameter=='minpts': self._minpts = int(input(" Choose the optimal minpts: "))
 
 
