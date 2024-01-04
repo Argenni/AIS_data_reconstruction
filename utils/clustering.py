@@ -14,7 +14,7 @@ class Clustering:
     """
     Class that introduces AIS data clustering using either k-means or DBSCAN.
     """
-    _epsilon = 3.16
+    _epsilon = 10
     _minpts = 1
     _verbose = []
 
@@ -42,7 +42,7 @@ class Clustering:
         if self._verbose: print(" Complete.")
         return idx, centroids
 
-    def run_DBSCAN(self, X, distance='euclidean', optimize=None):
+    def run_DBSCAN(self, X, distance='euclidean', optimize=None, MMSI=[]):
         """
         Runs DBSCAN algorithm on a given dataset with given distance metric. \n
         Arguments: 
@@ -55,8 +55,10 @@ class Clustering:
         - K - scalar, int, number of clusters created by DBSCAN.
         """
         # Optimize hyperparametres if allowed
-        if optimize == 'epsilon': self._optimize_DBSCAN(X, distance, hyperparameter='epsilon')
-        elif optimize == 'minpts': self._optimize_DBSCAN(X, distance, hyperparameter='minpts')
+        if len(MMSI)>0: 
+            if optimize == 'epsilon': self._optimize_DBSCAN(X, MMSI, distance, hyperparameter='epsilon')
+            elif optimize == 'minpts': self._optimize_DBSCAN(X, MMSI, distance, hyperparameter='minpts')
+        else: print(" Cannot perform DBSCAN optimization: no MMSI provided.")
         # Cluster using DBSCAN
         if self._verbose: print("Running DBSCAN clustering...")
         DBSCAN_model = DBSCAN(eps = self._epsilon, min_samples = self._minpts, metric = distance).fit(X)
@@ -65,7 +67,7 @@ class Clustering:
         if self._verbose:print(" Complete.")
         return idx, K
 
-    def _optimize_DBSCAN(self, X, distance, hyperparameter):
+    def _optimize_DBSCAN(self, X, MMSI, distance, hyperparameter):
         """
         Searches for optimal epsilon or minpts value for AIS data clustering using DBSCAN
         and stores it in self._epsilon or self._minpts. Arguments:
@@ -74,7 +76,9 @@ class Clustering:
         - hyperparameter - string, name of DBSCAN hyperparameter to optimize, 'epsilon' or 'minpts'.
         """
         params = [0.01, 0.1, 0.5, 1, 2, 5, 10, 20, 50, 100]
-        silhuettes = []
+        silhouettes = []
+        CCs = []
+        clusters = []
         print(" Search for optimal " + hyperparameter + "...")
         for param in params:
             if hyperparameter=='epsilon':
@@ -88,14 +92,28 @@ class Clustering:
                     min_samples = param, 
                     metric = distance).fit(X)
             idx = DBSCAN_model.labels_
-            if count_number(idx)[0] == 1: silhuettes.append(0)
-            else: silhuettes.append(silhouette_score(X,idx))
+            K = count_number(idx)[0]
+            clusters.append(K)
+            if K==1: silhouettes.append(0)
+            elif K==len(idx): silhouettes.append(1)
+            else: silhouettes.append(silhouette_score(X,idx))
+            MMSIs, MMSI_vec = count_number(MMSI)
+            CCs.append(calculate_CC(idx, MMSI, MMSI_vec))
         # Plot
-        fig, ax = plt.subplots()
-        ax.plot(params, silhuettes, color='k')
-        ax.set_title("Average silhouettes vs " + hyperparameter)
-        ax.set_xlabel(hyperparameter)
-        ax.set_ylabel("Average silhouette")
+        fig, ax = plt.subplots(ncols=3)
+        ax[0].plot(params, silhouettes, color='k')
+        ax[0].set_title("Average silhouettes vs " + hyperparameter)
+        ax[0].set_xlabel(hyperparameter)
+        ax[0].set_ylabel("Average silhouette")
+        ax[1].plot(params, CCs, color='k')
+        ax[1].set_title("CC vs " + hyperparameter)
+        ax[1].set_xlabel(hyperparameter)
+        ax[1].set_ylabel("CC")
+        ax[2].plot(params, clusters, color='k')
+        ax[2].plot(params, np.ones((len(params)))*MMSIs, color='r')
+        ax[2].set_title("No. clusters vs " + hyperparameter)
+        ax[2].set_xlabel(hyperparameter)
+        ax[2].set_ylabel("No. clusters")
         fig.show()
         # Save the optimal value
         if hyperparameter=='epsilon': self._epsilon = int(input(" Choose the optimal epsilon: "))
