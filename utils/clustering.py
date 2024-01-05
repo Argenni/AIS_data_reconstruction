@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import sys
 sys.path.append('.')
 from utils.miscellaneous import count_number
+import math
 
 class Clustering:
     """
@@ -25,22 +26,78 @@ class Clustering:
         """
         self._verbose = verbose
 
-    def run_kmeans(self, X, K):
+    def run_kmeans(self, X, K, optimize=None, MMSI=[]):
         """
         Runs k-means algorithm on a given dataset with Euclidean distance metric. \n
         Arguments: 
         - X - numpy array with dataset to cluster, shape=(num_message, num_features (115)),
-        - K - scalar, int, desired number of clusters. \n
+        - K - scalar, int, desired number of clusters,
+        - optimize - (optional) string, name of k-means hyperparameter to optimize ('K), 
+            default=None (no optimization), 
+        - MMSI (optional) - list of MMSI identifiers from each AIS message, len=num_messages
+            (for hyperparameter tuning; only required if optimize!=None). \n\n
         Returns:
         - idx - list of indices of clusters assigned to each message, len=num_messages,
         - centroids - numpy array with centers of each cluster, shape=(K, num_features (115)).
         """
+        # Optimize hyperparametres if allowed
+        if len(MMSI)>0: 
+            if optimize=='K': K = self.optimize_kmeans(X, K, MMSI)
+        else: print(" Cannot perform k-means hyperparameter tuning: no MMSI provided.")
+        # Cluster using k-means
         if self._verbose: print("Running k-means clustering...")
         kmeans_model = KMeans(n_clusters=K, n_init=10, max_iter=100, tol=0.001, random_state=0).fit(X)
         idx = kmeans_model.labels_
         centroids = kmeans_model.cluster_centers_
         if self._verbose: print(" Complete.")
         return idx, centroids
+    
+    def optimize_kmeans(self, X, K, MMSI):
+        """
+        Searches for optimal number of clusters for k-means to create in terms of
+        silhouette, CC and desired number of clusters.
+        Arguments: 
+        - X - numpy array with dataset to cluster, shape=(num_message, num_features (115)),
+        - K - scalar, int, number of ships in a dataset,
+        - MMSI - list of MMSI identifiers from each AIS message, len=num_messages. \n
+        Returns: Knew - optimal number of clusters.
+        """
+        Ks = range(2, int(K*1.5))
+        silhouettes = []
+        CCs = []
+        costs = []
+        print(" Search for optimal K...")
+        for K_0 in Ks:
+            kmeans_model = KMeans(n_clusters=K_0, n_init=10, max_iter=100, tol=0.001, random_state=0).fit(X)
+            idx = kmeans_model.labels_
+            centroids = kmeans_model.cluster_centers_
+            if K==len(idx): silhouettes.append(1)
+            else: silhouettes.append(silhouette_score(X,idx))
+            CCs.append(calculate_CC(idx, MMSI, count_number(MMSI)[1]))
+            cost = [math.dist(X[i,:],centroids[idx[i]]) for i in range(len(idx))]
+            costs.append(np.mean(cost))
+        # Plot
+        fig, ax = plt.subplots(ncols=3)
+        ax[0].plot(Ks[0:K-1], np.ones((K-1))*silhouettes[K-2], color='r', linestyle='dashed')
+        ax[0].vlines(x=K, ymin=min(silhouettes), ymax=silhouettes[K-2], color='r', linestyle='dashed')
+        ax[0].plot(Ks, silhouettes, color='k')
+        ax[0].set_title("Average silhouette vs K")
+        ax[0].set_xlabel("Number of clusters")
+        ax[0].set_ylabel("Average silhouette")
+        ax[1].plot(Ks[0:K-1], np.ones((K-1))*CCs[K-2], color='r', linestyle='dashed')
+        ax[1].vlines(x=K, ymin=min(CCs), ymax=CCs[K-2], color='r', linestyle='dashed')
+        ax[1].plot(Ks, CCs, color='k')
+        ax[1].set_title("Correctness coeff. vs K")
+        ax[1].set_xlabel("Number of clusters")
+        ax[1].set_ylabel("Correctness coeff.")
+        ax[2].plot(Ks, costs, color='k')
+        ax[2].set_title("Average cost vs K")
+        ax[2].set_xlabel("Number of clusters")
+        ax[2].set_ylabel("Average cost")
+        fig.show()
+        # Save the optimal value
+        Knew = int(input(" Choose the optimal K: "))
+        return Knew
 
     def run_DBSCAN(self, X, distance='euclidean', optimize=None, MMSI=[]):
         """
@@ -49,7 +106,9 @@ class Clustering:
         - X - numpy array with dataset to cluster, shape=(num_message, num_features (115)),
         - distance - (optional) string, name of distance metric, default='euclidean',
         - optimize - (optional) string, name of DBSCAN hyperparameter to optimize, 
-            'epsilon' or 'minpts', default=None (no optimization). \n
+            'epsilon' or 'minpts', default=None (no optimization),
+        - MMSI (optional) - list of MMSI identifiers from each AIS message, len=num_messages
+            (for hyperparameter tuning; only required if optimize!=None). \n
         Returns:
         - idx - list of indices of clusters assigned to each message, len=num_messages,
         - K - scalar, int, number of clusters created by DBSCAN.
@@ -58,7 +117,7 @@ class Clustering:
         if len(MMSI)>0: 
             if optimize == 'epsilon': self._optimize_DBSCAN(X, MMSI, distance, hyperparameter='epsilon')
             elif optimize == 'minpts': self._optimize_DBSCAN(X, MMSI, distance, hyperparameter='minpts')
-        else: print(" Cannot perform DBSCAN optimization: no MMSI provided.")
+        else: print(" Cannot perform DBSCAN hyperparameter tuning: no MMSI provided.")
         # Cluster using DBSCAN
         if self._verbose: print("Running DBSCAN clustering...")
         DBSCAN_model = DBSCAN(eps = self._epsilon, min_samples = self._minpts, metric = distance).fit(X)
@@ -72,6 +131,7 @@ class Clustering:
         Searches for optimal epsilon or minpts value for AIS data clustering using DBSCAN
         and stores it in self._epsilon or self._minpts. Arguments:
         - X - numpy array with training dataset, shape=(num_message, num_features (115)),
+        - MMSI - list of MMSI identifiers from each AIS message, len=num_messages
         - distance - string, name of distance metric, eg. 'euclidean',
         - hyperparameter - string, name of DBSCAN hyperparameter to optimize, 'epsilon' or 'minpts'.
         """
@@ -127,7 +187,7 @@ def calculate_CC(idx, MMSI, MMSI_vec, if_all=False):
     2. messages from one vessel are not divided between several clusters (VHC). \n
     Arguments:
     - idx - list of indices of clusters assigned to each message, len=num_messages,
-    - MMSI - list of MMSI identifier from each AIS message, len=num_messages,
+    - MMSI - list of MMSI identifiers from each AIS message, len=num_messages,
     - MMSI_vec - list of unique MMSIs in MMSI list,
     - if_all (optional) - Boolean, whether to return also VHC and CHC (default=False). \n
     Returns: 
