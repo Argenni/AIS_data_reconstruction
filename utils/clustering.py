@@ -43,7 +43,8 @@ class Clustering:
         # Optimize hyperparametres if allowed
         if len(MMSI)>0: 
             if optimize=='K': K = self.optimize_kmeans(X, K, MMSI)
-        else: print(" Cannot perform k-means hyperparameter tuning: no MMSI provided.")
+        else: 
+            if optimize=="K": print(" Cannot perform k-means hyperparameter tuning: no MMSI provided.")
         # Cluster using k-means
         if self._verbose: print("Running k-means clustering...")
         kmeans_model = KMeans(n_clusters=K, n_init=10, max_iter=100, tol=0.001, random_state=0).fit(X)
@@ -117,7 +118,9 @@ class Clustering:
         if len(MMSI)>0: 
             if optimize == 'epsilon': self._optimize_DBSCAN(X, MMSI, distance, hyperparameter='epsilon')
             elif optimize == 'minpts': self._optimize_DBSCAN(X, MMSI, distance, hyperparameter='minpts')
-        else: print(" Cannot perform DBSCAN hyperparameter tuning: no MMSI provided.")
+        else: 
+            if optimize=='epsilon' or optimize=='minpts':
+                print(" Cannot perform DBSCAN hyperparameter tuning: no MMSI provided.")
         # Cluster using DBSCAN
         if self._verbose: print("Running DBSCAN clustering...")
         DBSCAN_model = DBSCAN(eps = self._epsilon, min_samples = self._minpts, metric = distance).fit(X)

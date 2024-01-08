@@ -36,7 +36,7 @@ np.random.seed(1)  # For reproducibility
 distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
 ad_algorithm = 'xgboost' # 'rf', 'xgboost' or 'threshold' (only for 1-element-cluster anomaly detection) 
-stage = 'ad' # 'clustering', 'ad_1element', 'ad_multielement'
+stage = 'clustering' # 'clustering', 'ad_1element', 'ad_multielement'
 num_metrics = {'clustering':2, 'ad_1element':5, 'ad_multielement':4}
 num_bits = {'clustering':10, 'ad_1element':2, 'ad_multielement':2}
 num_experiment = {'clustering':50, 'ad_1element':100, 'ad_multielement':10}
@@ -116,15 +116,21 @@ else:  # or run the computations
                     else: bit_idx = np.random.choice(bits, size=num_bit+1, replace=False).tolist()
                     # perform actual damage of randomly chosen message
                     message_idx = corruption.choose_message()
-                    for bit in bit_idx:
-                        message_bits_corr, _ = corruption.corrupt_bits(
-                            message_bits=message_bits_corr, 
-                            bit_idx=bit, message_idx=message_idx)
-                    # put it back to the dataset
-                    X_0, MMSI_0, message_decoded_0 = decode(message_bits_corr[message_idx,:])
+                    if stage=='clustering' and num_bit==0 and i==10:
+                        # damage location only - mimic GPS drift
+                        X_0 = copy.deepcopy(data.Xraw[message_idx])
+                        X_0[0] = np.random.choice([0.99998, 1.00002]) * X_0[0] # damage latitude
+                        X_0[1] = np.random.choice([0.99998, 1.00002]) * X_0[1] # damage longitude
+                    else:
+                        for bit in bit_idx:
+                            message_bits_corr, _ = corruption.corrupt_bits(
+                                message_bits=message_bits_corr, 
+                                bit_idx=bit, message_idx=message_idx)
+                        # put it back to the dataset
+                        X_0, MMSI_0, message_decoded_0 = decode(message_bits_corr[message_idx,:])
+                        message_decoded_corr[message_idx,:] = message_decoded_0
+                        MMSI_corr[message_idx] = MMSI_0
                     Xraw_corr[message_idx,:] = X_0
-                    MMSI_corr[message_idx] = MMSI_0
-                    message_decoded_corr[message_idx,:] = message_decoded_0
                     X_corr, _, _ = data.standarize(Xraw_corr)
                     # cluster again to find new cluster assignment
                     K_corr = []
@@ -137,7 +143,29 @@ else:  # or run the computations
                     if clustering_algorithm=='DBSCAN' or stage=='clustering':
                         idx_corr_DBSCAN, K_corr_DBSCAN = clustering.run_DBSCAN(X=X_corr, distance=distance)
                         K_corr.append(K_corr_DBSCAN)
-                        idx_corr.append(idx_corr_DBSCAN) 
+                        idx_corr.append(idx_corr_DBSCAN)
+                    if stage=='clustering' and num_bit==0 and i==10:
+                        # Visualize previous and present cluster for message with damaged location
+                        fig1, ax1 = plt.subplots()
+                        ax1.scatter(data.Xraw[:,0],data.Xraw[:,1], color='k') # plot all points
+                        indices = idx[0] == idx[0][message_idx]
+                        ax1.scatter(data.Xraw[indices,0],data.Xraw[indices,1], color='b') # plot points from the given cluster
+                        ax1.scatter(data.Xraw[message_idx,0],data.Xraw[message_idx,1], color='r') # plot the given point
+                        ax1.scatter(data.Xraw[message_idx,0],data.Xraw[message_idx,1], color='r', s=10000, facecolors='none',) # plot a circle around given point
+                        ax1.set_xlabel("Longitude")
+                        ax1.set_ylabel("Latitide")
+                        ax1.legend(["All other messages", "Messages from the damaged message cluster", "Damaged message"])
+                        fig1.show()
+                        fig2, ax2 = plt.subplots()
+                        ax2.scatter(Xraw_corr[:,0],Xraw_corr[:,1], color='k') # plot all points
+                        indices = idx_corr[0] == idx_corr[0][message_idx]
+                        ax2.scatter(Xraw_corr[indices,0],Xraw_corr[indices,1], color='b') # plot points from the given cluster
+                        ax2.scatter(Xraw_corr[message_idx,0],Xraw_corr[message_idx,1], color='r') # plot the given point
+                        ax2.scatter(Xraw_corr[message_idx,0],Xraw_corr[message_idx,1], color='r', s=10000, facecolors='none',) # plot a circle the given point
+                        ax2.set_xlabel("Longitude")
+                        ax2.set_ylabel("Latitide")
+                        ax2.legend(["All other messages", "Messages from the damaged message cluster", "Damaged message"])
+                        fig2.show()
                     # check if the conditions were met - the message is either in 1-element or multielement cluster
                     if stage=='ad_1element': 
                         # Check if the cluster is a 1-element cluster
