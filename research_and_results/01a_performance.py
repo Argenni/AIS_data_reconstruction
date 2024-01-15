@@ -36,10 +36,11 @@ np.random.seed(1)  # For reproducibility
 distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
 ad_algorithm = 'xgboost' # 'rf', 'xgboost' or 'threshold' (only for 1-element-cluster anomaly detection) 
-stage = 'clustering' # 'clustering', 'ad_1element', 'ad_multielement'
+stage = 'ad' # 'clustering', 'ad_1element', 'ad_multielement'
 num_metrics = {'clustering':2, 'ad_1element':5, 'ad_multielement':4}
 num_bits = {'clustering':10, 'ad_1element':2, 'ad_multielement':2}
 num_experiment = {'clustering':50, 'ad_1element':100, 'ad_multielement':10}
+if_corrupt_location = False
 # --------------------------------------------------------------------------------
 if ad_algorithm=='threshold' and stage!='ad_1element': ad_algorithm = 'xgboost' 
 
@@ -116,7 +117,7 @@ else:  # or run the computations
                     else: bit_idx = np.random.choice(bits, size=num_bit+1, replace=False).tolist()
                     # perform actual damage of randomly chosen message
                     message_idx = corruption.choose_message()
-                    if stage=='clustering' and num_bit==0 and i==10:
+                    if stage=='clustering' and num_bit==0 and i==10 and if_corrupt_location:
                         # damage location only - mimic GPS drift
                         X_0 = copy.deepcopy(data.Xraw[message_idx])
                         X_0[0] = np.random.choice([0.99998, 1.00002]) * X_0[0] # damage latitude
@@ -144,7 +145,7 @@ else:  # or run the computations
                         idx_corr_DBSCAN, K_corr_DBSCAN = clustering.run_DBSCAN(X=X_corr, distance=distance)
                         K_corr.append(K_corr_DBSCAN)
                         idx_corr.append(idx_corr_DBSCAN)
-                    if stage=='clustering' and num_bit==0 and i==10:
+                    if stage=='clustering' and num_bit==0 and i==10 and if_corrupt_location:
                         # Visualize previous and present cluster for message with damaged location
                         fig1, ax1 = plt.subplots()
                         ax1.scatter(data.Xraw[:,0],data.Xraw[:,1], color='k') # plot all points
