@@ -42,7 +42,7 @@ class Prediction:
         self._prediction_algorithm = prediction_algorithm
         self._verbose = verbose
         if self._prediction_algorithm == 'xgboost':
-            if os.path.exists('utils/prediction_files/regressor'+prediction_algorithm+'.h5'):
+            if os.path.exists('utils/prediction_files/regressor_'+prediction_algorithm+'.h5'):
                 # If there is a file with the trained regressor saved, load it
                 self._regressor = pickle.load(open('utils/prediction_files/regressor_'+prediction_algorithm+'.h5', 'rb'))
             else:
@@ -56,34 +56,28 @@ class Prediction:
         # Show some regressor metrics if allowed
         if self._verbose:
             # Calculate the MSE of the regressor on the training and validation data
-            variables = pickle.load(open('utils/prediciton_files/dataset_'+self._prediction_algorithm+'.h5', 'rb'))
+            if not os.path.exists('utils/prediction_files/dataset_'+prediction_algorithm+'.h5'):
+                self._create_regression_dataset()
+            variables = pickle.load(open('utils/prediction_files/dataset_'+self._prediction_algorithm+'.h5', 'rb'))
             print(" Average MSE of regressor:")
             mse = []
-            if self._prediction_algorithm == 'xgboost': 
-                for i in range(len(variables[1])):
-                    pred = self._regressor[i].predict(variables[0][i])
-                    mse.append(mean_squared_error(variables[1][i],pred))
-            elif self._prediction_algorithm == 'ar':
-                for i in range(len(variables[1])):
+            for field_num in range(len(variables[1])):
+                if self._prediction_algorithm == 'xgboost': 
+                    pred = self._regressor[field_num].predict(variables[0][field_num])
+                    mse.append(mean_squared_error(variables[1][field_num],pred))
+                elif self._prediction_algorithm == 'ar':
                     mse_ar = []
-                    for j in range(len(variables[1][i])):
-                        pred = self._predict_ar(variables[0][j], self.fields[i])
-                        mse_ar.append(mean_squared_error(variables[1][i][j],pred))
+                    for trajectory in range(len(variables[1][field_num])):
+                        pred = self._predict_ar(variables[0][field_num][trajectory], self.fields[field_num])
+                        mse_ar.append(mean_squared_error(variables[1][field_num][trajectory],pred))
                     mse.append(np.mean(mse_ar))
             print("  trainset: " + str(round(np.mean(mse),4)))
-            mse = []
             if self._prediction_algorithm == 'xgboost': 
-                for i in range(len(variables[3])):
-                    pred = self._regressor[i].predict(variables[2][i])
-                    mse.append(mean_squared_error(variables[3][i],pred))
-            elif self._prediction_algorithm == 'ar':
-                for i in range(len(variables[3])):
-                    mse_ar = []
-                    for j in range(len(variables[3][i])):
-                        pred = self._predict_ar(variables[2][j], self.fields[i])
-                        mse_ar.append(mean_squared_error(variables[3][i][j],pred))
-                    mse.append(np.mean(mse_ar))
-            print("  valset: " + str(round(np.mean(mse),4)))
+                mse = []
+                for field_num in range(len(variables[3])):
+                    pred = self._regressor[field_num].predict(variables[2][field_num])
+                    mse.append(mean_squared_error(variables[3][field_num],pred))
+                print("  valset: " + str(round(np.mean(mse),4)))
 
     def _train_regressor(self):
         """
@@ -95,16 +89,16 @@ class Prediction:
             if not os.path.exists('utils/prediction_files/dataset_'+self._prediction_algorithm+'.h5'):
                 # if not, create a corrupted dataset
                 self._create_regression_dataset()
-            variables = pickle.load(open('utils/prediction_files/dataset'+self._prediction_algorithm+'.h5', 'rb'))
+            variables = pickle.load(open('utils/prediction_files/dataset_'+self._prediction_algorithm+'.h5', 'rb'))
             # Train one classifier for each class
             print(" Training a regressor...")
             self._regressor = []
-            for i in range(len(variables[0])):
+            for field_num in range(len(variables[0])):
                 self._regressor.append(XGBRegressor(
                     random_state=0,
                     n_estimators=self._num_estimators, 
                     max_depth=self._max_depth)
-                    .fit(variables[0][i],variables[1][i]))
+                    .fit(variables[0][field_num],variables[1][field_num]))
             print(" Complete.")
             # Save
             pickle.dump(self._regressor, open('utils/prediction_files/regressor_'+self._prediction_algorithm+'.h5', 'ab'))
@@ -135,15 +129,12 @@ class Prediction:
             timestamp = []
             timestamp.append(np.concatenate((data1.timestamp_train, data2.timestamp_train), axis=0))
             timestamp.append(np.concatenate((data1.timestamp_val, data2.timestamp_val), axis=0))    
-        variables = [[],[],[],[]]
-        for i in range(self.fields): 
-            if self._prediction_algorithm == 'xgboost':
-                variables[0].append([]) # training set          
-                variables[2].append([]) # validation set
-            variables[1].append([]) # training labels          
-            variables[3].append([]) # validation labels
-        for i in [0,1]:
-            if self._prediction_algorithm == 'xgboost':
+        variables = [[],[]] if self._prediction_algorithm == 'ar' else [[],[],[],[]]
+        for i in range(len(variables)):
+            for field_num in range(len(self.fields)): 
+                variables[i].append([]) # training set           
+        if self._prediction_algorithm == 'xgboost':
+            for i in [0,1]:
                 for message_idx in range(len(MMSI[i])):
                     if len(np.where(np.array(MMSI[i]) == MMSI[i][message_idx])[0])>2:
                         for field in self.fields:
@@ -153,15 +144,21 @@ class Prediction:
                                 message_idx=message_idx,
                                 field=field))
                             variables[i+i+1][self.fields.index(field)].append(message_decoded[i][message_idx,field])
-            if self._prediction_algorithm == 'ar':
-                MMSI_vec = count_number(MMSI[i])[1]
-                for MMSI_0 in MMSI_vec:
-                    indices = MMSI[i] == MMSI_0
-                    batch = message_decoded[indices,:]
+        if self._prediction_algorithm == 'ar':
+            MMSI = np.concatenate((MMSI[0], MMSI[1]), axis=0)
+            message_decoded = np.concatenate((message_decoded[0], message_decoded[1]), axis=0)
+            MMSI_vec = count_number(MMSI)[1]
+            for MMSI_0 in MMSI_vec:
+                message_idx = np.where(MMSI==MMSI_0)[0][-1]
+                for field_num in range(len(self.fields)):
+                    batch = self._create_ar_sample(
+                        message_decoded=message_decoded,
+                        idx=MMSI,
+                        message_idx=message_idx,
+                        field=self.fields[field_num])
                     if batch.shape[0]>self._p and batch.shape[0]>self._q:
-                        variables[i+i].append(batch[:-1,:])
-                        for field in self.fields:
-                            variables[i+i+1][self.fields.index(field)].append(batch[-1,field])
+                        variables[0][field_num].append(batch)
+                        variables[1][field_num].append(message_decoded[message_idx,field_num])
         pickle.dump(variables, open('utils/prediction_files/dataset_'+self._prediction_algorithm+'.h5', 'ab'))
         print(" Complete.")
 
@@ -185,49 +182,48 @@ class Prediction:
                 regressor = []
                 mse_train_field = []
                 mse_val_field = []
-                for i in range(len(variables[1])):
+                for field_num in range(len(variables[1])):
                     if hyperparameter == 'max_depth':
                         regressor.append(XGBRegressor(
                             random_state=0, 
                             n_estimators=self._num_estimators, 
                             max_depth=param,
-                            ).fit(variables[0][i], variables[1][i]))
+                            ).fit(variables[0][field_num], variables[1][field_num]))
                     elif hyperparameter == 'n_estimators':
                         regressor.append(XGBRegressor(
                             random_state=0, 
                             n_estimators=param, 
                             max_depth=self._max_depth,
-                            ).fit(variables[0][i], variables[1][i]))
-                    pred = regressor[i].predict(np.array(variables[0][i]))
-                    mse_train_field.append(mean_squared_error(pred,variables[1][i]))
-                    pred = regressor[i].predict(np.array(variables[2][i]))
-                    mse_val_field.append(mean_squared_error(pred,variables[3][i]))
+                            ).fit(variables[0][field_num], variables[1][field_num]))
+                    pred = regressor[field_num].predict(np.array(variables[0][field_num]))
+                    mse_train_field.append(mean_squared_error(pred,variables[1][field_num]))
+                    pred = regressor[field_num].predict(np.array(variables[2][field_num]))
+                    mse_val_field.append(mean_squared_error(pred,variables[3][field_num]))
                 mse_train.append(np.mean(mse_train_field))
                 mse_val.append(np.mean(mse_val_field))
         elif self._prediction_algorithm == 'ar':
             params = [1,2,3,5,7,10,20]
             for param in params:
                 mse_train_field = []
-                mse_val_field = []
-                for i in range(len(variables[1])):
-                    for j in range(len(variables[1][i])):
+                for field_num in range(len(variables[1])):
+                    for trajectory in range(len(variables[1][field_num])):
                         if hyperparameter=='p':
-                            model = sm.tsa.VARMAX(endog=variables[0][j], order=(param, self._q))
+                            model = sm.tsa.VARMAX(endog=variables[0][field_num][trajectory], order=(param, self._q))
                         elif hyperparameter=='q':
-                            model = sm.tsa.VARMAX(endog=variables[0][j], order=(self._p, param))
+                            model = sm.tsa.VARMAX(endog=variables[0][field_num][trajectory], order=(self._p, param))
                         res = model.fit()
                         pred = res.forecast(step=1)
-                        mse_train_field.append(mean_squared_error(pred,variables[1][i][j]))
+                        mse_train_field.append(mean_squared_error(pred,variables[1][field_num][trajectory]))
                 mse_train.append(np.mean(mse_train_field))
-                mse_val.append(np.mean(mse_val_field))
         print(" Complete. ")
         fig, ax = plt.subplots()
         ax.plot(params, mse_train, color='k')
-        ax.plot(params, mse_val, color='b')
+        if self._prediction_algorithm == 'xgboost': 
+            ax.plot(params, mse_val, color='b')
+            ax.legend(["Training set", "Validation set"])
         ax.set_title("MSE vs " + hyperparameter)
         ax.set_xlabel(hyperparameter)
-        ax.set_ylabel("MSE")
-        ax.legend(["Training set", "Validation set"])
+        ax.set_ylabel("MSE") 
         fig.show()
         # Save results
         if hyperparameter == 'max_depth': self._max_depth = int(input("Choose the optimal max_depth: "))
@@ -240,11 +236,12 @@ class Prediction:
                 os.remove('utils/prediction_files/regressor_'+self._prediction_algorithm+'.h5')
             self._train_regressor()
 
-    def _create_ar_sample(self, message_decoded, idx, message_idx):
+    def _create_ar_sample(self, message_decoded, idx, message_idx, field):
         # Take datapoints only from the given cluster AND from the past
         cluster_idx = idx[message_idx]
         idx_cropped = idx[0:message_idx]
-        message_decoded_cropped = message_decoded[idx_cropped==cluster_idx,:]
+        message_decoded_cropped = message_decoded[0:message_idx,:]
+        message_decoded_cropped = message_decoded_cropped[idx_cropped==cluster_idx,:]
         # Take only the fields of interest
         sample = message_decoded_cropped[:, self.fields]
         return sample
@@ -273,7 +270,7 @@ class Prediction:
 
     def reconstruct_data(self, message_decoded, idx, message_idx, field):
         if self._prediction_algorithm == 'ar':
-            sample = self._create_ar_sample(message_decoded, idx, message_idx)
+            sample = self._create_ar_sample(message_decoded, idx, message_idx, field)
             if sample.shape[0]>=self._p and sample.shape[0]>=self._q:
                 pred = self._predict_ar(sample, field)
             else: pred = np.mean(sample[:,self.fields.index(field)])

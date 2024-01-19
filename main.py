@@ -29,6 +29,7 @@ sys.path.append('.')
 from utils.initialization import Data
 from utils.clustering import Clustering, calculate_CC
 from utils.anomaly_detection import AnomalyDetection
+from utils.prediction import Prediction
 from utils.miscellaneous import count_number, visualize_trajectories, TimeWindow
 
 # ----------------------------!!! EDIT HERE !!! --------------------------------- 
@@ -65,7 +66,7 @@ data.X, mu, sigma = data.standarize(data.Xraw)
 print(" Complete.")
 
 
-# -------------------------- Part 1 - Clustering -------------------------
+# -------------------------- Stage 1 - Clustering -------------------------
 print("\n----------- Part 1 - Clustering ---------- ")
 clustering = Clustering(verbose=True)
 if clustering_algorithm == 'kmeans':
@@ -83,7 +84,7 @@ visualize_trajectories(
     goal='clustering')
 
 
-# ------------------------- Part 2 - Anomaly detection --------------------- 
+# ------------------------- Stage 2 - Anomaly detection --------------------- 
 print("\n----------- Part 2 - Anomaly detection ---------- ")
 ad = AnomalyDetection(
     verbose=True,
@@ -105,6 +106,13 @@ visualize_trajectories(
     MMSI=np.array(ad.outliers, dtype=object)[:,0].tolist(),
     MMSI_vec=[0,1],
     goal='anomaly_detection')
+
+# ------------------------- Stage 3 - Prediction --------------------- 
+print("\n----------- Part 3 - Prediction ---------- ")
+prediction = Prediction(
+    verbose=True,
+    optimize=None,
+    prediction_algorithm='ar')
 
 
 # ------------------ Finalization --------------------
