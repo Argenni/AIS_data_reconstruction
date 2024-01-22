@@ -113,7 +113,13 @@ prediction = Prediction(
     verbose=True,
     optimize=None,
     prediction_algorithm='ar')
-
+prediction.find_and_reconstruct_data(
+    message_decoded=data.message_decoded, 
+    idx=idx,
+    outliers=ad.outliers)
+message_bits_reconstructed, message_decoded_reconstructed = prediction.apply_predictions(
+    message_bits=data.message_bits,
+    message_decoded=data.message_decoded)
 
 # ------------------ Finalization --------------------
 # Save results

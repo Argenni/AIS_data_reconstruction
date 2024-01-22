@@ -8,26 +8,28 @@ import statsmodels.api as sm
 from sklearn.metrics import mean_squared_error
 import matplotlib.pyplot as plt
 plt.rcParams.update({'font.size': 16})
+import copy
 import h5py
 import pickle
 import os
 import sys
 sys.path.append(".")
-from utils.initialization import Data
+from utils.initialization import Data, encode
 from utils.miscellaneous import count_number
 
 class Prediction:
     """
     Class that introduces prediction phase in reconstruction of AIS data.
     """
-    reconstructed = []
+    predictions = []
     fields = [2,3,5,7,8,9,12]
+    fields_dynamic = [5,7,8,9]
+    fields_static = [2,3,12]
     _prediction_algorithm = 'xgboost'
     _regressor = []
     _max_depth = 7
     _num_estimators = 20
-    _p = 3
-    _q = 3
+    _lags = 3
     _verbose = []
     
     def __init__(self, verbose=False, optimize=None, prediction_algorithm='xgboost'):
@@ -51,8 +53,7 @@ class Prediction:
         # Optimize hyperparametres if allowed
         if optimize == 'max_depth': self._optimize_regression(hyperparameter='max_depth')
         elif optimize == 'n_estimators': self._optimize_regression(hyperparameter='n_estimators')
-        elif optimize == 'p': self._optimize_regression(hyperparameter='p')
-        elif optimize == 'q': self._optimize_regression(hyperparameter='q')
+        elif optimize == 'lags': self._optimize_regression(hyperparameter='lags')
         # Show some regressor metrics if allowed
         if self._verbose:
             # Calculate the MSE of the regressor on the training and validation data
@@ -64,13 +65,15 @@ class Prediction:
             for field_num in range(len(variables[1])):
                 if self._prediction_algorithm == 'xgboost': 
                     pred = self._regressor[field_num].predict(variables[0][field_num])
-                    mse.append(mean_squared_error(variables[1][field_num],pred))
+                    mse.append(mean_squared_error(variables[1][field_num], pred))
                 elif self._prediction_algorithm == 'ar':
-                    mse_ar = []
+                    y_true = []
+                    y_pred = []
                     for trajectory in range(len(variables[1][field_num])):
                         pred = self._predict_ar(variables[0][field_num][trajectory], self.fields[field_num])
-                        mse_ar.append(mean_squared_error(variables[1][field_num][trajectory],pred))
-                    mse.append(np.mean(mse_ar))
+                        y_true.append(variables[1][field_num][trajectory])
+                        y_pred.append(pred)
+                    mse.append(mean_squared_error(y_true, y_pred))
             print("  trainset: " + str(round(np.mean(mse),4)))
             if self._prediction_algorithm == 'xgboost': 
                 mse = []
@@ -156,9 +159,9 @@ class Prediction:
                         idx=MMSI,
                         message_idx=message_idx,
                         field=self.fields[field_num])
-                    if batch.shape[0]>self._p and batch.shape[0]>self._q:
+                    if batch.shape[0]>self._lags:
                         variables[0][field_num].append(batch)
-                        variables[1][field_num].append(message_decoded[message_idx,field_num])
+                        variables[1][field_num].append(message_decoded[message_idx,self.fields[field_num]])
         pickle.dump(variables, open('utils/prediction_files/dataset_'+self._prediction_algorithm+'.h5', 'ab'))
         print(" Complete.")
 
@@ -166,7 +169,7 @@ class Prediction:
         """ 
         Chooses optimal value of XGBoost hyperparameters for prediction stage. \n
         Argument: hyperparameter - string indicating which hyperparameter to optimize: 
-        'max_depth' or 'n_estimators'.
+        'max_depth' or 'n_estimators' (for XGBoost) or 'lags' (for VAR).
         """
         # Check if the file with the classifier dataset exist
         if not os.path.exists('utils/prediction_files/dataset_'+self._prediction_algorithm+'.h5'):
@@ -201,18 +204,15 @@ class Prediction:
                     mse_val_field.append(mean_squared_error(pred,variables[3][field_num]))
                 mse_train.append(np.mean(mse_train_field))
                 mse_val.append(np.mean(mse_val_field))
-        elif self._prediction_algorithm == 'ar':
+        elif self._prediction_algorithm == 'ar' and hyperparameter=='lags':
             params = [1,2,3,5,7,10,20]
             for param in params:
                 mse_train_field = []
                 for field_num in range(len(variables[1])):
                     for trajectory in range(len(variables[1][field_num])):
-                        if hyperparameter=='p':
-                            model = sm.tsa.VARMAX(endog=variables[0][field_num][trajectory], order=(param, self._q))
-                        elif hyperparameter=='q':
-                            model = sm.tsa.VARMAX(endog=variables[0][field_num][trajectory], order=(self._p, param))
-                        res = model.fit()
-                        pred = res.forecast(step=1)
+                        model = sm.tsa.VAR(endog=variables[0][field_num][trajectory])
+                        res = model.fit(maxlags=param, trend='n')
+                        pred = res.forecast(variables[0][field_num][trajectory], steps=1)
                         mse_train_field.append(mean_squared_error(pred,variables[1][field_num][trajectory]))
                 mse_train.append(np.mean(mse_train_field))
         print(" Complete. ")
@@ -228,8 +228,7 @@ class Prediction:
         # Save results
         if hyperparameter == 'max_depth': self._max_depth = int(input("Choose the optimal max_depth: "))
         elif hyperparameter == 'n_estimators': self._num_estimators = int(input("Choose the optimal n_estimators: "))
-        elif hyperparameter == 'p': self._p = int(input("Choose the optimal p: "))
-        elif hyperparameter == 'q': self._q = int(input("Choose the optimal q: "))
+        elif hyperparameter == 'lags': self._lags = int(input("Choose the optimal maxlags: "))
         # Retrain the model
         if hyperparameter == 'max_depth' or hyperparameter == 'n_estimators':
             if os.path.exists('utils/prediction_files/regressor_'+self._prediction_algorithm+'.h5'):
@@ -243,38 +242,64 @@ class Prediction:
         message_decoded_cropped = message_decoded[0:message_idx,:]
         message_decoded_cropped = message_decoded_cropped[idx_cropped==cluster_idx,:]
         # Take only the fields of interest
-        sample = message_decoded_cropped[:, self.fields]
+        if field in self.fields_dynamic:
+            sample = message_decoded_cropped[:, self.fields_dynamic]
+        elif field in self.fields_static:
+            sample = message_decoded_cropped[:, [7,8,field]]
         return sample
     
     def _create_regressor_sample(self, message_decoded, idx, message_idx, field):
         pass
 
     def _predict_ar(self, sample, field):
-        model = sm.tsa.VARMAX(endog=sample, order=(self._p, self._q))
-        res = model.fit()
-        pred = res.forecast(step=1)
-        return pred[self.fields.index(field)]
+        model = sm.tsa.VAR(sample)
+        res = model.fit(maxlags=self._lags, trend='n')
+        pred = res.forecast(sample, steps=1)
+        if field in self.fields_dynamic: pred = pred[0,self.fields_dynamic.index(field)]
+        elif field in self.fields_static: pred = np.round(pred[0,2])
+        return pred
 
-    def find_data_to_reconstruct(self, message_decoded, idx, outliers):
-        predictions = np.zeros((len(idx),len(self.fields)))
-        indices = np.where(outliers[:,0]==1)[0]
+    def find_and_reconstruct_data(self, message_decoded, idx, outliers):
+        indices = []
+        for i in range(len(idx)):
+            if outliers[i][0]==1: indices.append(i)
         for message_idx in indices:
-            fields = outliers[message_idx,2]
+            dict = {}
+            dict.update({'message_idx':message_idx})
+            fields = outliers[message_idx][2]
+            include = True
             for field in fields:
-                predictions[message_idx,self.fields.index(field)] = self.reconstruct_data(
+                pred = self.reconstruct_data(
                     message_decoded=message_decoded,
                     idx=idx,
                     message_idx=message_idx,
                     field=field)
-        return predictions
+                if pred is None: include = False
+                else: dict.update({self.fields.index(field): pred})
+            if include: self.predictions.append(dict)
 
     def reconstruct_data(self, message_decoded, idx, message_idx, field):
         if self._prediction_algorithm == 'ar':
             sample = self._create_ar_sample(message_decoded, idx, message_idx, field)
-            if sample.shape[0]>=self._p and sample.shape[0]>=self._q:
+            if sample.shape[0]>self._lags:
                 pred = self._predict_ar(sample, field)
-            else: pred = np.mean(sample[:,self.fields.index(field)])
+            elif sample.shape[0]==0: pred = None
+            else:
+                if field in self.fields_dynamic: pred = np.mean(sample[:,self.fields_dynamic.index(field)])
+                elif  field in self.fields_static: pred = np.mean(sample[:,2])
         elif self._prediction_algorithm == 'xgboost':
             sample = self._create_regressor_sample(message_decoded, idx, message_idx, field)
             pred = self._regressor[self.fields.index(field)].predict(sample)
         return pred
+    
+    def apply_predictions(self, message_bits, message_decoded):
+        message_bits_reconstructed = copy.deepcopy(message_bits)
+        message_decoded_reconstructed = copy.deepcopy(message_decoded)
+        for prediction in self.predictions:
+            message_idx = prediction['message_idx']
+            message_decoded_0 = message_decoded[message_idx,:]
+            for field in self.fields:
+                if field in prediction.keys(): message_decoded_0[field] = prediction[field]
+            message_decoded_reconstructed[message_idx,:] = message_decoded_0
+            message_bits_reconstructed[message_idx,:] = encode(message_decoded_0)
+        return message_bits_reconstructed, message_decoded_reconstructed
