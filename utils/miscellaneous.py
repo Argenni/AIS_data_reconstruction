@@ -27,7 +27,7 @@ def count_number(X):
     return quantity, vec
 
 
-def visualize_trajectories(X, MMSI, MMSI_vec, goal):
+def visualize_trajectories(X, MMSI, MMSI_vec, goal, reconstructed_idx=[]):
     """
     Displays every trajectory/cluster/outlier. \n
     Arguments:
@@ -48,6 +48,9 @@ def visualize_trajectories(X, MMSI, MMSI_vec, goal):
     elif goal == 'anomaly_detection':
         plt.title("Outliers found")
         plt.legend(["Regular datapoints", "Detected outliers"])
+    elif goal == 'prediction':
+        plt.scatter(X[reconstructed_idx,0],X[reconstructed_idx,1],s=500, facecolors='none', color='r')
+        plt.title("Datapoints after reconstruction")
     plt.xlabel("Longitude")
     plt.ylabel("Latitude")
     plt.show(block=False)

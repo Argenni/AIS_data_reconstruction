@@ -110,16 +110,23 @@ visualize_trajectories(
 # ------------------------- Stage 3 - Prediction --------------------- 
 print("\n----------- Part 3 - Prediction ---------- ")
 prediction = Prediction(
-    verbose=True,
+    verbose=False,
     optimize=None,
     prediction_algorithm='ar')
 prediction.find_and_reconstruct_data(
     message_decoded=data.message_decoded, 
     idx=idx,
     outliers=ad.outliers)
-message_bits_reconstructed, message_decoded_reconstructed = prediction.apply_predictions(
+reconstructed_idx = [prediction.predictions[i]['message_idx'] for i in range(len(prediction.predictions))]
+message_bits_new, message_decoded_new = prediction.apply_predictions(
     message_bits=data.message_bits,
     message_decoded=data.message_decoded)
+visualize_trajectories(
+    X=message_decoded_new[:,[7,8]],
+    MMSI=message_decoded_new[:,2],
+    MMSI_vec=count_number(message_decoded_new[:,2])[1],
+    goal='prediction',
+    reconstructed_idx=reconstructed_idx)
 
 # ------------------ Finalization --------------------
 # Save results
@@ -136,3 +143,9 @@ np.savetxt(
     delimiter=',',
     fmt='%s',
     header="If_outlier, Correct_cluster_id, Damage_fields")
+np.savetxt(
+    'output/prediction.txt',
+    np.array(prediction.predictions, dtype=object), 
+    delimiter=',',
+    fmt='%s',
+    header="Predicted new values")

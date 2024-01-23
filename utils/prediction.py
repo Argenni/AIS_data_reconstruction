@@ -260,6 +260,7 @@ class Prediction:
         return pred
 
     def find_and_reconstruct_data(self, message_decoded, idx, outliers):
+        print("Reconstructing data...")
         indices = []
         for i in range(len(idx)):
             if outliers[i][0]==1: indices.append(i)
@@ -275,8 +276,9 @@ class Prediction:
                     message_idx=message_idx,
                     field=field)
                 if pred is None: include = False
-                else: dict.update({self.fields.index(field): pred})
+                else: dict.update({field: pred})
             if include: self.predictions.append(dict)
+        print("Complete.")
 
     def reconstruct_data(self, message_decoded, idx, message_idx, field):
         if self._prediction_algorithm == 'ar':
@@ -301,5 +303,5 @@ class Prediction:
             for field in self.fields:
                 if field in prediction.keys(): message_decoded_0[field] = prediction[field]
             message_decoded_reconstructed[message_idx,:] = message_decoded_0
-            message_bits_reconstructed[message_idx,:] = encode(message_decoded_0)
+#            message_bits_reconstructed[message_idx,:] = encode(message_decoded_0)
         return message_bits_reconstructed, message_decoded_reconstructed
