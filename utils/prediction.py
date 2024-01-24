@@ -25,6 +25,7 @@ class Prediction:
     fields = [2,3,5,7,8,9,12]
     fields_dynamic = [5,7,8,9]
     fields_static = [2,3,12]
+    _decimals = [1,4,4,1]
     _prediction_algorithm = 'xgboost'
     _regressor = []
     _max_depth = 7
@@ -256,7 +257,8 @@ class Prediction:
         res = model.fit(maxlags=self._lags, trend='n')
         pred = res.forecast(sample, steps=1)
         if field in self.fields_dynamic: pred = pred[0,self.fields_dynamic.index(field)]
-        elif field in self.fields_static: pred = np.round(pred[0,2])
+        elif field in self.fields_static: pred = pred[0,2]
+        pred = self._validate_prediction(pred, field)
         return pred
 
     def find_and_reconstruct_data(self, message_decoded, idx, outliers):
@@ -287,11 +289,34 @@ class Prediction:
                 pred = self._predict_ar(sample, field)
             elif sample.shape[0]==0: pred = None
             else:
-                if field in self.fields_dynamic: pred = np.mean(sample[:,self.fields_dynamic.index(field)])
-                elif  field in self.fields_static: pred = np.mean(sample[:,2])
+                if field in self.fields_dynamic: 
+                    pred = np.mean(sample[:,self.fields_dynamic.index(field)])
+                    pred = np.round(pred, decimals=self._decimals[self.fields_dynamic.index(field)])
+                elif  field in self.fields_static: pred = np.round(np.mean(sample[:,2]))
         elif self._prediction_algorithm == 'xgboost':
             sample = self._create_regressor_sample(message_decoded, idx, message_idx, field)
             pred = self._regressor[self.fields.index(field)].predict(sample)
+        return pred
+    
+    def _validate_prediction(self, pred, field):
+        if field in self.fields_static:
+            pred = np.round(pred)
+            if field == 2: 
+                if pred < 0 or pred > 999999999: pred = 200000000
+            elif field == 3:
+                if pred < 0 or pred > 15: pred = 15
+            elif field == 12:
+                if pred < 0 or pred > 2: pred = 0
+        elif field in self.fields_dynamic:
+            pred = np.round(pred, decimals=self._decimals[self.fields_dynamic.index(field)])
+            if field == 5: 
+                if pred < 0 or pred > 102.2: pred = 102.3
+            elif field == 7:
+                if pred < -180 or pred > 180: pred = 181
+            elif field == 8:
+                if pred < -90 or pred > 90: pred = 91
+            elif field == 9:
+                if pred < 0 or pred > 359.9: pred = 360
         return pred
     
     def apply_predictions(self, message_bits, message_decoded):
@@ -303,5 +328,5 @@ class Prediction:
             for field in self.fields:
                 if field in prediction.keys(): message_decoded_0[field] = prediction[field]
             message_decoded_reconstructed[message_idx,:] = message_decoded_0
-#            message_bits_reconstructed[message_idx,:] = encode(message_decoded_0)
+            message_bits_reconstructed[message_idx,:] = encode(message_decoded_0)
         return message_bits_reconstructed, message_decoded_reconstructed

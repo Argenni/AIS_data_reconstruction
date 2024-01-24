@@ -34,7 +34,9 @@ def visualize_trajectories(X, MMSI, MMSI_vec, goal, reconstructed_idx=[]):
     - X - numpy array, AIS feature vectors (w/o normalization), shape=(num_messages, num_features (115)),
     - MMSI - list of MMSI identifier from each AIS message, len=num_messages,
     - MMSI_vec - list of uniqe items in MMSI,
-    - goal - string, the purpose of visualization: 'data_visualization', 'clustering' or 'anomaly_detection'.
+    - goal - string, the purpose of visualization: 'data_visualization', 'clustering' or 'anomaly_detection',
+    - reconstructed_idx - (optional) list of indices of messages that had at least one field reconstructed
+        (for stage='prediction' only), default=[].
     """
     plt.figure()
     for i in MMSI_vec: 

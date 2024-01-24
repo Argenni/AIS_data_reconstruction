@@ -10,21 +10,26 @@ with the following datasets:
  - X - numpy array, AIS feature vectors (w/o normalization), shape=(num_messages, num_features (115)),
  - MMSI - list of MMSI identifiers from each AIS message, len=num_messages,
  - timestamp - list of strings with timestamp of each message, len  um_messages. \n
-Creates (saved as .txt):
+Creates:
  - idx - list of indices of clusters assigned to each message, len=num_messages (clustering.txt),
  - outliers - numpy array with anomaly detection information, shape=(num_messages, 3) (anomaly_detection.txt)
    (1. column - if a message is outlier, 2. column - proposed correct cluster, 3. column - possibly damaged field).
-"""
+ - predicitons - list of messages that underwent correction (in the form of dictionary with 
+    'message_idx':index of reconstructed message, field_num:reconstructed value for that field) (prediction.txt),
+ - data/reconstructed_Gdansk.h5 / data/reconstructed_Baltic.h5 / data/reconstructed_Gibraltar.h5 - corrected datasets 
+    (message_bits and message_decoded).
+   """
 print("\n----------- AIS Data Reconstruction ---------- ")
 
 # ----------------------------------------------- AIS Data Reconstruction ---------------------------------------------
-# ----------- Initialization ----------
+# ------------------- Initialization ----------------------
 print("\n----------- Initialization ---------- ")
 # Important imports
 import numpy as np
 import h5py
 from sklearn.metrics import silhouette_score
 import sys
+import os
 sys.path.append('.')
 from utils.initialization import Data
 from utils.clustering import Clustering, calculate_CC
@@ -35,15 +40,17 @@ from utils.miscellaneous import count_number, visualize_trajectories, TimeWindow
 # ----------------------------!!! EDIT HERE !!! --------------------------------- 
 # Specify some important configuration
 np.random.seed(1) #For reproducibility
+filename = 'Gdansk.h5' # Gdansk.h5, Gibraltar.h5 or Baltic.h5
 distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
 ad_algorithm = 'xgboost' # 'rf' or 'xgboost'
+prediction_algorithm = 'ar' # 'ar' or 'xgboost'
 wavelet = 'morlet' # 'morlet' or 'ricker'
 #--------------------------------------------------------------------------------
 
 # Load data
 print(" Importing files... ")
-file = h5py.File(name='data/Gdansk.h5', mode='r') # Gdansk.h5, Gibraltar.h5 or Baltic.h5
+file = h5py.File(name='data/'+filename, mode='r')
 data = Data(file=file)
 data.split(train_percentage=50, val_percentage=25) # split into train (50%), val (25%) and test (25%) set
 file.close()
@@ -107,12 +114,13 @@ visualize_trajectories(
     MMSI_vec=[0,1],
     goal='anomaly_detection')
 
+
 # ------------------------- Stage 3 - Prediction --------------------- 
 print("\n----------- Part 3 - Prediction ---------- ")
 prediction = Prediction(
-    verbose=False,
+    verbose=True,
     optimize=None,
-    prediction_algorithm='ar')
+    prediction_algorithm=prediction_algorithm)
 prediction.find_and_reconstruct_data(
     message_decoded=data.message_decoded, 
     idx=idx,
@@ -127,6 +135,7 @@ visualize_trajectories(
     MMSI_vec=count_number(message_decoded_new[:,2])[1],
     goal='prediction',
     reconstructed_idx=reconstructed_idx)
+print("Messages corrected: " + str(len(prediction.predictions)))
 
 # ------------------ Finalization --------------------
 # Save results
@@ -149,3 +158,9 @@ np.savetxt(
     delimiter=',',
     fmt='%s',
     header="Predicted new values")
+if os.path.exists('data/reconstructed_'+filename):
+    os.remove('data/reconstructed_'+filename)
+File = h5py.File('data/reconstructed_'+filename, mode='x')
+File.create_dataset('message_bits', data=message_bits_new)
+File.create_dataset('message_decoded', data=message_decoded_new)
+File.close()
