@@ -124,18 +124,20 @@ prediction = Prediction(
 prediction.find_and_reconstruct_data(
     message_decoded=data.message_decoded, 
     idx=idx,
+    timestamp=data.timestamp,
     outliers=ad.outliers)
 reconstructed_idx = [prediction.predictions[i]['message_idx'] for i in range(len(prediction.predictions))]
 message_bits_new, message_decoded_new = prediction.apply_predictions(
     message_bits=data.message_bits,
     message_decoded=data.message_decoded)
+print("Messages corrected: " + str(len(prediction.predictions)))
 visualize_trajectories(
     X=message_decoded_new[:,[7,8]],
     MMSI=message_decoded_new[:,2],
     MMSI_vec=count_number(message_decoded_new[:,2])[1],
     goal='prediction',
     reconstructed_idx=reconstructed_idx)
-print("Messages corrected: " + str(len(prediction.predictions)))
+
 
 # ------------------ Finalization --------------------
 # Save results

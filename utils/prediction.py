@@ -38,7 +38,7 @@ class Prediction:
         Class initialization (class object creation). Arguments:
         - verbose (optional) - Boolean, whether to print running logs or not, default=False,
         - optimize (optional) - string, name of regressor hyperparameter to optimize, 
-            'max_depth', 'n_estimators' (for xgboost), 'p' or 'q' (for autoregression), default=None (no optimization),
+            'max_depth', 'n_estimators' (for xgboost), 'lags' (for autoregression), default=None (no optimization),
         - prediction_algorithm (optional) - string deciding which model to use, 'xgboost' or 'ar', default='xgboost'.
         """
         # Initialize models and necessary variables
@@ -85,7 +85,7 @@ class Prediction:
 
     def _train_regressor(self):
         """
-        Trains a regressor that will be used in prediction phase of AIS data reconstruction
+        Trains a xgboost regressor that will be used in prediction phase of AIS data reconstruction
         and saves it as pickle in utils/prediction_files/regressor_.h5 and in self._regressor.
         """
         if self._prediction_algorithm == 'xgboost':
@@ -168,7 +168,7 @@ class Prediction:
 
     def _optimize_regression(self, hyperparameter):
         """ 
-        Chooses optimal value of XGBoost hyperparameters for prediction stage. \n
+        Chooses optimal value of regressor's hyperparameters for prediction stage. \n
         Argument: hyperparameter - string indicating which hyperparameter to optimize: 
         'max_depth' or 'n_estimators' (for XGBoost) or 'lags' (for VAR).
         """
@@ -237,6 +237,15 @@ class Prediction:
             self._train_regressor()
 
     def _create_ar_sample(self, message_decoded, idx, message_idx, field):
+        """
+        Computes the sample for autoregression for prediction stage. \n
+        Arguments:
+        - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape=(num_mesages, num_fields (14)),
+        - idx - list of indices of clusters assigned to each message, len=num_messages,
+        - message_idx - scalar, int, index of a message to correct,
+        - field - scalar, int, a field to examine. \n
+        Returns: sample - a numpy-array with time series based on a trajectory, shape=(num_previous_messages, 4 or 3).
+        """
         # Take datapoints only from the given cluster AND from the past
         cluster_idx = idx[message_idx]
         idx_cropped = idx[0:message_idx]
@@ -249,10 +258,27 @@ class Prediction:
             sample = message_decoded_cropped[:, [7,8,field]]
         return sample
     
-    def _create_regressor_sample(self, message_decoded, idx, message_idx, field):
+    def _create_regressor_sample(self, message_decoded, timestamp, idx, message_idx, field):
+        """
+        Computes the sample for  XGBoost regressor for prediction stage. \n
+        Arguments:
+        - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape=(num_mesages, num_fields (14)),
+        - timestamp - list of strings with timestamp of each message, len=num_messages,
+        - idx - list of indices of clusters assigned to each message, len=num_messages,
+        - message_idx - scalar, int, index of a message to correct,
+        - field - scalar, int, a field to examine. \n
+        Returns: sample - a numpy-array vector descibing a message for correct, shape=(?,).
+        """
         pass
 
     def _predict_ar(self, sample, field):
+        """
+        Predicts the value of a given field of AIS message using autoregression. \n
+        Arguments:
+        - sample - a numpy-array with time series based on a trajectory, shape=(num_previous_messages, 4 or 3),
+        - field - scalar, int, a field to examine. \n
+        Returns: pred - a scalar, float, correct field value.
+        """
         model = sm.tsa.VAR(sample)
         res = model.fit(maxlags=self._lags, trend='n')
         pred = res.forecast(sample, steps=1)
@@ -261,7 +287,7 @@ class Prediction:
         pred = self._validate_prediction(pred, field)
         return pred
 
-    def find_and_reconstruct_data(self, message_decoded, idx, outliers):
+    def find_and_reconstruct_data(self, message_decoded, idx, timestamp, outliers):
         print("Reconstructing data...")
         indices = []
         for i in range(len(idx)):
@@ -274,6 +300,7 @@ class Prediction:
             for field in fields:
                 pred = self.reconstruct_data(
                     message_decoded=message_decoded,
+                    timestamp=timestamp,
                     idx=idx,
                     message_idx=message_idx,
                     field=field)
@@ -282,7 +309,7 @@ class Prediction:
             if include: self.predictions.append(dict)
         print("Complete.")
 
-    def reconstruct_data(self, message_decoded, idx, message_idx, field):
+    def reconstruct_data(self, message_decoded, timestamp, idx, message_idx, field):
         if self._prediction_algorithm == 'ar':
             sample = self._create_ar_sample(message_decoded, idx, message_idx, field)
             if sample.shape[0]>self._lags:
@@ -291,10 +318,11 @@ class Prediction:
             else:
                 if field in self.fields_dynamic: 
                     pred = np.mean(sample[:,self.fields_dynamic.index(field)])
+                    # !!!!!!!!!!!!!!! Make it more reasonable !!!!! #
                     pred = np.round(pred, decimals=self._decimals[self.fields_dynamic.index(field)])
                 elif  field in self.fields_static: pred = np.round(np.mean(sample[:,2]))
         elif self._prediction_algorithm == 'xgboost':
-            sample = self._create_regressor_sample(message_decoded, idx, message_idx, field)
+            sample = self._create_regressor_sample(message_decoded, timestamp, idx, message_idx, field)
             pred = self._regressor[self.fields.index(field)].predict(sample)
         return pred
     
