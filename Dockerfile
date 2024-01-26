@@ -1,4 +1,4 @@
-#v2
+#v4
 FROM python:3.8
 COPY main.py ./main.py
 COPY /data/Gdansk.h5 /data/Gdansk.h5
@@ -9,6 +9,6 @@ CMD ["python", "main.py"]
 
 
 # ------ Build new image and tag it --------------
-# docker build --no-cache -t ais:v3 .
+# docker build --no-cache -t ais:v4 .
 # ------ Run container from that image -----------
-# docker container run -v $(pwd)/output:/output --name ais ais:v3
+# docker container run -v $(pwd)/output:/output --name ais ais:v4

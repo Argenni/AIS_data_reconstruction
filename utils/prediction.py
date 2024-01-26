@@ -30,7 +30,7 @@ class Prediction:
     _regressor = []
     _max_depth = 7
     _num_estimators = 20
-    _lags = 3
+    _lags = 1
     _verbose = []
     
     def __init__(self, verbose=False, optimize=None, prediction_algorithm='xgboost'):
@@ -71,7 +71,7 @@ class Prediction:
                     y_true = []
                     y_pred = []
                     for trajectory in range(len(variables[1][field_num])):
-                        pred = self._predict_ar(variables[0][field_num][trajectory], self.fields[field_num])
+                        pred = self._predict_ar(variables[0][field_num][trajectory], self._lags, self.fields[field_num])
                         y_true.append(variables[1][field_num][trajectory])
                         y_pred.append(pred)
                     mse.append(mean_squared_error(y_true, y_pred))
@@ -136,7 +136,7 @@ class Prediction:
         variables = [[],[]] if self._prediction_algorithm == 'ar' else [[],[],[],[]]
         for i in range(len(variables)):
             for field_num in range(len(self.fields)): 
-                variables[i].append([]) # training set           
+                variables[i].append([])        
         if self._prediction_algorithm == 'xgboost':
             for i in [0,1]:
                 for message_idx in range(len(MMSI[i])):
@@ -160,7 +160,7 @@ class Prediction:
                         idx=MMSI,
                         message_idx=message_idx,
                         field=self.fields[field_num])
-                    if batch.shape[0]>self._lags:
+                    if batch.shape[0]>20:
                         variables[0][field_num].append(batch)
                         variables[1][field_num].append(message_decoded[message_idx,self.fields[field_num]])
         pickle.dump(variables, open('utils/prediction_files/dataset_'+self._prediction_algorithm+'.h5', 'ab'))
@@ -210,11 +210,13 @@ class Prediction:
             for param in params:
                 mse_train_field = []
                 for field_num in range(len(variables[1])):
+                    y_pred = []
+                    y_true = []
                     for trajectory in range(len(variables[1][field_num])):
-                        model = sm.tsa.VAR(endog=variables[0][field_num][trajectory])
-                        res = model.fit(maxlags=param, trend='n')
-                        pred = res.forecast(variables[0][field_num][trajectory], steps=1)
-                        mse_train_field.append(mean_squared_error(pred,variables[1][field_num][trajectory]))
+                        pred = self._predict_ar(variables[0][field_num][trajectory], param, self.fields[field_num])
+                        y_pred.append(pred)
+                        y_true.append(variables[1][field_num][trajectory])
+                    mse_train_field.append(mean_squared_error(y_pred, y_true))
                 mse_train.append(np.mean(mse_train_field))
         print(" Complete. ")
         fig, ax = plt.subplots()
@@ -271,7 +273,7 @@ class Prediction:
         """
         pass
 
-    def _predict_ar(self, sample, field):
+    def _predict_ar(self, sample, lags, field):
         """
         Predicts the value of a given field of AIS message using autoregression. \n
         Arguments:
@@ -280,7 +282,7 @@ class Prediction:
         Returns: pred - a scalar, float, correct field value.
         """
         model = sm.tsa.VAR(sample)
-        res = model.fit(maxlags=self._lags, trend='n')
+        res = model.fit(maxlags=lags, trend='n')
         pred = res.forecast(sample, steps=1)
         if field in self.fields_dynamic: pred = pred[0,self.fields_dynamic.index(field)]
         elif field in self.fields_static: pred = pred[0,2]
@@ -288,6 +290,16 @@ class Prediction:
         return pred
 
     def find_and_reconstruct_data(self, message_decoded, idx, timestamp, outliers):
+        """
+        Takes every field (and message) marked in previous stage as an outlier, predicts its correct form
+        and saves the results in self.predictions. \n
+        Arguments:
+        - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape=(num_mesages, num_fields (14)),
+        - idx - list of indices of clusters assigned to each message, len=num_messages,
+        - timestamp - list of strings with timestamp of each message, len=num_messages,
+        - outliers - numpy array with anomaly detection information, shape=(num_messages, 3) (anomaly_detection.txt)
+          (1. column - if a message is outlier, 2. column - proposed correct cluster, 3. column - possibly damaged field).
+        """
         print("Reconstructing data...")
         indices = []
         for i in range(len(idx)):
@@ -310,10 +322,20 @@ class Prediction:
         print("Complete.")
 
     def reconstruct_data(self, message_decoded, timestamp, idx, message_idx, field):
+        """
+        Predicts the correct form of a value from a given field of a given AIS message. \n
+        Arguments:
+        - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape=(num_mesages, num_fields (14)),
+        - timestamp - list of strings with timestamp of each message, len=num_messages,
+        - idx - list of indices of clusters assigned to each message, len=num_messages,
+        - message_idx - scalar, int, index of a message to correct,
+        - field - scalar, int, a field to examine. \n
+        Returns: pred - a scalar, float, correct field value.
+        """
         if self._prediction_algorithm == 'ar':
             sample = self._create_ar_sample(message_decoded, idx, message_idx, field)
             if sample.shape[0]>self._lags:
-                pred = self._predict_ar(sample, field)
+                pred = self._predict_ar(sample, self._lags, field)
             elif sample.shape[0]==0: pred = None
             else:
                 if field in self.fields_dynamic: 
@@ -327,6 +349,13 @@ class Prediction:
         return pred
     
     def _validate_prediction(self, pred, field):
+        """
+        Makes sure the predicted values matches the official specification (in terms of range, decimals). \n
+        Argumenets:
+        - pred - a scalar, float, predicted field value.
+        - field - scalar, int, a field that was examined. \n
+        Returns: pred - a scalar, float, correct field value.
+        """
         if field in self.fields_static:
             pred = np.round(pred)
             if field == 2: 
@@ -348,6 +377,13 @@ class Prediction:
         return pred
     
     def apply_predictions(self, message_bits, message_decoded):
+        """
+        Makes a copy of the original dataset and puts all predicted values into the correct places. \n
+        Arguments:
+        - message_bits - numpy array, original AIS messages in binary form (1 column = 1 bit), shape=(num_mesages, num_bits (168)),
+        - message_decoded - numpy array, original AIS messages decoded from binary to decimal, shape=(num_mesages, num_fields (14)).
+        Returns: message_bits_reconstructed, message_decoded_reconstructed - numpy array, corrected dataset in binary/decimal form.
+        """
         message_bits_reconstructed = copy.deepcopy(message_bits)
         message_decoded_reconstructed = copy.deepcopy(message_decoded)
         for prediction in self.predictions:
