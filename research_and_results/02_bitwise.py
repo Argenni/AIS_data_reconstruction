@@ -189,7 +189,7 @@ fig.legend([
             "Message type","Repeat indicator","MMSI","Navigational status", 
             "Rate of turns","Speed over ground","Position accuracy","Longitude", 
             "Latitude","Course over ground","True heading","Time stamp", 
-            "Special manouvre indicator", "RAIM-flag"], loc=7)
+            "Special manoeuvre indicator", "RAIM-flag"], loc=7)
 fig.show()
 
 

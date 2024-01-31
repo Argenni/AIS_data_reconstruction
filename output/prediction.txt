@@ -1,6 +1,4 @@
 # Predicted new values
-{'message_idx': 6, 9: 324.7}
-{'message_idx': 10, 9: 202.8}
 {'message_idx': 12, 5: 0.1, 9: 325.9}
 {'message_idx': 14, 9: 164.0}
 {'message_idx': 15, 9: 152.8}
@@ -37,7 +35,6 @@
 {'message_idx': 136, 9: 256.8}
 {'message_idx': 139, 7: 18.5479, 9: 202.8}
 {'message_idx': 149, 9: 202.8}
-{'message_idx': 153, 9: 145.1}
 {'message_idx': 166, 9: 273.1}
 {'message_idx': 170, 9: 202.8}
 {'message_idx': 171, 9: 141.1}

@@ -118,7 +118,7 @@ visualize_trajectories(
 # ------------------------- Stage 3 - Prediction --------------------- 
 print("\n----------- Part 3 - Prediction ---------- ")
 prediction = Prediction(
-    verbose=True,
+    verbose=False,
     optimize=None,
     prediction_algorithm=prediction_algorithm)
 prediction.find_and_reconstruct_data(
