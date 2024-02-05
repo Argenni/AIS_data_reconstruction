@@ -63,8 +63,8 @@ else:  # or run the computations on the original data
         file.close()
         # Preprocess data
         K, _ = count_number(data.MMSI_val)  # Count number of groups/ships
-        data.X_train, _, _ = data.standarize(data.Xraw_train)
-        data.X_val, _, _ = data.standarize(data.Xraw_val)
+        data.X_train, _, _ = data.standardize(data.Xraw_train)
+        data.X_val, _, _ = data.standardize(data.Xraw_val)
         # First clustering
         clustering = Clustering()
         if clustering_algorithm == 'kmeans': idx, centroids = clustering.run_kmeans(X=data.X_val,K=K)
@@ -89,7 +89,7 @@ else:  # or run the computations on the original data
                         Xraw_corr[message_idx,:] = X_0
                         MMSI_corr[message_idx] = MMSI_0
                         message_decoded_corr[message_idx,:] = message_decoded_0
-                        X_corr, _, _ = data.standarize(Xraw_corr)
+                        X_corr, _, _ = data.standardize(Xraw_corr)
                         # cluster again to find new cluster assignment
                         K_corr, MMSI_vec_corr = count_number(MMSI_corr)
                         if clustering_algorithm == 'kmeans':

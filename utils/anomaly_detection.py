@@ -363,7 +363,7 @@ class AnomalyDetection:
                 X_0, _, _ = decode(message_bits_corr[message_idx,:])  # decode from binary
                 X_corr = copy.deepcopy(Xraw)
                 X_corr[message_idx] = X_0
-                X_corr, _, _ = data.standarize(X_corr)
+                X_corr, _, _ = data.standardize(X_corr)
                 X_0 = X_corr[message_idx]
                 X_corr = np.delete(X_corr, message_idx, axis=0)
                 MMSI_corr = np.delete(MMSI,message_idx,axis=0)

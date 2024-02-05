@@ -182,7 +182,7 @@ class Data:
         elif file.filename == 'data/Baltic.h5' or file.filename == 'data\Baltic.h5':
             self.timestamp = [datetime.datetime.strptime(i, '%d/%m/%Y %H:%M:%S') for i in self.timestamp]
 
-    def standarize(self, X):
+    def standardize(self, X):
         """
         Changes the data distribution to have mean=0 and std=1. \n
         Argument: X - dataset to standarize, shape = (num_messages, num_features). \n

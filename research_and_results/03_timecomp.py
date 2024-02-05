@@ -78,8 +78,8 @@ else:  # or run the computations
         file.close()
         if stage!='clustering':
             data_original.split(train_percentage=50, val_percentage=25)
-            data_original.X_train, _, _ = data_original.standarize(data_original.Xraw_train)
-            data_original.X_val, _, _ = data_original.standarize(data_original.Xraw_val)
+            data_original.X_train, _, _ = data_original.standardize(data_original.Xraw_train)
+            data_original.X_val, _, _ = data_original.standardize(data_original.Xraw_val)
         overall_time = max(data_original.timestamp)-min(data_original.timestamp)
         overall_time = overall_time.seconds/60
         for window_num in range(len(windows)):
@@ -98,7 +98,7 @@ else:  # or run the computations
                     data = copy.deepcopy(data_original)
                     time_window = TimeWindow(start, stop)
                     data = time_window.use_time_window(data, crop_train=False, crop_val=False, verbose=False)
-                    data.X, _, _ = data.standarize(data.Xraw)
+                    data.X, _, _ = data.standardize(data.Xraw)
                     if (data.Xraw).shape[0]>1:
                         for percentage_num in range(len(percentages)):
                             # Damage data
@@ -125,7 +125,7 @@ else:  # or run the computations
                             # Preprocess data
                             _, MMSI_vec = count_number(data.MMSI)                
                             K, MMSI_corr_vec = count_number(MMSI_corr)  # Count number of groups/ships
-                            Xcorr, _, _ = data.standarize(Xraw_corr) 
+                            Xcorr, _, _ = data.standardize(Xraw_corr) 
                             clustering = Clustering() # perform clustering
                             if clustering_algorithm == 'kmeans':
                                 idx_corr, _ = clustering.run_kmeans(X=Xcorr,K=K)

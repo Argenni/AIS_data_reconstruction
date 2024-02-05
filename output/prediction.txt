@@ -1,5 +1,4 @@
 # Predicted new values
-{'message_idx': 12, 5: 0.1, 9: 325.9}
 {'message_idx': 14, 9: 164.0}
 {'message_idx': 15, 9: 152.8}
 {'message_idx': 23, 9: 202.8}
@@ -51,13 +50,13 @@
 {'message_idx': 223, 9: 237.8}
 {'message_idx': 228, 9: 275.2}
 {'message_idx': 231, 9: 191.3}
-{'message_idx': 232, 5: 1.2, 9: 272.5}
+{'message_idx': 232, 5: 2.3, 9: 272.5}
 {'message_idx': 233, 9: 202.8}
 {'message_idx': 238, 9: 202.8}
 {'message_idx': 239, 9: 163.5}
 {'message_idx': 242, 9: 360}
 {'message_idx': 245, 9: 360}
-{'message_idx': 247, 5: 0.2, 9: 360}
+{'message_idx': 247, 5: 0.0, 9: 360}
 {'message_idx': 251, 9: 271.0}
 {'message_idx': 254, 9: 74.1}
 {'message_idx': 256, 9: 202.8}
@@ -75,7 +74,7 @@
 {'message_idx': 295, 9: 274.6}
 {'message_idx': 299, 9: 202.8}
 {'message_idx': 304, 9: 284.4}
-{'message_idx': 310, 5: 3.7, 9: 241.5}
+{'message_idx': 310, 5: 3.6, 9: 241.5}
 {'message_idx': 311, 9: 202.8}
 {'message_idx': 316, 9: 126.6}
 {'message_idx': 317, 9: 202.8}

@@ -162,7 +162,12 @@ class Prediction:
                         field=self.fields[field_num])
                     if batch.shape[0]>20:
                         variables[0][field_num].append(batch)
-                        variables[1][field_num].append(message_decoded[message_idx,self.fields[field_num]])
+                        if field_num == 3 or field_num == 4: # for lon or lat
+                            previous_idx = np.where(MMSI==MMSI_0)[0][-2]
+                            variables[1][field_num].append( # append the difference
+                                message_decoded[message_idx,self.fields[field_num]] - message_decoded[previous_idx,self.fields[field_num]])
+                        else: 
+                            variables[1][field_num].append(message_decoded[message_idx,self.fields[field_num]])
         pickle.dump(variables, open('utils/prediction_files/dataset_'+self._prediction_algorithm+'.h5', 'ab'))
         print(" Complete.")
 
@@ -252,12 +257,22 @@ class Prediction:
         cluster_idx = idx[message_idx]
         idx_cropped = idx[0:message_idx]
         message_decoded_cropped = message_decoded[0:message_idx,:]
-        message_decoded_cropped = message_decoded_cropped[idx_cropped==cluster_idx,:]
+        message_decoded_cropped = message_decoded_cropped[np.array(idx_cropped)==cluster_idx,:]
         # Take only the fields of interest
-        if field in self.fields_dynamic:
-            sample = message_decoded_cropped[:, self.fields_dynamic]
-        elif field in self.fields_static:
-            sample = message_decoded_cropped[:, [7,8,field]]
+        if message_decoded_cropped.shape[0]>1:
+            if field in [5,7,8]:            
+                num_messages = message_decoded_cropped.shape[0]
+                sample = np.zeros((num_messages-1, len(self.fields_dynamic)))
+                sample[:,0] = message_decoded_cropped[1:num_messages, 5]
+                sample[:,1] = message_decoded_cropped[1:num_messages, 7] - message_decoded_cropped[0:num_messages-1, 7]
+                sample[:,2] = message_decoded_cropped[1:num_messages, 8] - message_decoded_cropped[0:num_messages-1, 8]
+                sample[:,3] = message_decoded_cropped[1:num_messages, 9]
+            if field == 9:
+                sample = message_decoded_cropped[:, self.fields_dynamic]
+            elif field in self.fields_static:
+                sample = message_decoded_cropped[:, [7,8,field]]
+        else:
+            sample = np.array([]) 
         return sample
     
     def _create_regressor_sample(self, message_decoded, timestamp, idx, message_idx, field):
@@ -286,7 +301,6 @@ class Prediction:
         pred = res.forecast(sample, steps=1)
         if field in self.fields_dynamic: pred = pred[0,self.fields_dynamic.index(field)]
         elif field in self.fields_static: pred = pred[0,2]
-        pred = self._validate_prediction(pred, field)
         return pred
 
     def find_and_reconstruct_data(self, message_decoded, idx, timestamp, outliers):
@@ -334,48 +348,51 @@ class Prediction:
         """
         if self._prediction_algorithm == 'ar':
             sample = self._create_ar_sample(message_decoded, idx, message_idx, field)
-            if sample.shape[0]>self._lags:
-                pred = self._predict_ar(sample, self._lags, field)
-            elif sample.shape[0]==0 or sample.shape[0]==1: pred = None # too few examples to make prediction
+            if sample.shape[0]==0 or sample.shape[0]==1: pred = None # too few examples to make prediction
             else:
-                if field in self.fields_dynamic: 
-                    messages_idx = np.where(np.array(idx)==idx[message_idx])[0]
-                    new_message_idx = np.where(messages_idx==message_idx)[0][0]
-                    previous_idx = messages_idx[new_message_idx-1]
-                    delta_lon_deg = message_decoded[message_idx, 7]-message_decoded[previous_idx, 7]
-                    delta_lat_deg = message_decoded[message_idx, 8]-message_decoded[previous_idx, 8]
-                    if field == 9: # cog
-                        if delta_lon_deg<0: cart = np.sign(delta_lat_deg)*180-np.arctan(delta_lat_deg/abs(delta_lon_deg))/np.pi*180
-                        elif delta_lon_deg>0: cart = np.arctan(delta_lat_deg/delta_lon_deg)/np.pi*180
-                        else: cart = 90 # delta_lon_deg = 0
-                        pred = np.mod(90-cart,360)
-                    else:
-                        coeff_lon = 111320 * np.cos(message_decoded[message_idx, 8]*np.pi/180)
-                        delta_lon = delta_lon_deg * coeff_lon
-                        coeff_lat = 111320
-                        delta_lat = delta_lat_deg * coeff_lat
-                        time = timestamp[message_idx]-timestamp[previous_idx]
-                        time = time.seconds
-                        if field == 5: # sog
-                            dist = np.sqrt(delta_lat*delta_lat + delta_lon*delta_lon)
-                            pred = dist/(time * 0.5144) # in knots
-                        elif field == 7: # lon
-                            dist = message_decoded[message_idx, 5] * 0.5144 * time.seconds # in m
-                            if 0 < message_decoded[message_idx, 9] < 180: # heading east
-                                pred = message_decoded[message_idx, 7] + np.sqrt(abs(dist*dist - delta_lat*delta_lat))/coeff_lon
-                            else: # heading west
-                                pred = message_decoded[message_idx, 7] - np.sqrt(abs(dist*dist - delta_lat*delta_lat))/coeff_lon
-                        elif field == 8: # lat
-                            dist = message_decoded[message_idx, 5] * 0.5144 * time.seconds # in m
-                            if 90 < message_decoded[message_idx, 9] < 270: # heading south
-                                pred = message_decoded[message_idx, 8] - np.sqrt(abs(dist*dist - delta_lon*delta_lon))/coeff_lat
-                            else: # heading north
-                                pred = message_decoded[message_idx, 8] + np.sqrt(abs(dist*dist - delta_lon*delta_lon))/coeff_lat
-                    pred = np.round(pred, decimals=self._decimals[self.fields_dynamic.index(field)])
-                elif  field in self.fields_static: pred = np.round(np.mean(sample[:,2]))
+                messages_idx = np.where(np.array(idx)==idx[message_idx])[0]
+                new_message_idx = np.where(messages_idx==message_idx)[0][0]
+                previous_idx = messages_idx[new_message_idx-1]
+                if sample.shape[0]>self._lags: # normal prediction - enough examples for VAR 
+                    pred = self._predict_ar(sample, self._lags, field)
+                    if field == 7 or field == 8: pred = pred + message_decoded[previous_idx, field]
+                else: # too few examples for VAR, but enough for estimation (between 2 and lags)
+                    if field in self.fields_dynamic: 
+                        delta_lon_deg = message_decoded[message_idx, 7]-message_decoded[previous_idx, 7]
+                        delta_lat_deg = message_decoded[message_idx, 8]-message_decoded[previous_idx, 8]
+                        if field == 9: # cog
+                            if delta_lon_deg<0: cart = np.sign(delta_lat_deg)*180-np.arctan(delta_lat_deg/abs(delta_lon_deg))/np.pi*180
+                            elif delta_lon_deg>0: cart = np.arctan(delta_lat_deg/delta_lon_deg)/np.pi*180
+                            else: cart = 90 # delta_lon_deg = 0
+                            pred = np.mod(90-cart,360)
+                        else:
+                            coeff_lon = 111320 * np.cos(message_decoded[message_idx, 8]*np.pi/180)
+                            delta_lon = delta_lon_deg * coeff_lon
+                            coeff_lat = 111320
+                            delta_lat = delta_lat_deg * coeff_lat
+                            time = timestamp[message_idx]-timestamp[previous_idx]
+                            time = time.seconds
+                            if field == 5: # sog
+                                dist = np.sqrt(delta_lat*delta_lat + delta_lon*delta_lon)
+                                pred = dist/(time * 0.5144) # in knots
+                            elif field == 7: # lon
+                                dist = message_decoded[message_idx, 5] * 0.5144 * time.seconds # in m
+                                if 0 < message_decoded[message_idx, 9] < 180: # heading east
+                                    pred = message_decoded[message_idx, 7] + np.sqrt(abs(dist*dist - delta_lat*delta_lat))/coeff_lon
+                                else: # heading west
+                                    pred = message_decoded[message_idx, 7] - np.sqrt(abs(dist*dist - delta_lat*delta_lat))/coeff_lon
+                            elif field == 8: # lat
+                                dist = message_decoded[message_idx, 5] * 0.5144 * time.seconds # in m
+                                if 90 < message_decoded[message_idx, 9] < 270: # heading south
+                                    pred = message_decoded[message_idx, 8] - np.sqrt(abs(dist*dist - delta_lon*delta_lon))/coeff_lat
+                                else: # heading north
+                                    pred = message_decoded[message_idx, 8] + np.sqrt(abs(dist*dist - delta_lon*delta_lon))/coeff_lat
+                        pred = np.round(pred, decimals=self._decimals[self.fields_dynamic.index(field)])
+                    elif  field in self.fields_static: pred = np.round(np.mean(sample[:,2]))
         elif self._prediction_algorithm == 'xgboost':
             sample = self._create_regressor_sample(message_decoded, timestamp, idx, message_idx, field)
             pred = self._regressor[self.fields.index(field)].predict(sample)
+        if pred is not None: pred = self._validate_prediction(pred, field)
         return pred
     
     def _validate_prediction(self, pred, field):

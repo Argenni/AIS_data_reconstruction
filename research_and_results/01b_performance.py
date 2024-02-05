@@ -182,9 +182,9 @@ else:  # or run the computations
         file.close()
         if stage != 'clustering':
             data.split(train_percentage=50, val_percentage=25)
-            data.X_train, _, _ = data.standarize(data.Xraw_train)
-            data.X_val, _, _ = data.standarize(data.Xraw_val)
-        data.X, _, _ = data.standarize(data.Xraw)
+            data.X_train, _, _ = data.standardize(data.Xraw_train)
+            data.X_val, _, _ = data.standardize(data.Xraw_val)
+        data.X, _, _ = data.standardize(data.Xraw)
         # Perform (first) clustering
         clustering = Clustering()
         K, MMSI_vec = count_number(data.MMSI)
@@ -242,7 +242,7 @@ else:  # or run the computations
                         Xraw_corr[message_idx,:] = X_0
                         MMSI_corr[message_idx] = MMSI_0
                         message_decoded_corr[message_idx,:] = message_decoded_0
-                    X_corr, _, _ = data.standarize(Xraw_corr)
+                    X_corr, _, _ = data.standardize(Xraw_corr)
                     # cluster again to find new cluster assignment
                     if clustering_algorithm == 'kmeans': 
                         K_corr, _ = count_number(MMSI_corr)

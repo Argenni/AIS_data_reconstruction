@@ -67,9 +67,9 @@ visualize_trajectories(
     MMSI=data.MMSI,
     MMSI_vec=MMSI_vec,
     goal='data_visualization')
-data.X_train, mu_train, sigma_train = data.standarize(data.Xraw_train)
-data.X_val, mu_val, sigma_val = data.standarize(data.Xraw_val)
-data.X, mu, sigma = data.standarize(data.Xraw)
+data.X_train, mu_train, sigma_train = data.standardize(data.Xraw_train)
+data.X_val, mu_val, sigma_val = data.standardize(data.Xraw_val)
+data.X, mu, sigma = data.standardize(data.Xraw)
 print(" Complete.")
 
 
@@ -118,7 +118,7 @@ visualize_trajectories(
 # ------------------------- Stage 3 - Prediction --------------------- 
 print("\n----------- Part 3 - Prediction ---------- ")
 prediction = Prediction(
-    verbose=False,
+    verbose=True,
     optimize=None,
     prediction_algorithm=prediction_algorithm)
 prediction.find_and_reconstruct_data(

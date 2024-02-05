@@ -69,9 +69,9 @@ else:  # or run the computations on the original data
     data.split(train_percentage=50, val_percentage=25)
     file.close()
    # Preprocess data
-    data.X_train, _, _ = data.standarize(data.Xraw_train)
-    data.X_val, _, _ = data.standarize(data.Xraw_val)
-    data.X, _, _ = data.standarize(data.Xraw)  
+    data.X_train, _, _ = data.standardize(data.Xraw_train)
+    data.X_val, _, _ = data.standardize(data.Xraw_val)
+    data.X, _, _ = data.standardize(data.Xraw)  
     # First clustering
     clustering = Clustering()
     if clustering_algorithm == 'kmeans':
@@ -100,7 +100,7 @@ else:  # or run the computations on the original data
             X_corr[message_idx,:] = X_0
             MMSI_corr[message_idx] = MMSI_0
             message_decoded_corr[message_idx,:] = message_decoded_0
-            X_corr, _, _ = data.standarize(X_corr)
+            X_corr, _, _ = data.standardize(X_corr)
             # cluster again to find new cluster assignment
             if clustering_algorithm == 'kmeans':
                 K_corr, _ = count_number(MMSI_corr)
