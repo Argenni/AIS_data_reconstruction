@@ -259,18 +259,26 @@ class Prediction:
         message_decoded_cropped = message_decoded[0:message_idx,:]
         message_decoded_cropped = message_decoded_cropped[np.array(idx_cropped)==cluster_idx,:]
         # Take only the fields of interest
-        if message_decoded_cropped.shape[0]>1:
-            if field in [5,7,8]:            
+        if message_decoded_cropped.shape[0]>2:
+            if field in [5,7,8]:
                 num_messages = message_decoded_cropped.shape[0]
-                sample = np.zeros((num_messages-1, len(self.fields_dynamic)))
+                sample = np.zeros((num_messages-1, 3))                           
                 sample[:,0] = message_decoded_cropped[1:num_messages, 5]
                 sample[:,1] = message_decoded_cropped[1:num_messages, 7] - message_decoded_cropped[0:num_messages-1, 7]
                 sample[:,2] = message_decoded_cropped[1:num_messages, 8] - message_decoded_cropped[0:num_messages-1, 8]
-                sample[:,3] = message_decoded_cropped[1:num_messages, 9]
-            if field == 9:
-                sample = message_decoded_cropped[:, self.fields_dynamic]
+            elif field == 9:
+                num_messages = message_decoded_cropped.shape[0]
+                sample = np.zeros((num_messages-1, 4))
+                sample[:,0] = message_decoded_cropped[1:num_messages, 7]
+                sample[:,1] = message_decoded_cropped[1:num_messages, 8]
+                sample[:,2] = message_decoded_cropped[1:num_messages, 9]
+                delta_lon_deg = message_decoded_cropped[1:num_messages, 7] - message_decoded_cropped[0:num_messages-1, 7]
+                delta_lat_deg = message_decoded_cropped[1:num_messages, 8] - message_decoded_cropped[0:num_messages-1, 8]
+                for i in range(num_messages-1):
+                    if delta_lon_deg[i] != 0: sample[i,3] = np.arctan(delta_lat_deg[i]/delta_lon_deg[i])/np.pi*180
+                    else: sample[i,3] = 90
             elif field in self.fields_static:
-                sample = message_decoded_cropped[:, [7,8,field]]
+                sample = message_decoded_cropped[1:, [7,8,field]]
         else:
             sample = np.array([]) 
         return sample
@@ -299,8 +307,8 @@ class Prediction:
         model = sm.tsa.VAR(sample)
         res = model.fit(maxlags=lags, trend='n')
         pred = res.forecast(sample, steps=1)
-        if field in self.fields_dynamic: pred = pred[0,self.fields_dynamic.index(field)]
-        elif field in self.fields_static: pred = pred[0,2]
+        if field in [5,7,8]: pred = pred[0, [5,7,8].index(field)]
+        elif field in [2,3,9,12]: pred = pred[0,2]
         return pred
 
     def find_and_reconstruct_data(self, message_decoded, idx, timestamp, outliers):
@@ -414,13 +422,17 @@ class Prediction:
         elif field in self.fields_dynamic:
             pred = np.round(pred, decimals=self._decimals[self.fields_dynamic.index(field)])
             if field == 5: 
-                if pred < 0 or pred > 102.2: pred = 102.3
+                if pred < 0: pred = 0
+                elif pred > 102.2: pred = 102.3
             elif field == 7:
-                if pred < -180 or pred > 180: pred = 181
+                if pred < -180: pred = -180
+                elif pred > 180: pred = 181
             elif field == 8:
-                if pred < -90 or pred > 90: pred = 91
+                if pred < -90: pred = -90
+                elif pred > 90: pred = 91
             elif field == 9:
-                if pred < 0 or pred > 359.9: pred = 360
+                if pred < 0: pred = np.abs(pred)
+                if pred > 359.9: pred = 360
         return pred
     
     def apply_predictions(self, message_bits, message_decoded):

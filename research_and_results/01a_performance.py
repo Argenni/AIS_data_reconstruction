@@ -38,7 +38,7 @@ distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
 ad_algorithm = 'xgboost' # 'rf', 'xgboost' or 'threshold' (only for 1-element-cluster anomaly detection) 
 prediction_algorithm = 'ar' # 'ar' or 'xgboost'
-stage = 'prediction' # 'clustering', 'ad_1element', 'ad_multielement' or 'prediction'
+stage = 'ad_1element' # 'clustering', 'ad_1element', 'ad_multielement' or 'prediction'
 num_metrics = {'clustering':2, 'ad_1element':5, 'ad_multielement':4, 'prediction':1}
 num_bits = {'clustering':10, 'ad_1element':2, 'ad_multielement':2, 'prediction':7}
 num_experiment = {'clustering':50, 'ad_1element':100, 'ad_multielement':10, 'prediction':50}
@@ -71,6 +71,7 @@ else:  # or run the computations
         bits = list(range(145))  
         bits.append(148)
     field_bits = np.array([6, 8, 38, 42, 50, 60, 61, 89, 116, 128, 137, 143, 145, 148])  # range of fields
+    field_names = {2:"MMSI", 3:"Navigational status", 5:"Speed over ground", 7:"Longitude", 8:"Latitude", 9:"Course over ground", 12:"Special manoeuvre indicator"}
     OK_vec = np.zeros((len(filename), num_bits[stage], num_metrics[stage], num_experiment[stage]))
     for file_num in range(len(filename)):      
         # Load the data from the right file
@@ -103,6 +104,7 @@ else:  # or run the computations
             print(" Choosing one message at a time - " + str(file_num+1) + ". dataset, " + str(num_bit+1) + " damaged bits...")
             corruption = Corruption(data.Xraw)
             np.random.seed(1) # for reproducibility
+            if stage=="prediction": visualized = False
             for i in range(num_experiment[stage]):
                 if stage=='ad_1element' or stage=='ad_multielement': 
                     if ad_algorithm=='rf' or ad_algorithm=='xgboost': ad = AnomalyDetection(ad_algorithm=ad_algorithm)
@@ -249,7 +251,7 @@ else:  # or run the computations
                 elif stage=='prediction':
                     message_decoded_new = copy.deepcopy(data.message_decoded)
                     message_decoded_new[message_idx, field] = pred
-                if ((stage=='clustering' and num_bit==0) or (stage=='prediction' and (num_bit==3 or num_bit==4))) and i==10 and file_num==0 and if_corrupt_location:
+                if ((stage=='clustering' and num_bit==0) or (stage=='prediction' and num_bit==3)) and i==10 and file_num==0 and if_corrupt_location:
                     # Visualize previous and present cluster for message with damaged location
                     fig1, ax1 = plt.subplots()
                     ax1.scatter(data.Xraw[:,0],data.Xraw[:,1], color='k') # plot all points
@@ -293,24 +295,26 @@ else:  # or run the computations
                     OK_vec[file_num, num_bit, 3, i] = accuracies["hamming"]
                 elif stage=='prediction':
                     OK_vec[file_num, num_bit, 0, i] = pow(pred-data.message_decoded[message_idx,field],2)
-                    if i==10:
+                    if np.mean(data.message_decoded[np.array(data.MMSI)==data.MMSI[message_idx],5]) > 0.1 and visualized==False:
                         fig, ax = plt.subplots()
                         indices = np.zeros_like(data.MMSI)
                         indices[message_idx] = 1
                         indices = indices[np.array(data.MMSI) == data.MMSI[message_idx]]
                         message_original = np.multiply(indices, data.message_decoded[np.array(data.MMSI)==data.MMSI[message_idx],field])
-                        message_original[message_original == 0] = None
+                        message_original[indices == 0] = None
                         message_new = np.multiply(indices, message_decoded_new[np.array(data.MMSI)==data.MMSI[message_idx],field])
-                        message_new[message_new == 0] = None
+                        message_new[indices == 0] = None
                         ax.scatter(range(indices.shape[0]), data.message_decoded[np.array(data.MMSI)==data.MMSI[message_idx],field], color='k') # plot points from the given cluster
                         ax.scatter(range(indices.shape[0]), message_original, color='b') # original value
                         ax.scatter(range(indices.shape[0]), message_new, color='r') # predicted value
                         ax.scatter(range(indices.shape[0]), message_new, color='r', s=10000, facecolors='none') # plot a circle around given point
                         ax.set_xlabel("No. value")
-                        ax.set_ylabel("Consecutive field values")
+                        ax.set_ylabel("Consecutive field values - "+field_names[field])
                         ax.legend(["All values from the given field", "Original value", "Predicted value"])
                         fig.show()
-    OK_vec = np.mean(OK_vec, axis=3)*100
+                        visualized = True
+    if stage=='prediction': OK_vec = np.mean(OK_vec, axis=3)
+    else: OK_vec = np.mean(OK_vec, axis=3)*100
         
 
 # Visualisation
@@ -349,7 +353,7 @@ elif stage == 'ad_1element' or stage == 'ad_multielement':
     + str(round(OK_vec[1,1,4],2)) + "%, Gibraltar: " + str(round(OK_vec[2,1,4],2)) + "%")
 elif stage == 'prediction':
     print("For " + prediction_algorithm + ":")
-    print("- MMSI -                Gdansk: " + str(round(OK_vec[0,0,0],6)) + ", Baltic: " + str(round(OK_vec[1,0,0],6)) + ", Gibraltar: "
+    print("- MMSI                - Gdansk: " + str(round(OK_vec[0,0,0],6)) + ", Baltic: " + str(round(OK_vec[1,0,0],6)) + ", Gibraltar: "
     + str(round(OK_vec[2,0,0],6)))
     print("- Navigational status - Gdansk: " + str(round(OK_vec[0,1,0],6)) + ", Baltic: " + str(round(OK_vec[1,1,0],6)) + ", Gibraltar: "
     + str(round(OK_vec[2,1,0],6)))
