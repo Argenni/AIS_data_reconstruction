@@ -497,32 +497,28 @@ class AnomalyDetection:
         if new_message_idx<messages_idx.shape[0]-1: next_idx = messages_idx[new_message_idx+1]
         else: next_idx=-1          
         if field == 9: 
-            sample = np.zeros((9))
-            delta_lon_deg1 = message_decoded[next_idx, 7]-message_decoded[message_idx, 7]
-            delta_lon_deg2 = message_decoded[message_idx, 7]-message_decoded[previous_idx, 7]
-            delta_lat_deg1 = message_decoded[next_idx, 8]-message_decoded[message_idx, 8]
-            delta_lat_deg2 = message_decoded[message_idx, 8]-message_decoded[previous_idx, 8]
+            sample = np.zeros((7))
+            delta_lon_deg1 = message_decoded[next_idx, 7]-message_decoded[message_idx, 7] if next_idx!=-1 else 0
+            delta_lat_deg1 = message_decoded[next_idx, 8]-message_decoded[message_idx, 8] if next_idx!=-1 else 0
+            delta_lon_deg2 = message_decoded[message_idx, 7]-message_decoded[previous_idx, 7] if previous_idx!=-1 else 0
+            delta_lat_deg2 = message_decoded[message_idx, 8]-message_decoded[previous_idx, 8] if previous_idx!=-1 else 0
             if delta_lon_deg1 !=0:
-                sample[0] = np.arctan(delta_lat_deg1/delta_lon_deg1)/np.pi*180
                 if delta_lon_deg1<0: cart = np.sign(delta_lat_deg1)*180-np.arctan(delta_lat_deg1/abs(delta_lon_deg1))/np.pi*180
                 elif delta_lon_deg1>0: cart = np.arctan(delta_lat_deg1/delta_lon_deg1)/np.pi*180
             else: cart = 90 # delta_lon_deg = 0
-            course = np.mod(90-cart,360)
-            sample[2] = abs(course - message_decoded[message_idx, 9])
+            sample[5] = np.mod(90-cart,360)
             if delta_lon_deg2 !=0:
-                sample[1] = np.arctan(delta_lat_deg2/delta_lon_deg2)/np.pi*180
                 if delta_lon_deg2<0: cart = np.sign(delta_lat_deg2)*180-np.arctan(delta_lat_deg2/abs(delta_lon_deg2))/np.pi*180
                 elif delta_lon_deg2>0: cart = np.arctan(delta_lat_deg2/delta_lon_deg2)/np.pi*180
             else: cart = 90
-            course = np.mod(90-cart,360)
-            sample[3] = abs(course - message_decoded[message_idx, 9])
+            sample[6] = np.mod(90-cart,360)
             if previous_idx!=-1:
-                sample[4] = ((timestamp[message_idx]-timestamp[previous_idx]).seconds)/60
-                sample[5] = message_decoded[previous_idx,9]/360
-            sample[6] = message_decoded[message_idx,9]/360
+                sample[3] = ((timestamp[message_idx]-timestamp[previous_idx]).seconds)/60
+                sample[0] = message_decoded[previous_idx,9]/360
+            sample[1] = message_decoded[message_idx,9]/360
             if next_idx!=-1:
-                sample[7] = ((timestamp[next_idx]-timestamp[message_idx]).seconds)/60
-                sample[8] = message_decoded[next_idx,9]/360
+                sample[4] = ((timestamp[next_idx]-timestamp[message_idx]).seconds)/60
+                sample[2] = message_decoded[next_idx,9]/360
         else: 
             sample = np.zeros((12))
             if previous_idx!=-1:
@@ -645,33 +641,18 @@ class AnomalyDetection:
         print("  Training a multi-element-cluster classifier...")
         for i in range(len(self.fields_dynamic)):
             if self._ad_algorithm=='rf':
-                if self.fields_dynamic[i] != 9:
-                    self._inside_field_classifier.append(RandomForestClassifier(
-                        random_state=0,
-                        criterion='entropy',
-                        n_estimators=self._num_estimators2_rf, 
-                        max_depth=self._max_depth2_rf
-                        ).fit(variables[0][i],variables[1][i]))
-                else:
-                    self._inside_field_classifier.append(RandomForestClassifier(
-                        random_state=0,
-                        criterion='entropy',
-                        n_estimators=self._num_estimators2_rf, 
-                        max_depth=int(np.floor(0.8*self._max_depth2_rf))
-                        ).fit(variables[0][i],variables[1][i]))
+                self._inside_field_classifier.append(RandomForestClassifier(
+                    random_state=0,
+                    criterion='entropy',
+                    n_estimators=self._num_estimators2_rf, 
+                    max_depth=self._max_depth2_rf
+                    ).fit(variables[0][i],variables[1][i]))
             else:
-                if self.fields_dynamic[i] != 9:
-                    self._inside_field_classifier.append(XGBClassifier(
-                        random_state=0,
-                        n_estimators=self._num_estimators2_xgboost, 
-                        max_depth=self._max_depth2_xgboost
-                        ).fit(variables[0][i],variables[1][i]))
-                else:
-                    self._inside_field_classifier.append(XGBClassifier(
-                        random_state=0,
-                        n_estimators=self._num_estimators2_xgboost, 
-                        max_depth=int(np.floor(0.8*self._max_depth2_xgboost))
-                        ).fit(variables[0][i],variables[1][i]))
+                self._inside_field_classifier.append(XGBClassifier(
+                    random_state=0,
+                    n_estimators=self._num_estimators2_xgboost, 
+                    max_depth=self._max_depth2_xgboost
+                    ).fit(variables[0][i],variables[1][i]))
         print("  Complete. ")
         # Save the model
         pickle.dump(self._inside_field_classifier, open('utils/anomaly_detection_files/multielement_classifier_'+self._ad_algorithm+'.h5', 'ab'))
@@ -701,53 +682,33 @@ class AnomalyDetection:
         for param in params:
             field_classifier = []
             if hyperparameter=='max_depth' and self._ad_algorithm=='rf':
-                for i in range(len(y_train)-1):
+                for i in range(len(y_train)):
                     field_classifier.append(RandomForestClassifier(
                         random_state=0, 
                         n_estimators=self._num_estimators2_rf, 
                         max_depth=param,
                         ).fit(x_train[i],y_train[i]))
-                field_classifier.append(RandomForestClassifier(
-                    random_state=0, 
-                    n_estimators=self._num_estimators2_rf, 
-                    max_depth=param,
-                    ).fit(x_train[i+1],y_train[i+1]))
             elif hyperparameter=='n_estimators' and self._ad_algorithm=='rf':
-                for i in range(len(y_train)-1):
+                for i in range(len(y_train)):
                     field_classifier.append(RandomForestClassifier(
                         random_state=0, 
                         n_estimators=param, 
                         max_depth=self._max_depth2_rf,
                         ).fit(x_train[i],y_train[i]))
-                field_classifier.append(RandomForestClassifier(
-                    random_state=0, 
-                    n_estimators=param, 
-                    max_depth=int(np.floor(0.8*self._max_depth2_rf)),
-                    ).fit(x_train[i+1],y_train[i+1]))
             elif hyperparameter=='max_depth' and self._ad_algorithm=='xgboost':
-                for i in range(len(y_train)-1):
+                for i in range(len(y_train)):
                     field_classifier.append(XGBClassifier(
                         random_state=0, 
                         n_estimators=self._num_estimators2_xgboost, 
                         max_depth=param,
                         ).fit(x_train[i],y_train[i]))
-                field_classifier.append(XGBClassifier(
-                    random_state=0, 
-                    n_estimators=self._num_estimators2_xgboost, 
-                    max_depth=param,
-                    ).fit(x_train[i+1],y_train[i+1]))
             elif hyperparameter=='n_estimators' and self._ad_algorithm=='xgboost':
-                for i in range(len(y_train)-1):
+                for i in range(len(y_train)):
                     field_classifier.append(XGBClassifier(
                         random_state=0, 
                         n_estimators=param, 
                         max_depth=self._max_depth2_xgboost,
                         ).fit(x_train[i],y_train[i]))
-                field_classifier.append(XGBClassifier(
-                    random_state=0, 
-                    n_estimators=param, 
-                    max_depth=int(np.floor(0.8*self._max_depth2_xgboost)),
-                    ).fit(x_train[i+1],y_train[i+1]))
             # Calculate the accuracy of the classifier on the training and validation data
             accuracies_field_train = []
             accuracies_field_val = []
