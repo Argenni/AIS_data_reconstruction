@@ -29,7 +29,7 @@ sys.path.append('.')
 from utils.initialization import Data, decode # pylint: disable=import-error
 from utils.clustering import Clustering, check_cluster_assignment
 from utils.anomaly_detection import AnomalyDetection, calculate_ad_accuracy
-from utils.prediction import Prediction
+from utils.prediction import Prediction, compute_prediction_accuracy
 from utils.miscellaneous import count_number, Corruption
 
 # ----------------------------!!! EDIT HERE !!! ---------------------------------  
@@ -270,14 +270,14 @@ else:  # or run the computations
                         indices = idx_corr[0] == idx_corr[0][message_idx]
                         ax2.scatter(Xraw_corr[indices,0],Xraw_corr[indices,1], color='b') # plot points from the given cluster
                         ax2.scatter(Xraw_corr[message_idx,0],Xraw_corr[message_idx,1], color='r') # plot the given point
-                        ax2.scatter(Xraw_corr[message_idx,0],Xraw_corr[message_idx,1], color='r', s=10000, facecolors='none',) # plot a circle the given point
+                        ax2.scatter(Xraw_corr[message_idx,0],Xraw_corr[message_idx,1], color='r', s=10000, facecolors='none') # circle the given point
                         ax2.legend(["All other messages", "Messages from the damaged message cluster", "Damaged message"])
                     elif stage=='prediction':
                         ax2.scatter(message_decoded_new[:,7], message_decoded_new[:,8], color='k') # plot all points
                         indices = np.array(data.MMSI) == data.MMSI[message_idx]
                         ax2.scatter(message_decoded_new[indices,7], message_decoded_new[indices,8], color='b') # plot points from the given cluster
                         ax2.scatter(message_decoded_new[message_idx,7], message_decoded_new[message_idx,8], color='r') # plot the given point
-                        ax2.scatter(message_decoded_new[message_idx,7], message_decoded_new[message_idx,8], color='r', s=10000, facecolors='none',) # plot a circle the given point
+                        ax2.scatter(message_decoded_new[message_idx,7], message_decoded_new[message_idx,8], color='r', s=10000, facecolors='none') # circle the given point
                         ax2.legend(["All other messages", "Messages from the predicted message cluster", "Predicted message"])
                     ax2.set_xlabel("Longitude")
                     ax2.set_ylabel("Latitide")
@@ -294,7 +294,8 @@ else:  # or run the computations
                     OK_vec[file_num, num_bit, 2, i] = accuracies["jaccard"]
                     OK_vec[file_num, num_bit, 3, i] = accuracies["hamming"]
                 elif stage=='prediction':
-                    OK_vec[file_num, num_bit, 0, i] = pow(pred-data.message_decoded[message_idx,field],2)
+                    OK_vec[file_num, num_bit, 0, i] = compute_prediction_accuracy(pred, data.message_decoded[message_idx,field], field)
+                    #OK_vec[file_num, num_bit, 0, i] = pow(pred-data.message_decoded[message_idx,field],2)
                     if np.mean(data.message_decoded[np.array(data.MMSI)==data.MMSI[message_idx],5]) > 0.1 and visualized==False:
                         fig, ax = plt.subplots()
                         indices = np.zeros_like(data.MMSI)
@@ -307,7 +308,8 @@ else:  # or run the computations
                         ax.scatter(range(indices.shape[0]), data.message_decoded[np.array(data.MMSI)==data.MMSI[message_idx],field], color='k') # plot points from the given cluster
                         ax.scatter(range(indices.shape[0]), message_original, color='b') # original value
                         ax.scatter(range(indices.shape[0]), message_new, color='r') # predicted value
-                        ax.scatter(range(indices.shape[0]), message_new, color='r', s=10000, facecolors='none') # plot a circle around given point
+                        ax.scatter(range(indices.shape[0]), message_original, color='b', s=10000, facecolors='none') # circle the original point
+                        ax.scatter(range(indices.shape[0]), message_new, color='r', s=10000, facecolors='none') # circle the predicted point
                         ax.set_xlabel("No. value")
                         ax.set_ylabel("Consecutive field values - "+field_names[field])
                         ax.legend(["All values from the given field", "Original value", "Predicted value"])
@@ -359,10 +361,10 @@ elif stage == 'prediction':
     + str(round(OK_vec[2,1,0],6)))
     print("- Speed over ground   - Gdansk: " + str(round(OK_vec[0,2,0],6)) + ", Baltic: " + str(round(OK_vec[1,2,0],6)) + ", Gibraltar: "
     + str(round(OK_vec[2,2,0],6)))
-    print("- Longitude           - Gdansk: " + str(round(OK_vec[0,3,0],6)) + ", Baltic: " + str(round(OK_vec[1,3,0],6)) + ", Gibraltar: "
-    + str(round(OK_vec[2,3,0],6)))
-    print("- Latitude            - Gdansk: " + str(round(OK_vec[0,4,0],6)) + ", Baltic: " + str(round(OK_vec[1,4,0],6)) + ", Gibraltar: "
-    + str(round(OK_vec[2,4,0],6)))
+    print("- Longitude           - Gdansk: " + str(round(OK_vec[0,3,0],8)) + ", Baltic: " + str(round(OK_vec[1,3,0],8)) + ", Gibraltar: "
+    + str(round(OK_vec[2,3,0],8)))
+    print("- Latitude            - Gdansk: " + str(round(OK_vec[0,4,0],8)) + ", Baltic: " + str(round(OK_vec[1,4,0],8)) + ", Gibraltar: "
+    + str(round(OK_vec[2,4,0],8)))
     print("- Course over ground  - Gdansk: " + str(round(OK_vec[0,5,0],6)) + ", Baltic: " + str(round(OK_vec[1,5,0],6)) + ", Gibraltar: "
     + str(round(OK_vec[2,5,0],6)))
     print("- Special manoeuvre   - Gdansk: " + str(round(OK_vec[0,6,0],6)) + ", Baltic: " + str(round(OK_vec[1,6,0],6)) + ", Gibraltar: "

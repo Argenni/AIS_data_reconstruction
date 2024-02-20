@@ -119,18 +119,16 @@ visualize_trajectories(
 print("\n----------- Part 3 - Prediction ---------- ")
 prediction = Prediction(
     verbose=True,
-    optimize=None,
+    optimize=None, # 'lags', 'max_depth' or 'n_estimators'
     prediction_algorithm=prediction_algorithm)
-prediction.find_and_reconstruct_data(
+message_bits_new, message_decoded_new =  prediction.find_and_reconstruct_data(
     message_decoded=data.message_decoded, 
+    message_bits=data.message_bits,
     idx=idx,
     timestamp=data.timestamp,
     outliers=ad.outliers)
-reconstructed_idx = [prediction.predictions[i]['message_idx'] for i in range(len(prediction.predictions))]
-message_bits_new, message_decoded_new = prediction.apply_predictions(
-    message_bits=data.message_bits,
-    message_decoded=data.message_decoded)
 print("Messages corrected: " + str(len(prediction.predictions)))
+reconstructed_idx = [prediction.predictions[i]['message_idx'] for i in range(len(prediction.predictions))]
 visualize_trajectories(
     X=message_decoded_new[:,[7,8]],
     MMSI=message_decoded_new[:,2],

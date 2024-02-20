@@ -5,7 +5,6 @@ Functions and classes used in prediction stage of AIS message reconstruction
 import numpy as np
 from xgboost import XGBRegressor
 import statsmodels.api as sm
-from sklearn.metrics import mean_squared_error
 import matplotlib.pyplot as plt
 plt.rcParams.update({'font.size': 16})
 import copy
@@ -66,7 +65,8 @@ class Prediction:
             for field_num in range(len(variables[1])):
                 if self._prediction_algorithm == 'xgboost': 
                     pred = self._regressor[field_num].predict(variables[0][field_num])
-                    mse.append(mean_squared_error(variables[1][field_num], pred))
+                    mse.append(compute_prediction_accuracy(pred, variables[1][field_num], self.fields[field_num]))
+                    #mse.append(mean_squared_error(variables[1][field_num], pred))
                 elif self._prediction_algorithm == 'ar':
                     y_true = []
                     y_pred = []
@@ -74,13 +74,15 @@ class Prediction:
                         pred = self._predict_ar(variables[0][field_num][trajectory], self._lags, self.fields[field_num])
                         y_true.append(variables[1][field_num][trajectory])
                         y_pred.append(pred)
-                    mse.append(mean_squared_error(y_true, y_pred))
+                    mse.append(compute_prediction_accuracy(y_pred, y_true, self.fields[field_num]))
+                    #mse.append(mean_squared_error(y_true, y_pred))
             print("  trainset: " + str(round(np.mean(mse),4)))
             if self._prediction_algorithm == 'xgboost': 
                 mse = []
                 for field_num in range(len(variables[3])):
                     pred = self._regressor[field_num].predict(variables[2][field_num])
-                    mse.append(mean_squared_error(variables[3][field_num],pred))
+                    mse.append(compute_prediction_accuracy(pred, variables[3][field_num], self.fields[field_num]))
+                    #mse.append(mean_squared_error(variables[3][field_num],pred))
                 print("  valset: " + str(round(np.mean(mse),4)))
 
     def _train_regressor(self):
@@ -205,9 +207,11 @@ class Prediction:
                             max_depth=self._max_depth,
                             ).fit(variables[0][field_num], variables[1][field_num]))
                     pred = regressor[field_num].predict(np.array(variables[0][field_num]))
-                    mse_train_field.append(mean_squared_error(pred,variables[1][field_num]))
+                    mse_train_field.append(compute_prediction_accuracy(pred, variables[1][field_num], self.fields[field_num]))
+                    #mse_train_field.append(mean_squared_error(pred,variables[1][field_num]))
                     pred = regressor[field_num].predict(np.array(variables[2][field_num]))
-                    mse_val_field.append(mean_squared_error(pred,variables[3][field_num]))
+                    mse_val_field.append(compute_prediction_accuracy(pred, variables[3][field_num], self.fields[field_num]))
+                    #mse_val_field.append(mean_squared_error(pred,variables[3][field_num]))
                 mse_train.append(np.mean(mse_train_field))
                 mse_val.append(np.mean(mse_val_field))
         elif self._prediction_algorithm == 'ar' and hyperparameter=='lags':
@@ -221,7 +225,8 @@ class Prediction:
                         pred = self._predict_ar(variables[0][field_num][trajectory], param, self.fields[field_num])
                         y_pred.append(pred)
                         y_true.append(variables[1][field_num][trajectory])
-                    mse_train_field.append(mean_squared_error(y_pred, y_true))
+                    mse_train_field.append(compute_prediction_accuracy(y_pred, y_true, self.fields[field_num]))
+                    #mse_train_field.append(mean_squared_error(y_pred, y_true))
                 mse_train.append(np.mean(mse_train_field))
         print(" Complete. ")
         fig, ax = plt.subplots()
@@ -311,37 +316,50 @@ class Prediction:
         elif field in [2,3,9,12]: pred = pred[0,2]
         return pred
 
-    def find_and_reconstruct_data(self, message_decoded, idx, timestamp, outliers):
+    def find_and_reconstruct_data(self, message_decoded, message_bits, idx, timestamp, outliers, if_bits=True):
         """
-        Takes every field (and message) marked in previous stage as an outlier, predicts its correct form
-        and saves the results in self.predictions. \n
+        Takes every field (and message) marked in previous stage as an outlier, predicts its correct form, saves the results 
+        in self.predictions and modifies the original dataset accordingly. \n
         Arguments:
         - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape=(num_mesages, num_fields (14)),
+        - message_bits - numpy array, original AIS messages in binary form (1 column = 1 bit), shape=(num_mesages, num_bits (168)),
         - idx - list of indices of clusters assigned to each message, len=num_messages,
         - timestamp - list of strings with timestamp of each message, len=num_messages,
         - outliers - numpy array with anomaly detection information, shape=(num_messages, 3) (anomaly_detection.txt)
-          (1. column - if a message is outlier, 2. column - proposed correct cluster, 3. column - possibly damaged field).
+          (1. column - if a message is outlier, 2. column - proposed correct cluster, 3. column - possibly damaged field),
+        - if_bits - (optional) boolean, decide if to update also dataset in binary form (default=True). \n
+        Returns: message_bits_reconstructed, message_decoded_reconstructed - numpy array, corrected dataset in binary/decimal form.
         """
         print("Reconstructing data...")
+        if if_bits: message_bits_reconstructed = copy.deepcopy(message_bits)
+        message_decoded_reconstructed = copy.deepcopy(message_decoded)
         indices = []
         for i in range(len(idx)):
             if outliers[i][0]==1: indices.append(i)
         for message_idx in indices:
+            message_decoded_0 = message_decoded[message_idx,:]
             dict = {}
             dict.update({'message_idx':message_idx})
             fields = outliers[message_idx][2]
             include = True
             for field in fields:
                 pred = self.reconstruct_data(
-                    message_decoded=message_decoded,
+                    message_decoded=message_decoded_reconstructed,
                     timestamp=timestamp,
                     idx=idx,
                     message_idx=message_idx,
                     field=field)
                 if pred is None: include = False
-                else: dict.update({field: pred})
-            if include: self.predictions.append(dict)
+                else: 
+                    dict.update({field: pred})
+                    message_decoded_0[field] = pred
+            if include: 
+                self.predictions.append(dict)
+                message_decoded_reconstructed[message_idx,:] = message_decoded_0
+                if if_bits: message_bits_reconstructed[message_idx,:] = encode(message_decoded_0)
         print("Complete.")
+        if if_bits: return message_bits_reconstructed, message_decoded_reconstructed
+        else: return message_decoded_reconstructed
 
     def reconstruct_data(self, message_decoded, timestamp, idx, message_idx, field):
         """
@@ -435,21 +453,22 @@ class Prediction:
                 if pred > 359.9: pred = 360
         return pred
     
-    def apply_predictions(self, message_bits, message_decoded):
-        """
-        Makes a copy of the original dataset and puts all predicted values into the correct places. \n
-        Arguments:
-        - message_bits - numpy array, original AIS messages in binary form (1 column = 1 bit), shape=(num_mesages, num_bits (168)),
-        - message_decoded - numpy array, original AIS messages decoded from binary to decimal, shape=(num_mesages, num_fields (14)).
-        Returns: message_bits_reconstructed, message_decoded_reconstructed - numpy array, corrected dataset in binary/decimal form.
-        """
-        message_bits_reconstructed = copy.deepcopy(message_bits)
-        message_decoded_reconstructed = copy.deepcopy(message_decoded)
-        for prediction in self.predictions:
-            message_idx = prediction['message_idx']
-            message_decoded_0 = message_decoded[message_idx,:]
-            for field in self.fields:
-                if field in prediction.keys(): message_decoded_0[field] = prediction[field]
-            message_decoded_reconstructed[message_idx,:] = message_decoded_0
-            message_bits_reconstructed[message_idx,:] = encode(message_decoded_0)
-        return message_bits_reconstructed, message_decoded_reconstructed
+
+def compute_prediction_accuracy(prediction, real, field):
+    """
+    Computes MSE (or its modified version for COG) of the prediction. \n
+    Arguments:
+    - prediction - float scalar/list/numpy array with predictions,
+    - real - float scalar/list/numpy array with ground truth,
+    - field - int, scalar, field to examine (to identify if to use modified MSE for COG). \n
+    Returns: calculated MSE, float, scalar
+    """   
+    if field == 9: # for COG
+        if isinstance(prediction, list) or isinstance(prediction, np.ndarray):
+            mse = []
+            iterations = len(prediction) if isinstance(prediction, list) else prediction.shape[0]
+            for i in range(iterations):
+                mse.append(pow(np.min((prediction[i]-real[i], 360-(prediction[i]-real[i]))),2))
+        else: mse = pow(np.min((prediction-real, 360-(prediction-real))),2)
+    else: mse = pow(np.array(prediction)-np.array(real),2) # for other fields than COG
+    return np.mean(mse)
