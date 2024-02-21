@@ -29,16 +29,18 @@ sys.path.append('.')
 from utils.initialization import Data, decode # pylint: disable=import-error
 from utils.clustering import Clustering, calculate_CC
 from utils.anomaly_detection import AnomalyDetection, calculate_ad_accuracy
+from utils.prediction import Prediction, compute_prediction_accuracy
 from utils.miscellaneous import count_number, visualize_trajectories, Corruption
 
 # ----------------------------!!! EDIT HERE !!! ---------------------------------  
 np.random.seed(1)  # For reproducibility
 distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
-ad_algorithm = 'xgboost' # 'rf', 'xgboost' or 'LOF'
+ad_algorithm = 'LOF' # 'rf', 'xgboost' or 'LOF'
+prediction_algorithm = 'ar' # 'ar' or 'xgboost'
 stage = 'ad' # 'clustering' or 'ad'
-num_metrics = {'clustering':5, 'ad':4}
-num_experiments = {'clustering':1, 'ad':10}
+num_metrics = {'clustering':5, 'ad':4, 'prediction':2}
+num_experiments = {'clustering':1, 'ad':10, 'prediction':10}
 if stage == 'clustering': percentages = [0]
 else: percentages = [5, 10]
 # --------------------------------------------------------------------------------
@@ -166,6 +168,7 @@ print(" Importing files... ")
 if precomputed == '2':  # Load file with precomputed values
     if stage == 'clustering': file = h5py.File(name='research_and_results/01b_performance_'+clustering_algorithm+'.h5', mode='r')
     elif stage == 'ad': file = h5py.File(name='research_and_results/01b_performance_'+ad_algorithm+'.h5', mode='r')
+    elif stage == 'prediction': file = h5py.File(name='research_and_results/01b_performance_prediction_'+prediction_algorithm+'.h5', mode='r')
     OK_vec = np.array(file.get('OK_vec'))
     file.close()
 
@@ -229,8 +232,8 @@ else:  # or run the computations
                     messages = []
                     num_messages = int(len(data.MMSI)*percentages[percentage_num]/100)
                     for n in range(num_messages):
-                        # Choose 0.05 or 0.1 of all messages and damage 2 their random bits
-                        field = np.random.choice(ad.fields_dynamic, size=2, replace=False)
+                        # Choose 0.05 or 0.1 of all messages and damage 2 their random bits from different fields
+                        field = np.random.choice(ad.fields, size=2, replace=False)
                         fields.append(field)
                         bit_idx = np.random.randint(field_bits[field[0]-1], field_bits[field[0]]-1)
                         message_bits_corr, message_idx = corruption.corrupt_bits(message_bits=data.message_bits, bit_idx=bit_idx)
@@ -274,7 +277,40 @@ else:  # or run the computations
                             precision.append(accuracy["precision"])
                         OK_vec[file_num, percentage_num, 2, i] = np.mean(recall) # field recall
                         OK_vec[file_num, percentage_num, 3, i] = np.mean(precision) # field precision
-    OK_vec = np.mean(OK_vec, axis=3)*100
+                
+                    if stage == 'prediction':
+                        prediction = Prediction(prediction_algorithm=prediction_algorithm)
+                        message_decoded_new, idx_new = prediction.find_and_reconstruct_data(
+                            message_decoded=message_decoded_corr, 
+                            message_bits=[],
+                            idx=idx_corr,
+                            timestamp=data.timestamp,
+                            outliers=ad.outliers,
+                            if_bits=False)
+                        mse_corr = []
+                        mse_new = []
+                        for n in range(num_messages):
+                            mse_corr.append(compute_prediction_accuracy(
+                                prediction=message_decoded_corr[messages[n],fields[n][0]],
+                                real = data.message_decoded[messages[n],fields[n][0]],
+                                field=fields[n][0]))
+                            mse_corr.append(compute_prediction_accuracy(
+                                prediction=message_decoded_corr[messages[n],fields[n][1]],
+                                real = data.message_decoded[messages[n],fields[n][1]],
+                                field=fields[n][1]))
+                            mse_new.append(compute_prediction_accuracy(
+                                prediction=message_decoded_new[messages[n],fields[n][0]],
+                                real = data.message_decoded[messages[n],fields[n][0]],
+                                field=fields[n][0]))
+                            mse_new.append(compute_prediction_accuracy(
+                                prediction=message_decoded_new[messages[n],fields[n][1]],
+                                real = data.message_decoded[messages[n],fields[n][1]],
+                                field=fields[n][1]))
+                        OK_vec[file_num, percentage_num, 0, i] = np.mean(mse_corr)
+                        OK_vec[file_num, percentage_num, 1, i] = np.mean(mse_new)
+
+    if stage != 'prediction': OK_vec = np.mean(OK_vec, axis=3)*100
+    else: OK_vec = np.mean(OK_vec, axis=3)
 
 
 # Visualisation
@@ -310,6 +346,21 @@ elif stage=='ad':
     + str(round(OK_vec[2,1,2],2)) + "%")
     print("- Precision (field) - Gdansk: " + str(round(OK_vec[0,1,3],2)) + "%, Baltic: " + str(round(OK_vec[1,1,3],2)) + "%, Gibraltar: "
     + str(round(OK_vec[2,1,3],2)) + "%")
+elif stage=='prediction':
+    print("For "+ prediction_algorithm + ", with 5% messages damaged:")
+    print("- MSE after damage - Gdansk: " + str(round(OK_vec[0,0,0],6)) + ", Baltic: " + str(round(OK_vec[1,0,0],6)) + ", Gibraltar: "
+    + str(round(OK_vec[2,0,0],6)))
+    print("- MSE after correction - Gdansk: " + str(round(OK_vec[0,0,1],6)) + ", Baltic: " + str(round(OK_vec[1,0,1],6)) + ", Gibraltar: "
+    + str(round(OK_vec[2,0,1],6)))
+    print("Difference: " + str(round((OK_vec[0,0,0]-OK_vec[0,0,1])/OK_vec[0,0,1],4)) + "%, " + str(round((OK_vec[1,0,0]-OK_vec[1,0,1])/OK_vec[1,0,1],4)) + "%, "
+          + str(round((OK_vec[2,0,0]-OK_vec[2,0,1])/OK_vec[2,0,1],4)) + "%")
+    print("For "+ prediction_algorithm + ", with 10% messages damaged:")
+    print("- MSE after damage - Gdansk: " + str(round(OK_vec[0,1,0],6)) + ", Baltic: " + str(round(OK_vec[1,1,0],6)) + ", Gibraltar: "
+    + str(round(OK_vec[2,1,0],6)))
+    print("- MSE after correction - Gdansk: " + str(round(OK_vec[0,1,1],6)) + ", Baltic: " + str(round(OK_vec[1,1,1],6)) + ", Gibraltar: "
+    + str(round(OK_vec[2,1,1],6)))
+    print("Difference: " + str(round((OK_vec[0,1,0]-OK_vec[0,1,1])/OK_vec[0,1,1],4)) + "%, " + str(round((OK_vec[1,1,0]-OK_vec[1,1,1])/OK_vec[1,1,1],4)) + "%, "
+          + str(round((OK_vec[2,1,0]-OK_vec[2,1,1])/OK_vec[2,1,1],4)) + "%")
 
 
 # Save results
@@ -325,5 +376,9 @@ else:
         if os.path.exists('research_and_results/01b_performance_'+ad_algorithm+'.h5'):
             os.remove('research_and_results/01b_performance_'+ad_algorithm+'.h5')
         file = h5py.File('research_and_results/01b_performance_'+ad_algorithm+'.h5', mode='a')
+    elif stage == 'prediction':
+        if os.path.exists('research_and_results/01b_performance_prediction_'+prediction_algorithm+'.h5'):
+            os.remove('research_and_results/01b_performance_prediction_'+prediction_algorithm+'.h5')
+        file = h5py.File('research_and_results/01b_performance_prediction_'+prediction_algorithm+'.h5', mode='a')
     file.create_dataset('OK_vec', data=OK_vec)
     file.close()

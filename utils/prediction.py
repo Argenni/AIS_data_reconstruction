@@ -333,20 +333,23 @@ class Prediction:
         print("Reconstructing data...")
         if if_bits: message_bits_reconstructed = copy.deepcopy(message_bits)
         message_decoded_reconstructed = copy.deepcopy(message_decoded)
+        idx_new = copy.deepcopy(idx)
         indices = []
         for i in range(len(idx)):
-            if outliers[i][0]==1: indices.append(i)
+            if outliers[i][0]==1: 
+                indices.append(i)
+                idx_new[i] = outliers[i][1]
         for message_idx in indices:
-            message_decoded_0 = message_decoded[message_idx,:]
+            message_decoded_0 = message_decoded_reconstructed[message_idx,:]
             dict = {}
             dict.update({'message_idx':message_idx})
             fields = outliers[message_idx][2]
             include = True
             for field in fields:
                 pred = self.reconstruct_data(
-                    message_decoded=message_decoded_reconstructed,
+                    message_decoded=copy.deepcopy(message_decoded_reconstructed),
                     timestamp=timestamp,
-                    idx=idx,
+                    idx=idx_new,
                     message_idx=message_idx,
                     field=field)
                 if pred is None: include = False
@@ -358,8 +361,8 @@ class Prediction:
                 message_decoded_reconstructed[message_idx,:] = message_decoded_0
                 if if_bits: message_bits_reconstructed[message_idx,:] = encode(message_decoded_0)
         print("Complete.")
-        if if_bits: return message_bits_reconstructed, message_decoded_reconstructed
-        else: return message_decoded_reconstructed
+        if if_bits: return message_bits_reconstructed, message_decoded_reconstructed, idx_new
+        else: return message_decoded_reconstructed, idx_new
 
     def reconstruct_data(self, message_decoded, timestamp, idx, message_idx, field):
         """
