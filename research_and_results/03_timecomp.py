@@ -25,6 +25,7 @@ sys.path.append('.')
 from utils.initialization import Data, decode # pylint: disable=import-error
 from utils.clustering import Clustering, calculate_CC
 from utils.anomaly_detection import AnomalyDetection, calculate_ad_accuracy
+from utils.prediction import Prediction, compute_prediction_accuracy
 from utils.miscellaneous import count_number, Corruption, TimeWindow
 
 # ----------------------------!!! EDIT HERE !!! ---------------------------------  
@@ -32,6 +33,7 @@ np.random.seed(1)  # For reproducibility
 distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
 ad_algorithm = 'xgboost' # 'rf' or 'xgboost'
+prediction_algorithm = 'ar' # 'ar' or  'xgboost'
 stage = 'ad' # 'clustering', 'ad' or 'prediction'
 if stage == 'clustering': percentages =  [0, 5, 10, 20]
 else: percentages = [5, 10, 20]
@@ -52,6 +54,8 @@ if precomputed == '2':  # Load file with precomputed values
         file = h5py.File(name='research_and_results/03_timecomp_' + clustering_algorithm+'.h5', mode='r')
     elif stage == 'ad':
         file = h5py.File(name='research_and_results/03_timecomp_' + ad_algorithm+'.h5', mode='r')
+    elif stage == 'prediction':
+        file = h5py.File(name='research_and_results/03_timecomp_prediction_' + prediction_algorithm+'.h5', mode='r')
     OK_vec = np.array(file.get('OK_vec'))
     file.close()
 
@@ -143,6 +147,15 @@ else:  # or run the computations
                                     idx=idx_corr,
                                     message_decoded=message_decoded_corr,
                                     timestamp=data.timestamp)
+                            if stage == 'prediction': # Perform prediction if needed
+                                prediction = Prediction(prediction_algorithm=prediction_algorithm)
+                                message_decoded_new, idx_new = prediction.find_and_reconstruct_data(
+                                    message_decoded=message_decoded_corr, 
+                                    message_bits=[],
+                                    idx=idx_corr,
+                                    timestamp=data.timestamp,
+                                    outliers=ad.outliers,
+                                    if_bits=False)
                             # Compute quality measures
                             if stage == 'clustering':
                                 if count_number(idx_corr)[0]<Xcorr.shape[0]:
@@ -158,6 +171,27 @@ else:  # or run the computations
                                     accuracy = calculate_ad_accuracy(fields[n], ad.outliers[messages[n]][2])
                                     f1.append(accuracy["f1"])
                                 measure2[file_num][percentage_num][window_num].append(np.mean(f1))
+                            elif stage == 'prediction':
+                                mse_pred = []
+                                mse_ad = []
+                                for n in range(num_messages):
+                                    for field in fields[n]:
+                                        pred = prediction.reconstruct_data(
+                                            message_decoded=data.message_decoded, 
+                                            timestamp=data.timestamp,
+                                            idx=data.MMSI,
+                                            message_idx=messages[n],
+                                            field=field)
+                                        mse_pred.append(compute_prediction_accuracy(
+                                            prediction=pred,
+                                            real=data.message_decoded[messages[n], field],
+                                            field=field))
+                                        mse_ad.append(compute_prediction_accuracy(
+                                            prediction=message_decoded_new[messages[n], field],
+                                            real=data.message_decoded[messages[n], field],
+                                            field=field))
+                                measure1[file_num][percentage_num][window_num].append(np.mean(mse_pred))
+                                measure2[file_num][percentage_num][window_num].append(np.mean(mse_ad))
                         slides[window_num,file_num] = slides[window_num,file_num]+1
                     # Slide the time window
                     if windows[window_num] == 5: 
@@ -198,6 +232,9 @@ if stage == 'clustering':
 elif stage == 'ad': 
     ax[0].set_ylabel("F1 - messages")
     ax[1].set_ylabel("F1 - fields")
+elif stage  == 'prediction':
+    ax[0].set_ylabel("MMSE - pure prediction")
+    ax[1].set_ylabel("MMSE - with anomaly detection ")
 fig.legend(legend, loc=9)
 fig.show()
 
@@ -214,5 +251,9 @@ else:
         if os.path.exists('research_and_results/03_timecomp_'+ad_algorithm+'.h5'):
             os.remove('research_and_results/03_timecomp_'+ad_algorithm+'.h5')
         file = h5py.File('research_and_results/03_timecomp_'+ad_algorithm+'.h5', mode='a')
+    elif stage == 'prediction':
+        if os.path.exists('research_and_results/03_timecomp_prediction_'+prediction_algorithm+'.h5'):
+            os.remove('research_and_results/03_timecomp_prediction_'+prediction_algorithm+'.h5')
+        file = h5py.File('research_and_results/03_timecomp_prediction+'+prediction_algorithm+'.h5', mode='a')
     file.create_dataset('OK_vec', data=OK_vec)
     file.close()

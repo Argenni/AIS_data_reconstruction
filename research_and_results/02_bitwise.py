@@ -23,6 +23,7 @@ sys.path.append('.')
 from utils.initialization import Data, decode # pylint: disable=import-error
 from utils.clustering import Clustering, check_cluster_assignment
 from utils.anomaly_detection import AnomalyDetection, calculate_ad_accuracy
+from utils.prediction import Prediction, compute_prediction_accuracy
 from utils.miscellaneous import count_number, Corruption
 
 # ----------------------------!!! EDIT HERE !!! ---------------------------------  
@@ -31,6 +32,9 @@ distance = 'euclidean'
 stage = 'ad' # 'clustering', 'ad' or 'prediction'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
 ad_algorithm = 'xgboost' # 'rf' or 'xgboost'
+prediction_algorithm = 'ar' # 'ar' or 'xgboost'
+num_metrics = 3
+num_experiments = 20
 # --------------------------------------------------------------------------------
 
 # Create a list of meaningful bits to examine
@@ -60,6 +64,8 @@ if precomputed == '2':  # Load file with precomputed values
         file = h5py.File(name='research_and_results/02_bitwise_'+clustering_algorithm+'.h5', mode='r')
     elif stage == 'ad':
         file = h5py.File(name='research_and_results/02_bitwise_'+ad_algorithm+'.h5', mode='r')
+    elif stage == 'prediction':
+        file = h5py.File(name='research_and_results/02_bitwise_prediction_'+prediction_algorithm+'.h5', mode='r')
     OK_vec = np.array(file.get('OK_vec'))
     file.close()
 
@@ -83,12 +89,12 @@ else:  # or run the computations on the original data
 
     print(" Damaging bit by bit...") 
     corruption = Corruption(data.X) 
-    OK_vec = np.zeros((3,146))
+    OK_vec = np.zeros((num_metrics,146))
     for bit in bits:  # For each of AIS message bits
         np.random.seed(250)  # make numpy choose the same messages all the time
         corruption.reset()
-        OK_vec2 = np.zeros((3,20))  # choose 20 messages
-        if stage=="ad": field = sum(field_bits <= bit)  # check to which field the damaged bit belong to
+        OK_vec2 = np.zeros((num_metrics, num_experiments))  # choose messages
+        if stage != "clustering": field = sum(field_bits <= bit)  # check to which field the damaged bit belong to
         for j in range(20):  # for each chosen message:
             # damage its bit
             X_corr = copy.deepcopy(data.Xraw)
@@ -135,8 +141,40 @@ else:  # or run the computations on the original data
                     OK_vec2[1,j] = accuracies["recall"] # save field indication recall
                     OK_vec2[2,j] = accuracies["precision"] # save field indication precision
 
-        if bit < 145: OK_vec[:,bit] = np.mean(OK_vec2, axis=1)*100
-        else: OK_vec[:,145] = np.mean(OK_vec2, axis=1)*100
+                elif stage == 'prediction': # perform prediction stage 
+                    prediction = Prediction(prediction_algorithm=prediction_algorithm)
+                    OK_vec2[0,j] = compute_prediction_accuracy(
+                        prediction=message_decoded_corr[message_idx,field],
+                        real=data.message_decoded[message_idx,field],
+                        field=field)
+                    pred = prediction.reconstruct_data(
+                            message_decoded=data.message_decoded, 
+                            timestamp=data.timestamp,
+                            idx=data.MMSI,
+                            message_idx=message_idx,
+                            field=field)
+                    OK_vec2[1,j] = compute_prediction_accuracy(
+                        prediction=pred,
+                        real=data.message_decoded[message_idx,field],
+                        field=field)
+                    message_decoded_new, idx_new = prediction.find_and_reconstruct_data(
+                        message_decoded=message_decoded_corr, 
+                        message_bits=[],
+                        idx=idx_corr,
+                        timestamp=data.timestamp,
+                        outliers=ad.outliers,
+                        if_bits=False)
+                    OK_vec2[2,j] = compute_prediction_accuracy(
+                        prediction=message_decoded_new[message_idx,field],
+                        real=data.message_decoded[message_idx,field],
+                        field=field)
+                    
+        if stage != 'prediction':
+            if bit < 145: OK_vec[:,bit] = np.mean(OK_vec2, axis=1)*100
+            else: OK_vec[:,145] = np.mean(OK_vec2, axis=1)*100
+        else:
+            if bit < 145: OK_vec[:,bit] = np.mean(OK_vec2, axis=1)
+            else: OK_vec[:,145] = np.mean(OK_vec2, axis=1)
 
 
 # Visualization
@@ -157,6 +195,14 @@ elif stage == 'ad':
     print(" Recall (message): " + str(round(np.mean(OK_vec[0,mask==1]),2)) + "%")
     print(" Recall (field): " + str(round(np.mean(OK_vec[1,mask==1]),2)) + "%")
     print(" Precision (field): " + str(round(np.mean(OK_vec[2,mask==1]),2)) + "%")
+elif stage == 'prediction': 
+    titles = {
+    '0':"MMSE (orignal vs damaged field value)", 
+    '1':"MMSE (pure prediction, no anomaly detection)",
+    '2':"MMSE (prediction after anomaly detection)"}
+    print(" MMSE (original vs damaged): " + str(round(np.mean(OK_vec[0,mask==1]),6)))
+    print(" MMSE (pure prediction): " + str(round(np.mean(OK_vec[1,mask==1]),6)))
+    print(" MMSE (for anomalies): " + str(round(np.mean(OK_vec[2,mask==1]),6)))
 
 bits = list(range(145))  # create a list of meaningful bits to visualize
 bits.append(148)
@@ -206,5 +252,9 @@ else:
         if os.path.exists('research_and_results/02_bitwise_'+ad_algorithm+'.h5'):
             os.remove('research_and_results/02_bitwise_'+ad_algorithm+'.h5')
         file = h5py.File('research_and_results/02_bitwise_'+ad_algorithm+'.h5', mode='a')
+    elif stage == 'prediction':
+        if os.path.exists('research_and_results/02_bitwise_prediction_'+prediction_algorithm+'.h5'):
+            os.remove('research_and_results/02_bitwise_prediction_'+prediction_algorithm+'.h5')
+        file = h5py.File('research_and_results/02_bitwise_prediction_'+prediction_algorithm+'.h5', mode='a')
     file.create_dataset('OK_vec', data=OK_vec)
     file.close()

@@ -104,7 +104,7 @@ class AnomalyDetection_LOF(AnomalyDetection):
                             self.outliers[i][2] = self.outliers[i][2] + [field]
             # If around half of fields are classified abnormal, that message is not an outlier
             if self.outliers[i][2] != 0:
-                if len(self.outliers[i][2])>=np.floor(len(self.fields)/2): self.outliers[i][0] = 0
+                if len(self.outliers[i][2])>=np.ceil(len(self.fields)/2): self.outliers[i][0] = 0
 
     def detect_in_multielement_clusters(self, idx, message_decoded, timestamp):
         """
@@ -348,16 +348,16 @@ elif stage=='ad':
     + str(round(OK_vec[2,1,3],2)) + "%")
 elif stage=='prediction':
     print("For "+ prediction_algorithm + ", with 5% messages damaged:")
-    print("- MSE after damage - Gdansk: " + str(round(OK_vec[0,0,0],6)) + ", Baltic: " + str(round(OK_vec[1,0,0],6)) + ", Gibraltar: "
+    print("- MMSE after damage - Gdansk: " + str(round(OK_vec[0,0,0],6)) + ", Baltic: " + str(round(OK_vec[1,0,0],6)) + ", Gibraltar: "
     + str(round(OK_vec[2,0,0],6)))
-    print("- MSE after correction - Gdansk: " + str(round(OK_vec[0,0,1],6)) + ", Baltic: " + str(round(OK_vec[1,0,1],6)) + ", Gibraltar: "
+    print("- MMSE after correction - Gdansk: " + str(round(OK_vec[0,0,1],6)) + ", Baltic: " + str(round(OK_vec[1,0,1],6)) + ", Gibraltar: "
     + str(round(OK_vec[2,0,1],6)))
     print("Difference: " + str(round((OK_vec[0,0,0]-OK_vec[0,0,1])/OK_vec[0,0,1],4)) + "%, " + str(round((OK_vec[1,0,0]-OK_vec[1,0,1])/OK_vec[1,0,1],4)) + "%, "
           + str(round((OK_vec[2,0,0]-OK_vec[2,0,1])/OK_vec[2,0,1],4)) + "%")
     print("For "+ prediction_algorithm + ", with 10% messages damaged:")
-    print("- MSE after damage - Gdansk: " + str(round(OK_vec[0,1,0],6)) + ", Baltic: " + str(round(OK_vec[1,1,0],6)) + ", Gibraltar: "
+    print("- MMSE after damage - Gdansk: " + str(round(OK_vec[0,1,0],6)) + ", Baltic: " + str(round(OK_vec[1,1,0],6)) + ", Gibraltar: "
     + str(round(OK_vec[2,1,0],6)))
-    print("- MSE after correction - Gdansk: " + str(round(OK_vec[0,1,1],6)) + ", Baltic: " + str(round(OK_vec[1,1,1],6)) + ", Gibraltar: "
+    print("- MMSE after correction - Gdansk: " + str(round(OK_vec[0,1,1],6)) + ", Baltic: " + str(round(OK_vec[1,1,1],6)) + ", Gibraltar: "
     + str(round(OK_vec[2,1,1],6)))
     print("Difference: " + str(round((OK_vec[0,1,0]-OK_vec[0,1,1])/OK_vec[0,1,1],4)) + "%, " + str(round((OK_vec[1,1,0]-OK_vec[1,1,1])/OK_vec[1,1,1],4)) + "%, "
           + str(round((OK_vec[2,1,0]-OK_vec[2,1,1])/OK_vec[2,1,1],4)) + "%")

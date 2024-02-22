@@ -36,9 +36,9 @@ from utils.miscellaneous import count_number, Corruption
 np.random.seed(1)  # For reproducibility
 distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
-ad_algorithm = 'xgboost' # 'rf', 'xgboost' or 'threshold' (only for 1-element-cluster anomaly detection) 
+ad_algorithm = 'rf' # 'rf', 'xgboost' or 'threshold' (only for 1-element-cluster anomaly detection) 
 prediction_algorithm = 'ar' # 'ar' or 'xgboost'
-stage = 'prediction' # 'clustering', 'ad_1element', 'ad_multielement' or 'prediction'
+stage = 'ad_1element' # 'clustering', 'ad_1element', 'ad_multielement' or 'prediction'
 num_metrics = {'clustering':2, 'ad_1element':5, 'ad_multielement':4, 'prediction':1}
 num_bits = {'clustering':10, 'ad_1element':2, 'ad_multielement':2, 'prediction':7}
 num_experiment = {'clustering':50, 'ad_1element':100, 'ad_multielement':100, 'prediction':50}
