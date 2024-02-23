@@ -29,7 +29,7 @@ from utils.miscellaneous import count_number, Corruption
 # ----------------------------!!! EDIT HERE !!! ---------------------------------  
 np.random.seed(1)  # For reproducibility
 distance = 'euclidean'
-stage = 'ad' # 'clustering', 'ad' or 'prediction'
+stage = 'prediction' # 'clustering', 'ad' or 'prediction'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
 ad_algorithm = 'xgboost' # 'rf' or 'xgboost'
 prediction_algorithm = 'ar' # 'ar' or 'xgboost'

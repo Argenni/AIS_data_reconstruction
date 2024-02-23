@@ -34,7 +34,7 @@ distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
 ad_algorithm = 'xgboost' # 'rf' or 'xgboost'
 prediction_algorithm = 'ar' # 'ar' or  'xgboost'
-stage = 'ad' # 'clustering', 'ad' or 'prediction'
+stage = 'prediction' # 'clustering', 'ad' or 'prediction'
 if stage == 'clustering': percentages =  [0, 5, 10, 20]
 else: percentages = [5, 10, 20]
 windows = [5, 10, 15, 20, 30, 60, 120]

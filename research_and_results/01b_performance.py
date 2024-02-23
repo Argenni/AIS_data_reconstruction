@@ -352,15 +352,15 @@ elif stage=='prediction':
     + str(round(OK_vec[2,0,0],6)))
     print("- MMSE after correction - Gdansk: " + str(round(OK_vec[0,0,1],6)) + ", Baltic: " + str(round(OK_vec[1,0,1],6)) + ", Gibraltar: "
     + str(round(OK_vec[2,0,1],6)))
-    print("Difference: " + str(round((OK_vec[0,0,0]-OK_vec[0,0,1])/OK_vec[0,0,1],4)) + "%, " + str(round((OK_vec[1,0,0]-OK_vec[1,0,1])/OK_vec[1,0,1],4)) + "%, "
-          + str(round((OK_vec[2,0,0]-OK_vec[2,0,1])/OK_vec[2,0,1],4)) + "%")
+    print("Difference: " + str(round((OK_vec[0,0,0]-OK_vec[0,0,1])/OK_vec[0,0,1],4)*100) + "%, " + str(round((OK_vec[1,0,0]-OK_vec[1,0,1])/OK_vec[1,0,1],4)*100) + "%, "
+          + str(round((OK_vec[2,0,0]-OK_vec[2,0,1])/OK_vec[2,0,1],4)*100) + "%")
     print("For "+ prediction_algorithm + ", with 10% messages damaged:")
     print("- MMSE after damage - Gdansk: " + str(round(OK_vec[0,1,0],6)) + ", Baltic: " + str(round(OK_vec[1,1,0],6)) + ", Gibraltar: "
     + str(round(OK_vec[2,1,0],6)))
     print("- MMSE after correction - Gdansk: " + str(round(OK_vec[0,1,1],6)) + ", Baltic: " + str(round(OK_vec[1,1,1],6)) + ", Gibraltar: "
     + str(round(OK_vec[2,1,1],6)))
-    print("Difference: " + str(round((OK_vec[0,1,0]-OK_vec[0,1,1])/OK_vec[0,1,1],4)) + "%, " + str(round((OK_vec[1,1,0]-OK_vec[1,1,1])/OK_vec[1,1,1],4)) + "%, "
-          + str(round((OK_vec[2,1,0]-OK_vec[2,1,1])/OK_vec[2,1,1],4)) + "%")
+    print("Difference: " + str(round((OK_vec[0,1,0]-OK_vec[0,1,1])/OK_vec[0,1,1],4)*100) + "%, " + str(round((OK_vec[1,1,0]-OK_vec[1,1,1])/OK_vec[1,1,1],4)*100) + "%, "
+          + str(round((OK_vec[2,1,0]-OK_vec[2,1,1])/OK_vec[2,1,1],4)*100) + "%")
 
 
 # Save results

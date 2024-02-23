@@ -60,29 +60,28 @@ class Prediction:
             if not os.path.exists('utils/prediction_files/dataset_'+prediction_algorithm+'.h5'):
                 self._create_regression_dataset()
             variables = pickle.load(open('utils/prediction_files/dataset_'+self._prediction_algorithm+'.h5', 'rb'))
-            print(" Average MSE of regressor:")
+            print(" Average SMAE of regressor:")
             mse = []
             for field_num in range(len(variables[1])):
                 if self._prediction_algorithm == 'xgboost': 
                     pred = self._regressor[field_num].predict(variables[0][field_num])
                     mse.append(compute_prediction_accuracy(pred, variables[1][field_num], self.fields[field_num]))
-                    #mse.append(mean_squared_error(variables[1][field_num], pred))
                 elif self._prediction_algorithm == 'ar':
                     y_true = []
                     y_pred = []
                     for trajectory in range(len(variables[1][field_num])):
-                        pred = self._predict_ar(variables[0][field_num][trajectory], self._lags, self.fields[field_num])
+                        pred = self._validate_prediction(
+                            pred=self._predict_ar(variables[0][field_num][trajectory], self._lags, self.fields[field_num]),
+                            field=self.fields[field_num])
                         y_true.append(variables[1][field_num][trajectory])
                         y_pred.append(pred)
                     mse.append(compute_prediction_accuracy(y_pred, y_true, self.fields[field_num]))
-                    #mse.append(mean_squared_error(y_true, y_pred))
             print("  trainset: " + str(round(np.mean(mse),4)))
             if self._prediction_algorithm == 'xgboost': 
                 mse = []
                 for field_num in range(len(variables[3])):
                     pred = self._regressor[field_num].predict(variables[2][field_num])
                     mse.append(compute_prediction_accuracy(pred, variables[3][field_num], self.fields[field_num]))
-                    #mse.append(mean_squared_error(variables[3][field_num],pred))
                 print("  valset: " + str(round(np.mean(mse),4)))
 
     def _train_regressor(self):
@@ -208,10 +207,8 @@ class Prediction:
                             ).fit(variables[0][field_num], variables[1][field_num]))
                     pred = regressor[field_num].predict(np.array(variables[0][field_num]))
                     mse_train_field.append(compute_prediction_accuracy(pred, variables[1][field_num], self.fields[field_num]))
-                    #mse_train_field.append(mean_squared_error(pred,variables[1][field_num]))
                     pred = regressor[field_num].predict(np.array(variables[2][field_num]))
                     mse_val_field.append(compute_prediction_accuracy(pred, variables[3][field_num], self.fields[field_num]))
-                    #mse_val_field.append(mean_squared_error(pred,variables[3][field_num]))
                 mse_train.append(np.mean(mse_train_field))
                 mse_val.append(np.mean(mse_val_field))
         elif self._prediction_algorithm == 'ar' and hyperparameter=='lags':
@@ -222,11 +219,13 @@ class Prediction:
                     y_pred = []
                     y_true = []
                     for trajectory in range(len(variables[1][field_num])):
-                        pred = self._predict_ar(variables[0][field_num][trajectory], param, self.fields[field_num])
+                        #pred = self._predict_ar(variables[0][field_num][trajectory], param, self.fields[field_num])
+                        pred = self._validate_prediction(
+                            pred=self._predict_ar(variables[0][field_num][trajectory], param, self.fields[field_num]),
+                            field=self.fields[field_num])
                         y_pred.append(pred)
                         y_true.append(variables[1][field_num][trajectory])
                     mse_train_field.append(compute_prediction_accuracy(y_pred, y_true, self.fields[field_num]))
-                    #mse_train_field.append(mean_squared_error(y_pred, y_true))
                 mse_train.append(np.mean(mse_train_field))
         print(" Complete. ")
         fig, ax = plt.subplots()
@@ -234,9 +233,9 @@ class Prediction:
         if self._prediction_algorithm == 'xgboost': 
             ax.plot(params, mse_val, color='b')
             ax.legend(["Training set", "Validation set"])
-        ax.set_title("MSE vs " + hyperparameter)
+        ax.set_title("SMAE vs " + hyperparameter)
         ax.set_xlabel(hyperparameter)
-        ax.set_ylabel("MSE") 
+        ax.set_ylabel("SMAE") 
         fig.show()
         # Save results
         if hyperparameter == 'max_depth': self._max_depth = int(input("Choose the optimal max_depth: "))
@@ -459,19 +458,20 @@ class Prediction:
 
 def compute_prediction_accuracy(prediction, real, field):
     """
-    Computes MSE (or its modified version for COG) of the prediction. \n
+    Computes SMAE (or its modified version for COG) of the prediction. \n
     Arguments:
     - prediction - float scalar/list/numpy array with predictions,
     - real - float scalar/list/numpy array with ground truth,
     - field - int, scalar, field to examine (to identify if to use modified MSE for COG). \n
     Returns: calculated MSE, float, scalar
     """   
+    scale = {2:999999999, 3:15, 5:102.3, 7:180, 8:90, 9:180, 12:2}
     if field == 9: # for COG
         if isinstance(prediction, list) or isinstance(prediction, np.ndarray):
-            mse = []
+            smae = []
             iterations = len(prediction) if isinstance(prediction, list) else prediction.shape[0]
             for i in range(iterations):
-                mse.append(pow(np.min((prediction[i]-real[i], 360-(prediction[i]-real[i]))),2))
-        else: mse = pow(np.min((prediction-real, 360-(prediction-real))),2)
-    else: mse = pow(np.array(prediction)-np.array(real),2) # for other fields than COG
-    return np.mean(mse)
+                smae.append(np.min((np.abs(real[i]-prediction[i]), 360-np.abs(real[i]-prediction[i])))/scale[field])
+        else: smae = np.min((np.abs(real-prediction), 360-np.abs(real-prediction)))/scale[field]
+    else: smae = np.abs(np.array(real)-np.array(prediction))/scale[field]
+    return np.mean(smae)
