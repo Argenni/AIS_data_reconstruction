@@ -56,16 +56,16 @@ class Prediction:
         elif optimize == 'lags': self._optimize_regression(hyperparameter='lags')
         # Show some regressor metrics if allowed
         if self._verbose:
-            # Calculate the MSE of the regressor on the training and validation data
+            # Calculate the performance of the regressor on training and validation data
             if not os.path.exists('utils/prediction_files/dataset_'+prediction_algorithm+'.h5'):
                 self._create_regression_dataset()
             variables = pickle.load(open('utils/prediction_files/dataset_'+self._prediction_algorithm+'.h5', 'rb'))
             print(" Average SMAE of regressor:")
-            mse = []
+            mae = []
             for field_num in range(len(variables[1])):
                 if self._prediction_algorithm == 'xgboost': 
                     pred = self._regressor[field_num].predict(variables[0][field_num])
-                    mse.append(compute_prediction_accuracy(pred, variables[1][field_num], self.fields[field_num]))
+                    mae.append(calculate_SMAE(pred, variables[1][field_num], self.fields[field_num]))
                 elif self._prediction_algorithm == 'ar':
                     y_true = []
                     y_pred = []
@@ -75,14 +75,14 @@ class Prediction:
                             field=self.fields[field_num])
                         y_true.append(variables[1][field_num][trajectory])
                         y_pred.append(pred)
-                    mse.append(compute_prediction_accuracy(y_pred, y_true, self.fields[field_num]))
-            print("  trainset: " + str(round(np.mean(mse),4)))
+                    mae.append(calculate_SMAE(y_pred, y_true, self.fields[field_num]))
+            print("  trainset: " + str(round(np.mean(mae),4)))
             if self._prediction_algorithm == 'xgboost': 
-                mse = []
+                mae = []
                 for field_num in range(len(variables[3])):
                     pred = self._regressor[field_num].predict(variables[2][field_num])
-                    mse.append(compute_prediction_accuracy(pred, variables[3][field_num], self.fields[field_num]))
-                print("  valset: " + str(round(np.mean(mse),4)))
+                    mae.append(calculate_SMAE(pred, variables[3][field_num], self.fields[field_num]))
+                print("  valset: " + str(round(np.mean(mae),4)))
 
     def _train_regressor(self):
         """
@@ -183,15 +183,15 @@ class Prediction:
             # if not, create a damaged dataset
             self._create_regression_dataset()
         variables = pickle.load(open('utils/prediction_files/dataset_'+self._prediction_algorithm+'.h5', 'rb'))
-        mse_train = []
-        mse_val = []
+        mae_train = []
+        mae_val = []
         print(" Searching for optimal " + hyperparameter + "...")
         if self._prediction_algorithm == 'xgboost':
             params = [2, 5, 8, 10, 13, 15, 20, 30, 50, 100]
             for param in params:
                 regressor = []
-                mse_train_field = []
-                mse_val_field = []
+                mae_train_field = []
+                mae_val_field = []
                 for field_num in range(len(variables[1])):
                     if hyperparameter == 'max_depth':
                         regressor.append(XGBRegressor(
@@ -206,15 +206,15 @@ class Prediction:
                             max_depth=self._max_depth,
                             ).fit(variables[0][field_num], variables[1][field_num]))
                     pred = regressor[field_num].predict(np.array(variables[0][field_num]))
-                    mse_train_field.append(compute_prediction_accuracy(pred, variables[1][field_num], self.fields[field_num]))
+                    mae_train_field.append(calculate_SMAE(pred, variables[1][field_num], self.fields[field_num]))
                     pred = regressor[field_num].predict(np.array(variables[2][field_num]))
-                    mse_val_field.append(compute_prediction_accuracy(pred, variables[3][field_num], self.fields[field_num]))
-                mse_train.append(np.mean(mse_train_field))
-                mse_val.append(np.mean(mse_val_field))
+                    mae_val_field.append(calculate_SMAE(pred, variables[3][field_num], self.fields[field_num]))
+                mae_train.append(np.mean(mae_train_field))
+                mae_val.append(np.mean(mae_val_field))
         elif self._prediction_algorithm == 'ar' and hyperparameter=='lags':
             params = [1,2,3,5,7,10,20]
             for param in params:
-                mse_train_field = []
+                mae_train_field = []
                 for field_num in range(len(variables[1])):
                     y_pred = []
                     y_true = []
@@ -225,13 +225,13 @@ class Prediction:
                             field=self.fields[field_num])
                         y_pred.append(pred)
                         y_true.append(variables[1][field_num][trajectory])
-                    mse_train_field.append(compute_prediction_accuracy(y_pred, y_true, self.fields[field_num]))
-                mse_train.append(np.mean(mse_train_field))
+                    mae_train_field.append(calculate_SMAE(y_pred, y_true, self.fields[field_num]))
+                mae_train.append(np.mean(mae_train_field))
         print(" Complete. ")
         fig, ax = plt.subplots()
-        ax.plot(params, mse_train, color='k')
+        ax.plot(params, mae_train, color='k')
         if self._prediction_algorithm == 'xgboost': 
-            ax.plot(params, mse_val, color='b')
+            ax.plot(params, mae_val, color='b')
             ax.legend(["Training set", "Validation set"])
         ax.set_title("SMAE vs " + hyperparameter)
         ax.set_xlabel(hyperparameter)
@@ -329,7 +329,7 @@ class Prediction:
         - if_bits - (optional) boolean, decide if to update also dataset in binary form (default=True). \n
         Returns: message_bits_reconstructed, message_decoded_reconstructed - numpy array, corrected dataset in binary/decimal form.
         """
-        print("Reconstructing data...")
+        if self._verbose: print("Reconstructing data...")
         if if_bits: message_bits_reconstructed = copy.deepcopy(message_bits)
         message_decoded_reconstructed = copy.deepcopy(message_decoded)
         idx_new = copy.deepcopy(idx)
@@ -359,7 +359,7 @@ class Prediction:
                 self.predictions.append(dict)
                 message_decoded_reconstructed[message_idx,:] = message_decoded_0
                 if if_bits: message_bits_reconstructed[message_idx,:] = encode(message_decoded_0)
-        print("Complete.")
+        if self._verbose: print("Complete.")
         if if_bits: return message_bits_reconstructed, message_decoded_reconstructed, idx_new
         else: return message_decoded_reconstructed, idx_new
 
@@ -456,16 +456,16 @@ class Prediction:
         return pred
     
 
-def compute_prediction_accuracy(prediction, real, field):
+def calculate_SMAE(prediction, real, field):
     """
     Computes SMAE (or its modified version for COG) of the prediction. \n
     Arguments:
     - prediction - float scalar/list/numpy array with predictions,
     - real - float scalar/list/numpy array with ground truth,
-    - field - int, scalar, field to examine (to identify if to use modified MSE for COG). \n
-    Returns: calculated MSE, float, scalar
+    - field - int, scalar, field to examine. \n
+    Returns: calculated SMAE, float, scalar
     """   
-    scale = {2:999999999, 3:15, 5:102.3, 7:180, 8:90, 9:180, 12:2}
+    scale = {2:999999999, 3:15, 5:102.3, 7:360, 8:180, 9:360, 12:2}
     if field == 9: # for COG
         if isinstance(prediction, list) or isinstance(prediction, np.ndarray):
             smae = []

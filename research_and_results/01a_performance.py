@@ -5,14 +5,15 @@ Requires: Gdansk.h5 / Baltic.h5 / Gibraltar.h5 file with the following datasets 
  - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape=(num_messages, num_fields (14)),
  - X - numpy array, AIS feature vectors (w/o normalization), shape=(num_messages, num_features (115)),
  - MMSI - list of MMSI identifier from each AIS message, len=num_messages. \n
-Creates 01a_performance_.h5 file, with OK_vec with:
-- if clustering: for both DBSCAN and kmeans, percentage of correctly clustered messages,
+Creates 01a_performance_.h5 file, with OK_vec with (for each dataset):
+- if clustering: for both DBSCAN and kmeans, percentage of correctly clustered messages (for Gdansk.h5 only),
 - if anomaly detection: for each amount of dataset/corrupted bits:
     0. field classification recall,
     1. field classification precision,
     2. field classification Jaccard score,
     3. field classification Hamming score,
-    4. message classification accuracy (only for 1-element-cluster anomaly detection).
+    4. message classification accuracy (only for 1-element-cluster anomaly detection),
+- if prediction: SMAE of pure prediction for each field.
 """
 print("\n----------- AIS data reconstruction performance - one damaged message at a time --------- ")
 
@@ -28,8 +29,8 @@ import sys
 sys.path.append('.')
 from utils.initialization import Data, decode # pylint: disable=import-error
 from utils.clustering import Clustering, check_cluster_assignment
-from utils.anomaly_detection import AnomalyDetection, calculate_ad_accuracy
-from utils.prediction import Prediction, compute_prediction_accuracy
+from utils.anomaly_detection import AnomalyDetection, calculate_ad_metrics
+from utils.prediction import Prediction, calculate_SMAE
 from utils.miscellaneous import count_number, Corruption
 
 # ----------------------------!!! EDIT HERE !!! ---------------------------------  
@@ -288,14 +289,13 @@ else:  # or run the computations
                     for j in range(len(idx)):
                         OK_vec[file_num, num_bit, -1-j, i] = check_cluster_assignment(idx[j], idx_corr[j], message_idx)
                 if stage=='ad_1element' or stage=='ad_multielement':
-                    accuracies = calculate_ad_accuracy(field, pred)
-                    OK_vec[file_num, num_bit, 0, i] = accuracies["recall"]
-                    OK_vec[file_num, num_bit, 1, i] = accuracies["precision"]
-                    OK_vec[file_num, num_bit, 2, i] = accuracies["jaccard"]
-                    OK_vec[file_num, num_bit, 3, i] = accuracies["hamming"]
+                    ad_metrics = calculate_ad_metrics(field, pred)
+                    OK_vec[file_num, num_bit, 0, i] = ad_metrics["recall"]
+                    OK_vec[file_num, num_bit, 1, i] = ad_metrics["precision"]
+                    OK_vec[file_num, num_bit, 2, i] = ad_metrics["jaccard"]
+                    OK_vec[file_num, num_bit, 3, i] = ad_metrics["hamming"]
                 elif stage=='prediction':
-                    OK_vec[file_num, num_bit, 0, i] = compute_prediction_accuracy(pred, data.message_decoded[message_idx,field], field)
-                    #OK_vec[file_num, num_bit, 0, i] = pow(pred-data.message_decoded[message_idx,field],2)
+                    OK_vec[file_num, num_bit, 0, i] = calculate_SMAE(pred, data.message_decoded[message_idx,field], field)
                     if np.mean(data.message_decoded[np.array(data.MMSI)==data.MMSI[message_idx],5]) > 0.1 and visualized==False:
                         fig, ax = plt.subplots()
                         indices = np.zeros_like(data.MMSI)

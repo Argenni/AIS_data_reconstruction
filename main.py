@@ -32,7 +32,7 @@ import sys
 import os
 sys.path.append('.')
 from utils.initialization import Data
-from utils.clustering import Clustering, calculate_CC
+from utils.clustering import Clustering
 from utils.anomaly_detection import AnomalyDetection
 from utils.prediction import Prediction
 from utils.miscellaneous import count_number, visualize_trajectories, TimeWindow
@@ -82,8 +82,6 @@ elif clustering_algorithm == 'DBSCAN':
     idx, K = clustering.run_DBSCAN(X=data.X, distance=distance, optimize=None, MMSI=data.MMSI)
 silhouette = silhouette_score(data.X,idx)
 print("Average silhouette: " + str(round(silhouette,2)))
-CC = calculate_CC(idx, data.MMSI, MMSI_vec)
-print("Correctness coefficient: " + str(round(CC,4)))
 visualize_trajectories(
     X=data.Xraw,
     MMSI=idx,

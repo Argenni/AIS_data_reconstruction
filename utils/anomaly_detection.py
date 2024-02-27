@@ -30,7 +30,7 @@ class AnomalyDetection:
     fields = [2,3,5,7,8,9,12]
     fields_dynamic = [5,7,8,9]
     fields_static = [2,3,12]
-    _field_classifier = []
+    _1element_classifier = []
     _num_estimators_rf = 20
     _max_depth_rf = 2
     _num_estimators_xgboost = 7
@@ -40,7 +40,7 @@ class AnomalyDetection:
     _num_estimators2_xgboost = 20
     _max_depth2_xgboost = 7
     _k = 3
-    _inside_field_classifier = []
+    _multielement_classifier = []
     _ad_algorithm = [] # 'rf' or 'xgboost'
     _wavelet = [] # 'morlet' or 'ricker'
     _verbose = []
@@ -62,13 +62,13 @@ class AnomalyDetection:
         self._verbose = verbose
         if os.path.exists('utils/anomaly_detection_files/1element_'+wavelet+'_classifier_'+ad_algorithm+'.h5'):
             # If there is a file with the trained 1-element-cluster field classifier saved, load it
-            self._field_classifier = pickle.load(open('utils/anomaly_detection_files/1element_'+wavelet+'_classifier_'+ad_algorithm+'.h5', 'rb'))
+            self._1element_classifier = pickle.load(open('utils/anomaly_detection_files/1element_'+wavelet+'_classifier_'+ad_algorithm+'.h5', 'rb'))
         else:
             # otherwise train a classifier from scratch
             self._train_1element_classifier()
         if os.path.exists('utils/anomaly_detection_files/multielement_classifier_'+ad_algorithm+'.h5'):
-            # If there is a file with the trained inside clusters field classifier saved, load it
-            self._inside_field_classifier = pickle.load(open('utils/anomaly_detection_files/multielement_classifier_'+ad_algorithm+'.h5', 'rb'))
+            # If there is a file with the trained multielement clusters field classifier saved, load it
+            self._multielement_classifier = pickle.load(open('utils/anomaly_detection_files/multielement_classifier_'+ad_algorithm+'.h5', 'rb'))
         else:
             # otherwise train a classifier from scratch
             self._train_multielement_classifier()
@@ -80,17 +80,17 @@ class AnomalyDetection:
         elif optimize == 'n_estimators2': self._optimize_multielement_classifier(hyperparameter='n_estimators')
         # Show some classifier metrics if allowed
         if self._verbose:
-            # Calculate the accuracy of the classifiers on the training data
+            # Calculate the performance of the classifiers on training and validation data
             variables = pickle.load(open('utils/anomaly_detection_files/1element_'+wavelet+'_dataset.h5', 'rb'))
             print(" Average accuracy of 1-element-cluster classifier:")
             accuracy = []
             for i in range(len(variables[1])):
-                pred = self._field_classifier[i].predict(variables[0][i])
+                pred = self._1element_classifier[i].predict(variables[0][i])
                 accuracy.append(np.mean(pred == variables[1][i]))          
             print("  trainset: " + str(round(np.mean(accuracy),4)))
             accuracy = []
             for i in range(len(variables[3])):
-                pred = self._field_classifier[i].predict(variables[2][i])
+                pred = self._1element_classifier[i].predict(variables[2][i])
                 accuracy.append(np.mean(pred == variables[3][i]))
             print("  valset: " + str(round(np.mean(accuracy),4)))
             variables = pickle.load(open('utils/anomaly_detection_files/multielement_dataset.h5', 'rb'))
@@ -98,13 +98,13 @@ class AnomalyDetection:
             y = np.array(variables[1])
             accuracy = []
             for i in range(len(variables[1])):
-                pred = self._inside_field_classifier[i].predict(variables[0][i])
+                pred = self._multielement_classifier[i].predict(variables[0][i])
                 accuracy.append(np.mean(pred == y))
             print("  trainset " + str(round(np.mean(accuracy),4)) )
             y = np.array(variables[3])
             accuracy = []
             for i in range(len(variables[3])):
-                pred = self._inside_field_classifier[i].predict(variables[2][i])
+                pred = self._multielement_classifier[i].predict(variables[2][i])
                 accuracy.append(np.mean(pred == variables[3][i]))
             print("  valset " + str(round(np.mean(accuracy),4)) )
     
@@ -124,24 +124,24 @@ class AnomalyDetection:
         y = variables[1]
         # Train one classifier for each class (field)
         print("  Training a 1-element-cluster classifier...")
-        self._field_classifier = []
+        self._1element_classifier = []
         for i in range(len(y)):
             if self._ad_algorithm == 'rf':
-                self._field_classifier.append(RandomForestClassifier(
+                self._1element_classifier.append(RandomForestClassifier(
                     random_state=0,
                     criterion='entropy',
                     n_estimators=self._num_estimators_rf, 
                     max_depth=self._max_depth_rf
                     ).fit(differences[i],y[i]))
             else:  
-                self._field_classifier.append(XGBClassifier(
+                self._1element_classifier.append(XGBClassifier(
                     random_state=0,
                     n_estimators=self._num_estimators_xgboost, 
                     max_depth=int(np.floor(self._max_depth_xgboost))
                     ).fit(differences[i],y[i]))
         print("  Complete.")
         # Save
-        pickle.dump(self._field_classifier, open('utils/anomaly_detection_files/1element_'+self._wavelet+'_classifier_'+self._ad_algorithm+'.h5', 'ab'))
+        pickle.dump(self._1element_classifier, open('utils/anomaly_detection_files/1element_'+self._wavelet+'_classifier_'+self._ad_algorithm+'.h5', 'ab'))
         
     def _create_1element_classifier_dataset(self):
         """
@@ -469,7 +469,7 @@ class AnomalyDetection:
         """
         fields = []
         for i, field in enumerate(self.fields):
-            pred = self._field_classifier[i].predict(
+            pred = self._1element_classifier[i].predict(
                 np.array(self.compute_fields_diff(message_decoded, idx, message_idx, field)
                 ).reshape(1,-1))[0]
             if pred: fields.append(field)
@@ -641,21 +641,21 @@ class AnomalyDetection:
         print("  Training a multi-element-cluster classifier...")
         for i in range(len(self.fields_dynamic)):
             if self._ad_algorithm=='rf':
-                self._inside_field_classifier.append(RandomForestClassifier(
+                self._multielement_classifier.append(RandomForestClassifier(
                     random_state=0,
                     criterion='entropy',
                     n_estimators=self._num_estimators2_rf, 
                     max_depth=self._max_depth2_rf
                     ).fit(variables[0][i],variables[1][i]))
             else:
-                self._inside_field_classifier.append(XGBClassifier(
+                self._multielement_classifier.append(XGBClassifier(
                     random_state=0,
                     n_estimators=self._num_estimators2_xgboost, 
                     max_depth=self._max_depth2_xgboost
                     ).fit(variables[0][i],variables[1][i]))
         print("  Complete. ")
         # Save the model
-        pickle.dump(self._inside_field_classifier, open('utils/anomaly_detection_files/multielement_classifier_'+self._ad_algorithm+'.h5', 'ab'))
+        pickle.dump(self._multielement_classifier, open('utils/anomaly_detection_files/multielement_classifier_'+self._ad_algorithm+'.h5', 'ab'))
 
     def _optimize_multielement_classifier(self, hyperparameter):
         """ 
@@ -782,7 +782,7 @@ class AnomalyDetection:
             samples = []
             for message_idx in range(message_decoded.shape[0]):
                 samples.append(self.compute_multielement_sample(message_decoded, idx, message_idx, timestamp, self.fields_dynamic[field]))
-            pred.append(np.round(self._inside_field_classifier[field].predict(samples)))
+            pred.append(np.round(self._multielement_classifier[field].predict(samples)))
         for message_idx in range(message_decoded.shape[0]):
             if len(np.where(np.array(idx)==idx[message_idx])[0])>2:
                 fields = []
@@ -796,13 +796,13 @@ class AnomalyDetection:
         if self._verbose: print("Complete. ")
 
        
-def calculate_ad_accuracy(real, predictions):
+def calculate_ad_metrics(real, predictions):
     """
-    Computes the accuracy of anomaly detecion stage. \n
+    Computes the quality metrics of anomaly detecion stage. \n
     Arguments: 
     - real - list of true labels (integers),
     - predictions - list of predicted labels (integers). \n
-    Returns: accuracies - dictionary containing the computed metrics:
+    Returns: ad_metrics - dictionary containing the computed metrics:
     "jaccard", "hamming", "recall", "precision", "f1"
     """
     if predictions==0: predictions = [] 
@@ -837,10 +837,10 @@ def calculate_ad_accuracy(real, predictions):
     # Calculate F1 score
     f1 = 2*precision*recall/(precision+recall) if (precision+recall) else 0
     # Gather all
-    accuracies = {
+    ad_metrics = {
         "jaccard": jaccard,
         "hamming": hamming,
         "recall": recall,
         "precision": precision,
         "f1": f1 } 
-    return accuracies
+    return ad_metrics

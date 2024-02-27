@@ -8,7 +8,8 @@ Requires: Gdansk.h5 / Baltic.h5 / Gibraltar.h5 file with the following datasets 
  - MMSI - list of MMSI identifiers from each AIS message, len=num_messages. \n
 Creates 03_timecomp_.h5 file, with OK_vec with average: 
  - if clustering: silhouette and CC,
- - if anomaly detection: F1 score of detecting messages and fields.
+ - if anomaly detection: F1 score of detecting messages and fields,
+ - if prediction: SMAE of pure prediction and after anomaly detection.
 """
 print("\n----------- The impact of observation time on AIS message reconstruction  --------- ")
 
@@ -24,8 +25,8 @@ import sys
 sys.path.append('.')
 from utils.initialization import Data, decode # pylint: disable=import-error
 from utils.clustering import Clustering, calculate_CC
-from utils.anomaly_detection import AnomalyDetection, calculate_ad_accuracy
-from utils.prediction import Prediction, compute_prediction_accuracy
+from utils.anomaly_detection import AnomalyDetection, calculate_ad_metrics
+from utils.prediction import Prediction, calculate_SMAE
 from utils.miscellaneous import count_number, Corruption, TimeWindow
 
 # ----------------------------!!! EDIT HERE !!! ---------------------------------  
@@ -168,12 +169,12 @@ else:  # or run the computations
                                 measure1[file_num][percentage_num][window_num].append(f1_score(true, pred))
                                 f1 =[]
                                 for n in range(num_messages):
-                                    accuracy = calculate_ad_accuracy(fields[n], ad.outliers[messages[n]][2])
-                                    f1.append(accuracy["f1"])
+                                    ad_metrics = calculate_ad_metrics(fields[n], ad.outliers[messages[n]][2])
+                                    f1.append(ad_metrics["f1"])
                                 measure2[file_num][percentage_num][window_num].append(np.mean(f1))
                             elif stage == 'prediction':
-                                mse_pred = []
-                                mse_ad = []
+                                mae_pred = []
+                                mae_ad = []
                                 for n in range(num_messages):
                                     for field in fields[n]:
                                         pred = prediction.reconstruct_data(
@@ -182,16 +183,16 @@ else:  # or run the computations
                                             idx=data.MMSI,
                                             message_idx=messages[n],
                                             field=field)
-                                        mse_pred.append(compute_prediction_accuracy(
+                                        mae_pred.append(calculate_SMAE(
                                             prediction=pred,
                                             real=data.message_decoded[messages[n], field],
                                             field=field))
-                                        mse_ad.append(compute_prediction_accuracy(
+                                        mae_ad.append(calculate_SMAE(
                                             prediction=message_decoded_new[messages[n], field],
                                             real=data.message_decoded[messages[n], field],
                                             field=field))
-                                measure1[file_num][percentage_num][window_num].append(np.mean(mse_pred))
-                                measure2[file_num][percentage_num][window_num].append(np.mean(mse_ad))
+                                measure1[file_num][percentage_num][window_num].append(np.mean(mae_pred))
+                                measure2[file_num][percentage_num][window_num].append(np.mean(mae_ad))
                         slides[window_num,file_num] = slides[window_num,file_num]+1
                     # Slide the time window
                     if windows[window_num] == 5: 
@@ -233,8 +234,8 @@ elif stage == 'ad':
     ax[0].set_ylabel("F1 - messages")
     ax[1].set_ylabel("F1 - fields")
 elif stage  == 'prediction':
-    ax[0].set_ylabel("MMSE - pure prediction")
-    ax[1].set_ylabel("MMSE - with anomaly detection ")
+    ax[0].set_ylabel("SMAE - pure prediction")
+    ax[1].set_ylabel("SMAE - with anomaly detection ")
 fig.legend(legend, loc=9)
 fig.show()
 

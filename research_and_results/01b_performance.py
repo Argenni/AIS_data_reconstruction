@@ -5,13 +5,16 @@ Requires: Gdansk.h5 / Baltic.h5 / Gibraltar.h5 file with the following datasets 
  - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape=(num_messages, num_fields (14)),
  - X - numpy array, AIS feature vectors (w/o normalization), shape=(num_messages, num_features (115)),
  - MMSI - list of MMSI identifier from each AIS message, len=num_messages. \n
-Creates 01b_performance_.h5 file, with OK_vec with:
-- if clustering: for both DBSCAN and kmeans, percentage of correctly clustered messages,
-- if anomaly detection: for each amount of dataset/corrupted bits:
+Creates 01b_performance_.h5 file, with OK_vec with (for each dataset):
+- if clustering: for both DBSCAN and kmeans:
+    0. no. clusters, 1. silhouette, 2. CHC, 3. VHC, 4. CC,
+- if anomaly detection: for each percentage of damaged messages:
     0. message classification recall,
     1. message classification precision,
-    2. message classification recall,
-    3. message classification precision.
+    2. field classification recall,
+    3. field classification precision,
+- if prediction: for each percentage of damaged messages:
+    0. SMAE of damaged dataset, 1. SMAE of prediction after anomaly detection.
 """
 print("\n----------- AIS data reconstruction performance - given percentage of damaged messages at a time --------- ")
 
@@ -28,8 +31,8 @@ import sys
 sys.path.append('.')
 from utils.initialization import Data, decode # pylint: disable=import-error
 from utils.clustering import Clustering, calculate_CC
-from utils.anomaly_detection import AnomalyDetection, calculate_ad_accuracy
-from utils.prediction import Prediction, compute_prediction_accuracy
+from utils.anomaly_detection import AnomalyDetection, calculate_ad_metrics
+from utils.prediction import Prediction, calculate_SMAE
 from utils.miscellaneous import count_number, visualize_trajectories, Corruption
 
 # ----------------------------!!! EDIT HERE !!! ---------------------------------  
@@ -272,9 +275,9 @@ else:  # or run the computations
                         recall = []
                         precision =[]
                         for n in range(num_messages):
-                            accuracy = calculate_ad_accuracy(fields[n], ad.outliers[messages[n]][2])
-                            recall.append(accuracy["recall"])
-                            precision.append(accuracy["precision"])
+                            ad_metrics = calculate_ad_metrics(fields[n], ad.outliers[messages[n]][2])
+                            recall.append(ad_metrics["recall"])
+                            precision.append(ad_metrics["precision"])
                         OK_vec[file_num, percentage_num, 2, i] = np.mean(recall) # field recall
                         OK_vec[file_num, percentage_num, 3, i] = np.mean(precision) # field precision
                 
@@ -287,27 +290,27 @@ else:  # or run the computations
                             timestamp=data.timestamp,
                             outliers=ad.outliers,
                             if_bits=False)
-                        mse_corr = []
-                        mse_new = []
+                        mae_corr = []
+                        mae_new = []
                         for n in range(num_messages):
-                            mse_corr.append(compute_prediction_accuracy(
+                            mae_corr.append(calculate_SMAE(
                                 prediction=message_decoded_corr[messages[n],fields[n][0]],
                                 real = data.message_decoded[messages[n],fields[n][0]],
                                 field=fields[n][0]))
-                            mse_corr.append(compute_prediction_accuracy(
+                            mae_corr.append(calculate_SMAE(
                                 prediction=message_decoded_corr[messages[n],fields[n][1]],
                                 real = data.message_decoded[messages[n],fields[n][1]],
                                 field=fields[n][1]))
-                            mse_new.append(compute_prediction_accuracy(
+                            mae_new.append(calculate_SMAE(
                                 prediction=message_decoded_new[messages[n],fields[n][0]],
                                 real = data.message_decoded[messages[n],fields[n][0]],
                                 field=fields[n][0]))
-                            mse_new.append(compute_prediction_accuracy(
+                            mae_new.append(calculate_SMAE(
                                 prediction=message_decoded_new[messages[n],fields[n][1]],
                                 real = data.message_decoded[messages[n],fields[n][1]],
                                 field=fields[n][1]))
-                        OK_vec[file_num, percentage_num, 0, i] = np.mean(mse_corr)
-                        OK_vec[file_num, percentage_num, 1, i] = np.mean(mse_new)
+                        OK_vec[file_num, percentage_num, 0, i] = np.mean(mae_corr)
+                        OK_vec[file_num, percentage_num, 1, i] = np.mean(mae_new)
 
     if stage != 'prediction': OK_vec = np.mean(OK_vec, axis=3)*100
     else: OK_vec = np.mean(OK_vec, axis=3)
@@ -348,19 +351,19 @@ elif stage=='ad':
     + str(round(OK_vec[2,1,3],2)) + "%")
 elif stage=='prediction':
     print("For "+ prediction_algorithm + ", with 5% messages damaged:")
-    print("- MMSE after damage - Gdansk: " + str(round(OK_vec[0,0,0],6)) + ", Baltic: " + str(round(OK_vec[1,0,0],6)) + ", Gibraltar: "
+    print("- SMAE after damage - Gdansk: " + str(round(OK_vec[0,0,0],6)) + ", Baltic: " + str(round(OK_vec[1,0,0],6)) + ", Gibraltar: "
     + str(round(OK_vec[2,0,0],6)))
-    print("- MMSE after correction - Gdansk: " + str(round(OK_vec[0,0,1],6)) + ", Baltic: " + str(round(OK_vec[1,0,1],6)) + ", Gibraltar: "
+    print("- SMAE after correction - Gdansk: " + str(round(OK_vec[0,0,1],6)) + ", Baltic: " + str(round(OK_vec[1,0,1],6)) + ", Gibraltar: "
     + str(round(OK_vec[2,0,1],6)))
-    print("Difference: " + str(round((OK_vec[0,0,0]-OK_vec[0,0,1])/OK_vec[0,0,1],4)*100) + "%, " + str(round((OK_vec[1,0,0]-OK_vec[1,0,1])/OK_vec[1,0,1],4)*100) + "%, "
-          + str(round((OK_vec[2,0,0]-OK_vec[2,0,1])/OK_vec[2,0,1],4)*100) + "%")
+    print("Difference: " + str(round((OK_vec[0,0,0]-OK_vec[0,0,1])/OK_vec[0,0,0],4)*-100) + "%, " + str(round((OK_vec[1,0,0]-OK_vec[1,0,1])/OK_vec[1,0,0],4)*-100) + "%, "
+          + str(round((OK_vec[2,0,0]-OK_vec[2,0,1])/OK_vec[2,0,0],4)*-100) + "%")
     print("For "+ prediction_algorithm + ", with 10% messages damaged:")
-    print("- MMSE after damage - Gdansk: " + str(round(OK_vec[0,1,0],6)) + ", Baltic: " + str(round(OK_vec[1,1,0],6)) + ", Gibraltar: "
+    print("- SMAE after damage - Gdansk: " + str(round(OK_vec[0,1,0],6)) + ", Baltic: " + str(round(OK_vec[1,1,0],6)) + ", Gibraltar: "
     + str(round(OK_vec[2,1,0],6)))
-    print("- MMSE after correction - Gdansk: " + str(round(OK_vec[0,1,1],6)) + ", Baltic: " + str(round(OK_vec[1,1,1],6)) + ", Gibraltar: "
+    print("- SMAE after correction - Gdansk: " + str(round(OK_vec[0,1,1],6)) + ", Baltic: " + str(round(OK_vec[1,1,1],6)) + ", Gibraltar: "
     + str(round(OK_vec[2,1,1],6)))
-    print("Difference: " + str(round((OK_vec[0,1,0]-OK_vec[0,1,1])/OK_vec[0,1,1],4)*100) + "%, " + str(round((OK_vec[1,1,0]-OK_vec[1,1,1])/OK_vec[1,1,1],4)*100) + "%, "
-          + str(round((OK_vec[2,1,0]-OK_vec[2,1,1])/OK_vec[2,1,1],4)*100) + "%")
+    print("Difference: " + str(round((OK_vec[0,1,0]-OK_vec[0,1,1])/OK_vec[0,1,0],4)*-100) + "%, " + str(round((OK_vec[1,1,0]-OK_vec[1,1,1])/OK_vec[1,1,0],4)*-100) + "%, "
+          + str(round((OK_vec[2,1,0]-OK_vec[2,1,1])/OK_vec[2,1,0],4)*-100) + "%")
 
 
 # Save results

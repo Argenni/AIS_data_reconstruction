@@ -5,9 +5,10 @@ Requires: Gdansk.h5 file with the following datasets (created by data_Gdansk.py)
  - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape=(num_messages (805), num_fields (14)),
  - X - numpy array, AIS feature vectors (w/o normalization), shape=(num_messages (805), num_features (115)),
  - MMSI - list of MMSI identifiers from each AIS message, len=num_messages (805). \n
-Creates 02_bitwise_.h5 file, with OK_vec with average percentage of: 
- - if clustering: correctly clustered messages, messages forming 1-element clusters, correctly assigned at the end,
- - if anomaly detection: recall of detecting messages and fields, precision of detecting fields.
+Creates 02_bitwise_.h5 file, with OK_vec with average: 
+ - if clustering: percentage of correctly clustered messages, messages forming 1-element clusters, correctly assigned at the end,
+ - if anomaly detection: recall of detecting messages and fields, precision of detecting fields,
+ - if prediction: SMAE of damaged dataset, pure prediction and prediction after anomaly detection.
 """
 print("\n----------- The impact of the position of damagedd bit on AIS message reconstruction  --------- ")
 
@@ -22,8 +23,8 @@ import sys
 sys.path.append('.')
 from utils.initialization import Data, decode # pylint: disable=import-error
 from utils.clustering import Clustering, check_cluster_assignment
-from utils.anomaly_detection import AnomalyDetection, calculate_ad_accuracy
-from utils.prediction import Prediction, compute_prediction_accuracy
+from utils.anomaly_detection import AnomalyDetection, calculate_ad_metrics
+from utils.prediction import Prediction, calculate_SMAE
 from utils.miscellaneous import count_number, Corruption
 
 # ----------------------------!!! EDIT HERE !!! ---------------------------------  
@@ -137,13 +138,13 @@ else:  # or run the computations on the original data
             
                 if stage == 'ad': # metrics after anomaly detection
                     OK_vec2[0,j] = ad.outliers[message_idx][0] # save message indication recall
-                    accuracies = calculate_ad_accuracy([field], ad.outliers[message_idx][2])
-                    OK_vec2[1,j] = accuracies["recall"] # save field indication recall
-                    OK_vec2[2,j] = accuracies["precision"] # save field indication precision
+                    ad_metrics = calculate_ad_metrics([field], ad.outliers[message_idx][2])
+                    OK_vec2[1,j] = ad_metrics["recall"] # save field indication recall
+                    OK_vec2[2,j] = ad_metrics["precision"] # save field indication precision
 
                 elif stage == 'prediction': # perform prediction stage 
                     prediction = Prediction(prediction_algorithm=prediction_algorithm)
-                    OK_vec2[0,j] = compute_prediction_accuracy(
+                    OK_vec2[0,j] = calculate_SMAE(
                         prediction=message_decoded_corr[message_idx,field],
                         real=data.message_decoded[message_idx,field],
                         field=field)
@@ -153,7 +154,7 @@ else:  # or run the computations on the original data
                             idx=data.MMSI,
                             message_idx=message_idx,
                             field=field)
-                    OK_vec2[1,j] = compute_prediction_accuracy(
+                    OK_vec2[1,j] = calculate_SMAE(
                         prediction=pred,
                         real=data.message_decoded[message_idx,field],
                         field=field)
@@ -164,7 +165,7 @@ else:  # or run the computations on the original data
                         timestamp=data.timestamp,
                         outliers=ad.outliers,
                         if_bits=False)
-                    OK_vec2[2,j] = compute_prediction_accuracy(
+                    OK_vec2[2,j] = calculate_SMAE(
                         prediction=message_decoded_new[message_idx,field],
                         real=data.message_decoded[message_idx,field],
                         field=field)
@@ -197,12 +198,12 @@ elif stage == 'ad':
     print(" Precision (field): " + str(round(np.mean(OK_vec[2,mask==1]),2)) + "%")
 elif stage == 'prediction': 
     titles = {
-    '0':"MMSE (orignal vs damaged field value)", 
-    '1':"MMSE (pure prediction, no anomaly detection)",
-    '2':"MMSE (prediction after anomaly detection)"}
-    print(" MMSE (original vs damaged): " + str(round(np.mean(OK_vec[0,mask==1]),6)))
-    print(" MMSE (pure prediction): " + str(round(np.mean(OK_vec[1,mask==1]),6)))
-    print(" MMSE (for anomalies): " + str(round(np.mean(OK_vec[2,mask==1]),6)))
+    '0':"SMAE (orignal vs damaged field value)", 
+    '1':"SMAE (pure prediction, no anomaly detection)",
+    '2':"SMAE (prediction after anomaly detection)"}
+    print(" SMAE (original vs damaged): " + str(round(np.mean(OK_vec[0,mask==1]),6)))
+    print(" SMAE (pure prediction): " + str(round(np.mean(OK_vec[1,mask==1]),6)))
+    print(" SMAE (for anomalies): " + str(round(np.mean(OK_vec[2,mask==1]),6)))
 
 bits = list(range(145))  # create a list of meaningful bits to visualize
 bits.append(148)

@@ -6,7 +6,8 @@ Requires: Gdansk/Baltic/Gibraltar.h5 files with the following datasets (created 
  - message_decoded - numpy array of AIS messages decoded from binary to decimal, shape=(num_messages, num_fields (14)),
  - X - numpy array, AIS feature vectors (w/o normalization), shape=(num_messages, num_features (115)),
  - MMSI - list of MMSI identifier from each AIS message, len=num_messages.
-Creates 00_hyperparameters_ad_wavelet.h5 file, with OK_vec with classification f1 scores.
+Creates 00_hyperparameters_ad_wavelet.h5 file, with OK_vec with classification f1 scores
+    (for each wavelet, algorithm and dataset).
 """
 print("\n---- Hyperparameter tuning - anomaly detection stage - wavelet -------- ")
 
@@ -22,7 +23,7 @@ import sys
 sys.path.append('.')
 from utils.initialization import Data, decode # pylint: disable=import-error
 from utils.clustering import Clustering
-from utils.anomaly_detection import AnomalyDetection, calculate_ad_accuracy
+from utils.anomaly_detection import AnomalyDetection, calculate_ad_metrics
 from utils.miscellaneous import count_number, Corruption
 
 # ----------------------------!!! EDIT HERE !!! ---------------------------------  
@@ -113,8 +114,8 @@ else:  # or run the computations on the original data
                     idx_corr[message_idx] = ad.outliers[message_idx][1]               
                     # Check which fields are damaged
                     field = list(set([sum(field_bits <= bit) for bit in np.sort(bit_idx)]))
-                    accuracies = calculate_ad_accuracy(field, ad.outliers[message_idx][2])
-                    OK_vec2[i,wav_num,alg_num,file_num] = accuracies["f1"]
+                    ad_metrics = calculate_ad_metrics(field, ad.outliers[message_idx][2])
+                    OK_vec2[i,wav_num,alg_num,file_num] = ad_metrics["f1"]
     OK_vec = np.mean(OK_vec2, axis=0)*100
 
 
