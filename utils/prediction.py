@@ -442,17 +442,15 @@ class Prediction:
         elif field in self.fields_dynamic:
             pred = np.round(pred, decimals=self._decimals[self.fields_dynamic.index(field)])
             if field == 5: 
-                if pred < 0: pred = 0
-                elif pred > 102.2: pred = 102.3
-            elif field == 7:
-                if pred < -180: pred = -180
-                elif pred > 180: pred = 181
-            elif field == 8:
-                if pred < -90: pred = -90
-                elif pred > 90: pred = 91
-            elif field == 9:
                 if pred < 0: pred = np.abs(pred)
-                if pred > 359.9: pred = 360
+                if pred > 102.2: pred = 102.3
+            elif field == 7:
+                if pred == -180: pred = 180
+                elif pred < -180 or pred > 180: pred = np.mod(pred, (-180)*np.sign(pred))
+            elif field == 8:
+                if pred < -90 or pred > 90: pred = 90*np.sign(pred) - np.mod(pred, 90*np.sign(pred))
+            elif field == 9:
+                if pred < 0 or pred > 359.9: pred = np.mod(pred, 360)
         return pred
     
 
@@ -465,8 +463,8 @@ def calculate_SMAE(prediction, real, field):
     - field - int, scalar, field to examine. \n
     Returns: calculated SMAE, float, scalar
     """   
-    scale = {2:999999999, 3:15, 5:102.3, 7:360, 8:180, 9:360, 12:2}
-    if field == 9: # for COG
+    scale = {2:999999999, 3:15, 5:102.3, 7:180, 8:180, 9:180, 12:2}
+    if field == 7 or field == 9: # for COG and longitude
         if isinstance(prediction, list) or isinstance(prediction, np.ndarray):
             smae = []
             iterations = len(prediction) if isinstance(prediction, list) else prediction.shape[0]

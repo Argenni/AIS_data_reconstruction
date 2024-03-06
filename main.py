@@ -117,7 +117,7 @@ visualize_trajectories(
 print("\n----------- Part 3 - Prediction ---------- ")
 prediction = Prediction(
     verbose=True,
-    optimize=None, # 'lags', 'max_depth' or 'n_estimators'
+    optimize='lags', # 'lags', 'max_depth' or 'n_estimators'
     prediction_algorithm=prediction_algorithm)
 message_bits_new, message_decoded_new, idx_new =  prediction.find_and_reconstruct_data(
     message_decoded=data.message_decoded, 
