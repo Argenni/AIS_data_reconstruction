@@ -141,14 +141,20 @@ class Prediction:
         if self._prediction_algorithm == 'xgboost':
             for i in [0,1]:
                 for message_idx in range(len(MMSI[i])):
-                    if len(np.where(np.array(MMSI[i]) == MMSI[i][message_idx])[0])>2:
+                    messages_idx = np.where(np.array(MMSI[i]) == MMSI[i][message_idx])[0]
+                    if messages_idx.shape[0]>2:
                         for field in self.fields:
                             variables[i+i][self.fields.index(field)].append(self._create_regressor_sample(self, 
                                 message_decoded=message_decoded[i],
                                 idx=MMSI[i],
                                 message_idx=message_idx,
                                 field=field))
-                            variables[i+i+1][self.fields.index(field)].append(message_decoded[i][message_idx,field])
+                            if field in [7,8]: 
+                                new_message_idx = np.where(messages_idx==message_idx)[0][0]
+                                previous_idx = messages_idx[new_message_idx-1]
+                                variables[i+i+1][self.fields.index(field)].append( # append the difference
+                                message_decoded[i][message_idx,field] - message_decoded[i][previous_idx,field])
+                            else: variables[i+i+1][self.fields.index(field)].append(message_decoded[i][message_idx,field])
         if self._prediction_algorithm == 'ar':
             MMSI = np.concatenate((MMSI[0], MMSI[1]), axis=0)
             message_decoded = np.concatenate((message_decoded[0], message_decoded[1]), axis=0)
@@ -298,7 +304,23 @@ class Prediction:
         - field - scalar, int, a field to examine. \n
         Returns: sample - a numpy-array vector descibing a message for correct, shape=(?,).
         """
-        pass
+        messages_idx = np.where(np.array(idx)==idx[message_idx])[0]
+        new_message_idx = np.where(messages_idx==message_idx)[0][0]
+        if new_message_idx>0: 
+            previous_idx = messages_idx[new_message_idx-1]
+            sample = np.zeros((4))
+            sample[0] = (timestamp[message_idx]-timestamp[previous_idx]).seconds # timestamp difference
+            if field in [7,8]: 
+                if field == 7: sample[1] = message_decoded[message_idx,8]-message_decoded[previous_idx,8]
+                else: sample[1] = message_decoded[message_idx,7]-message_decoded[previous_idx,7]
+                sample[2] = message_decoded[message_idx,5]
+                sample[3] = message_decoded[message_idx,9]
+            else:
+                sample[1] = message_decoded[message_idx,7]-message_decoded[previous_idx,7] # longitude difference
+                sample[2] = message_decoded[message_idx,8]-message_decoded[previous_idx,8] # latitude difference
+                sample[3] = message_decoded[previous_idx,field]
+        else: pred = None
+        return pred
 
     def _predict_ar(self, sample, lags, field):
         """
@@ -419,7 +441,10 @@ class Prediction:
                     elif  field in self.fields_static: pred = np.round(np.mean(sample[:,2]))
         elif self._prediction_algorithm == 'xgboost':
             sample = self._create_regressor_sample(message_decoded, timestamp, idx, message_idx, field)
-            pred = self._regressor[self.fields.index(field)].predict(sample)
+            if sample is None: pred = None
+            else: 
+                pred = self._regressor[self.fields.index(field)].predict(sample)
+                if field == 7 or field == 8: pred = pred + message_decoded[previous_idx, field]
         if pred is not None: pred = self._validate_prediction(pred, field)
         return pred
     
