@@ -40,7 +40,7 @@ np.random.seed(1)  # For reproducibility
 distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
 ad_algorithm = 'xgboost' # 'rf', 'xgboost' or 'LOF'
-prediction_algorithm = 'ar' # 'ar' or 'xgboost'
+prediction_algorithm = 'xgboost' # 'ar' or 'xgboost'
 stage = 'prediction' # 'clustering' or 'ad'
 num_metrics = {'clustering':5, 'ad':4, 'prediction':2}
 num_experiments = {'clustering':1, 'ad':10, 'prediction':10}

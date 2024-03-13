@@ -27,7 +27,7 @@ class Prediction:
     _decimals = [1,4,4,1]
     _prediction_algorithm = 'xgboost'
     _regressor = []
-    _max_depth = 10
+    _max_depth = 15
     _num_estimators = 20
     _lags = 1
     _verbose = []
@@ -102,7 +102,7 @@ class Prediction:
                 self._regressor.append(XGBRegressor(
                     random_state=0,
                     n_estimators=self._num_estimators, 
-                    max_depth=self._max_depth if field_num in [2,3,4,5] else 2)
+                    max_depth=self._max_depth if field_num in [2,3,4,5] else 3)
                     .fit(variables[0][field_num],variables[1][field_num]))
             print(" Complete.")
             # Save
@@ -152,7 +152,7 @@ class Prediction:
                                 field=field)
                             if sample is not None: 
                                 variables[i+i][self.fields.index(field)].append(sample)
-                                if field in [7,8]: 
+                                if field in [2,3,7,8,12]: 
                                     new_message_idx = np.where(messages_idx==message_idx)[0][0]
                                     previous_idx = messages_idx[new_message_idx-1]
                                     variables[i+i+1][self.fields.index(field)].append( # append the difference
@@ -172,7 +172,7 @@ class Prediction:
                         field=self.fields[field_num])
                     if batch.shape[0]>20:
                         variables[0][field_num].append(batch)
-                        if field_num == 3 or field_num == 4: # for lon or lat
+                        if field_num in [0,1,3,4,6]:  # for lon, lat and static
                             previous_idx = np.where(MMSI==MMSI_0)[0][-2]
                             variables[1][field_num].append( # append the difference
                                 message_decoded[message_idx,self.fields[field_num]] - message_decoded[previous_idx,self.fields[field_num]])
@@ -315,36 +315,42 @@ class Prediction:
             previous_idx = messages_idx[new_message_idx-1]
             next_idx = messages_idx[new_message_idx+1]
             if field in [7,8]: 
-                sample = np.zeros((5))
+                sample = np.zeros((7))
                 if field == 7: 
                     sample[0] = message_decoded[message_idx,8]-message_decoded[previous_idx,8]
                     sample[1] = message_decoded[next_idx,8]-message_decoded[message_idx,8]
-                    sample[2] = 1 if message_decoded[message_idx,9]<180 else -1
+                    sample[2] = (message_decoded[next_idx,7]-message_decoded[previous_idx,7])/2
+                    sample[3] = 1 if message_decoded[message_idx,9]<180 else -1
                 else: 
                     sample[0] = message_decoded[message_idx,7]-message_decoded[previous_idx,7]
                     sample[1] = message_decoded[next_idx,7]-message_decoded[message_idx,7]
-                    sample[2] = 1 if message_decoded[message_idx,9]<90 or message_decoded[message_idx,9]>270 else -1
-                sample[3] = message_decoded[message_idx,5]
-                sample[4] = (timestamp[message_idx]-timestamp[previous_idx]).seconds # timestamp difference
+                    sample[2] = (message_decoded[next_idx,8]-message_decoded[previous_idx,8])/2
+                    sample[3] = 1 if message_decoded[message_idx,9]<90 or message_decoded[message_idx,9]>270 else -1
+                sample[4] = message_decoded[message_idx,5]
+                sample[5] = (timestamp[message_idx]-timestamp[previous_idx]).seconds # timestamp difference
+                sample[6] = (timestamp[next_idx]-timestamp[message_idx]).seconds
             elif field == 5:
-                sample = np.zeros((5))
+                sample = np.zeros((8))
                 sample[0] = np.abs(message_decoded[message_idx,7]-message_decoded[previous_idx,7]) # longitude difference
                 sample[1] = np.abs(message_decoded[message_idx,8]-message_decoded[previous_idx,8]) # latitude difference
-                sample[2] = message_decoded[previous_idx,5]
-                sample[3] = message_decoded[next_idx,5]
-                sample[4] = (timestamp[message_idx]-timestamp[previous_idx]).seconds
+                sample[2] = np.abs(message_decoded[next_idx,7]-message_decoded[message_idx,7]) # longitude difference
+                sample[3] = np.abs(message_decoded[next_idx,8]-message_decoded[message_idx,8])
+                sample[4] = message_decoded[previous_idx,5]
+                sample[5] = message_decoded[next_idx,5]
+                sample[6] = (timestamp[message_idx]-timestamp[previous_idx]).seconds
+                sample[7] = (timestamp[next_idx]-timestamp[message_idx]).seconds
             elif field == 9:
                 sample = np.zeros((6))
                 sample[0] = message_decoded[message_idx,7]-message_decoded[previous_idx,7] 
                 sample[1] = message_decoded[message_idx,8]-message_decoded[previous_idx,8]
                 sample[2] = message_decoded[next_idx,7]-message_decoded[message_idx,7] 
                 sample[3] = message_decoded[next_idx,8]-message_decoded[message_idx,8] 
-                sample[4] = message_decoded[previous_idx,5]
-                sample[5] = message_decoded[next_idx,5]
+                sample[4] = message_decoded[previous_idx,9]
+                sample[5] = message_decoded[next_idx,9]
             else:
                 sample = np.zeros((2))
-                sample[0] = message_decoded[previous_idx,field]
-                sample[1] = message_decoded[next_idx,field]
+                sample[0] = (message_decoded[next_idx,field]-message_decoded[previous_idx,field])/2
+                sample[1] = np.std(np.delete(message_decoded[messages_idx,field], new_message_idx, axis=0))
         else: sample = None
         return sample
 
@@ -470,7 +476,7 @@ class Prediction:
             if sample is None: pred = None
             else: 
                 pred = self._regressor[self.fields.index(field)].predict(sample.reshape(1,-1))[0]
-                if field == 7 or field == 8: 
+                if field in [2,3,7,8,12]: 
                     messages_idx = np.where(np.array(idx)==idx[message_idx])[0]
                     new_message_idx = np.where(messages_idx==message_idx)[0][0]
                     previous_idx = messages_idx[new_message_idx-1]
