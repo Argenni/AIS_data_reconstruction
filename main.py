@@ -44,7 +44,7 @@ filename = 'Gdansk.h5' # Gdansk.h5, Gibraltar.h5 or Baltic.h5
 distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
 ad_algorithm = 'xgboost' # 'rf' or 'xgboost'
-prediction_algorithm = 'ar' # 'ar' or 'xgboost'
+prediction_algorithm = 'xgboost' # 'ar' or 'xgboost'
 wavelet = 'morlet' # 'morlet' or 'ricker'
 #--------------------------------------------------------------------------------
 
@@ -117,7 +117,7 @@ visualize_trajectories(
 print("\n----------- Part 3 - Prediction ---------- ")
 prediction = Prediction(
     verbose=True,
-    optimize='lags', # 'lags', 'max_depth' or 'n_estimators'
+    optimize=None, # 'lags', 'max_depth' or 'n_estimators'
     prediction_algorithm=prediction_algorithm)
 message_bits_new, message_decoded_new, idx_new =  prediction.find_and_reconstruct_data(
     message_decoded=data.message_decoded, 

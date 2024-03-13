@@ -27,7 +27,7 @@ class Prediction:
     _decimals = [1,4,4,1]
     _prediction_algorithm = 'xgboost'
     _regressor = []
-    _max_depth = 7
+    _max_depth = 10
     _num_estimators = 20
     _lags = 1
     _verbose = []
@@ -102,7 +102,7 @@ class Prediction:
                 self._regressor.append(XGBRegressor(
                     random_state=0,
                     n_estimators=self._num_estimators, 
-                    max_depth=self._max_depth)
+                    max_depth=self._max_depth if field_num in [2,3,4,5] else 2)
                     .fit(variables[0][field_num],variables[1][field_num]))
             print(" Complete.")
             # Save
@@ -144,17 +144,20 @@ class Prediction:
                     messages_idx = np.where(np.array(MMSI[i]) == MMSI[i][message_idx])[0]
                     if messages_idx.shape[0]>2:
                         for field in self.fields:
-                            variables[i+i][self.fields.index(field)].append(self._create_regressor_sample(self, 
+                            sample = self._create_regressor_sample( 
                                 message_decoded=message_decoded[i],
+                                timestamp=timestamp[i],
                                 idx=MMSI[i],
                                 message_idx=message_idx,
-                                field=field))
-                            if field in [7,8]: 
-                                new_message_idx = np.where(messages_idx==message_idx)[0][0]
-                                previous_idx = messages_idx[new_message_idx-1]
-                                variables[i+i+1][self.fields.index(field)].append( # append the difference
-                                message_decoded[i][message_idx,field] - message_decoded[i][previous_idx,field])
-                            else: variables[i+i+1][self.fields.index(field)].append(message_decoded[i][message_idx,field])
+                                field=field)
+                            if sample is not None: 
+                                variables[i+i][self.fields.index(field)].append(sample)
+                                if field in [7,8]: 
+                                    new_message_idx = np.where(messages_idx==message_idx)[0][0]
+                                    previous_idx = messages_idx[new_message_idx-1]
+                                    variables[i+i+1][self.fields.index(field)].append( # append the difference
+                                    message_decoded[i][message_idx,field] - message_decoded[i][previous_idx,field])
+                                else: variables[i+i+1][self.fields.index(field)].append(message_decoded[i][message_idx,field])
         if self._prediction_algorithm == 'ar':
             MMSI = np.concatenate((MMSI[0], MMSI[1]), axis=0)
             message_decoded = np.concatenate((message_decoded[0], message_decoded[1]), axis=0)
@@ -198,7 +201,9 @@ class Prediction:
                 regressor = []
                 mae_train_field = []
                 mae_val_field = []
-                for field_num in range(len(variables[1])):
+                for field in self.fields_dynamic:
+                    field_num = self.fields.index(field)
+                    field_num_d = self.fields_dynamic.index(field)
                     if hyperparameter == 'max_depth':
                         regressor.append(XGBRegressor(
                             random_state=0, 
@@ -211,9 +216,9 @@ class Prediction:
                             n_estimators=param, 
                             max_depth=self._max_depth,
                             ).fit(variables[0][field_num], variables[1][field_num]))
-                    pred = regressor[field_num].predict(np.array(variables[0][field_num]))
+                    pred = regressor[field_num_d].predict(np.array(variables[0][field_num]))
                     mae_train_field.append(calculate_SMAE(pred, variables[1][field_num], self.fields[field_num]))
-                    pred = regressor[field_num].predict(np.array(variables[2][field_num]))
+                    pred = regressor[field_num_d].predict(np.array(variables[2][field_num]))
                     mae_val_field.append(calculate_SMAE(pred, variables[3][field_num], self.fields[field_num]))
                 mae_train.append(np.mean(mae_train_field))
                 mae_val.append(np.mean(mae_val_field))
@@ -306,21 +311,42 @@ class Prediction:
         """
         messages_idx = np.where(np.array(idx)==idx[message_idx])[0]
         new_message_idx = np.where(messages_idx==message_idx)[0][0]
-        if new_message_idx>0: 
+        if 0 < new_message_idx < (messages_idx.shape[0]-1): 
             previous_idx = messages_idx[new_message_idx-1]
-            sample = np.zeros((4))
-            sample[0] = (timestamp[message_idx]-timestamp[previous_idx]).seconds # timestamp difference
+            next_idx = messages_idx[new_message_idx+1]
             if field in [7,8]: 
-                if field == 7: sample[1] = message_decoded[message_idx,8]-message_decoded[previous_idx,8]
-                else: sample[1] = message_decoded[message_idx,7]-message_decoded[previous_idx,7]
-                sample[2] = message_decoded[message_idx,5]
-                sample[3] = message_decoded[message_idx,9]
+                sample = np.zeros((5))
+                if field == 7: 
+                    sample[0] = message_decoded[message_idx,8]-message_decoded[previous_idx,8]
+                    sample[1] = message_decoded[next_idx,8]-message_decoded[message_idx,8]
+                    sample[2] = 1 if message_decoded[message_idx,9]<180 else -1
+                else: 
+                    sample[0] = message_decoded[message_idx,7]-message_decoded[previous_idx,7]
+                    sample[1] = message_decoded[next_idx,7]-message_decoded[message_idx,7]
+                    sample[2] = 1 if message_decoded[message_idx,9]<90 or message_decoded[message_idx,9]>270 else -1
+                sample[3] = message_decoded[message_idx,5]
+                sample[4] = (timestamp[message_idx]-timestamp[previous_idx]).seconds # timestamp difference
+            elif field == 5:
+                sample = np.zeros((5))
+                sample[0] = np.abs(message_decoded[message_idx,7]-message_decoded[previous_idx,7]) # longitude difference
+                sample[1] = np.abs(message_decoded[message_idx,8]-message_decoded[previous_idx,8]) # latitude difference
+                sample[2] = message_decoded[previous_idx,5]
+                sample[3] = message_decoded[next_idx,5]
+                sample[4] = (timestamp[message_idx]-timestamp[previous_idx]).seconds
+            elif field == 9:
+                sample = np.zeros((6))
+                sample[0] = message_decoded[message_idx,7]-message_decoded[previous_idx,7] 
+                sample[1] = message_decoded[message_idx,8]-message_decoded[previous_idx,8]
+                sample[2] = message_decoded[next_idx,7]-message_decoded[message_idx,7] 
+                sample[3] = message_decoded[next_idx,8]-message_decoded[message_idx,8] 
+                sample[4] = message_decoded[previous_idx,5]
+                sample[5] = message_decoded[next_idx,5]
             else:
-                sample[1] = message_decoded[message_idx,7]-message_decoded[previous_idx,7] # longitude difference
-                sample[2] = message_decoded[message_idx,8]-message_decoded[previous_idx,8] # latitude difference
-                sample[3] = message_decoded[previous_idx,field]
-        else: pred = None
-        return pred
+                sample = np.zeros((2))
+                sample[0] = message_decoded[previous_idx,field]
+                sample[1] = message_decoded[next_idx,field]
+        else: sample = None
+        return sample
 
     def _predict_ar(self, sample, lags, field):
         """
@@ -443,8 +469,12 @@ class Prediction:
             sample = self._create_regressor_sample(message_decoded, timestamp, idx, message_idx, field)
             if sample is None: pred = None
             else: 
-                pred = self._regressor[self.fields.index(field)].predict(sample)
-                if field == 7 or field == 8: pred = pred + message_decoded[previous_idx, field]
+                pred = self._regressor[self.fields.index(field)].predict(sample.reshape(1,-1))[0]
+                if field == 7 or field == 8: 
+                    messages_idx = np.where(np.array(idx)==idx[message_idx])[0]
+                    new_message_idx = np.where(messages_idx==message_idx)[0][0]
+                    previous_idx = messages_idx[new_message_idx-1]
+                    pred = pred + message_decoded[previous_idx, field]
         if pred is not None: pred = self._validate_prediction(pred, field)
         return pred
     
