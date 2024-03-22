@@ -184,7 +184,7 @@ else:  # or run the computations
                                             message_idx=messages[n],
                                             field=field)
                                         mae_pred.append(calculate_SMAE(
-                                            prediction=pred,
+                                            prediction=pred if pred is not None else message_decoded_corr[messages[n],field],
                                             real=data.message_decoded[messages[n], field],
                                             field=field))
                                         mae_ad.append(calculate_SMAE(

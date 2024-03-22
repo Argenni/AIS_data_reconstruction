@@ -33,7 +33,7 @@ distance = 'euclidean'
 stage = 'prediction' # 'clustering', 'ad' or 'prediction'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
 ad_algorithm = 'xgboost' # 'rf' or 'xgboost'
-prediction_algorithm = 'ar' # 'ar' or 'xgboost'
+prediction_algorithm = 'xgboost' # 'ar' or 'xgboost'
 num_metrics = 3
 num_experiments = 20
 # --------------------------------------------------------------------------------
@@ -96,7 +96,7 @@ else:  # or run the computations on the original data
         corruption.reset()
         OK_vec2 = np.zeros((num_metrics, num_experiments))  # choose messages
         if stage != "clustering": field = sum(field_bits <= bit)  # check to which field the damaged bit belong to
-        for j in range(20):  # for each chosen message:
+        for j in range(num_experiments):  # for each chosen message:
             # damage its bit
             X_corr = copy.deepcopy(data.Xraw)
             MMSI_corr = copy.deepcopy(data.MMSI)
@@ -155,7 +155,7 @@ else:  # or run the computations on the original data
                             message_idx=message_idx,
                             field=field)
                     OK_vec2[1,j] = calculate_SMAE(
-                        prediction=pred,
+                        prediction=pred if pred is not None else message_decoded_corr[message_idx,field],
                         real=data.message_decoded[message_idx,field],
                         field=field)
                     message_decoded_new, idx_new = prediction.find_and_reconstruct_data(
