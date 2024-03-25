@@ -34,7 +34,7 @@ np.random.seed(1)  # For reproducibility
 distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
 ad_algorithm = 'xgboost' # 'rf' or 'xgboost'
-prediction_algorithm = 'ar' # 'ar' or  'xgboost'
+prediction_algorithm = 'xgboost' # 'ar' or  'xgboost'
 stage = 'prediction' # 'clustering', 'ad' or 'prediction'
 if stage == 'clustering': percentages =  [0, 5, 10, 20]
 else: percentages = [5, 10, 20]
@@ -255,6 +255,6 @@ else:
     elif stage == 'prediction':
         if os.path.exists('research_and_results/03_timecomp_prediction_'+prediction_algorithm+'.h5'):
             os.remove('research_and_results/03_timecomp_prediction_'+prediction_algorithm+'.h5')
-        file = h5py.File('research_and_results/03_timecomp_prediction+'+prediction_algorithm+'.h5', mode='a')
+        file = h5py.File('research_and_results/03_timecomp_prediction_'+prediction_algorithm+'.h5', mode='a')
     file.create_dataset('OK_vec', data=OK_vec)
     file.close()
