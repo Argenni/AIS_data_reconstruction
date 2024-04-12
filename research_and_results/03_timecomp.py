@@ -19,6 +19,7 @@ import h5py
 import matplotlib.pyplot as plt
 from sklearn.metrics import f1_score, silhouette_score
 plt.rcParams.update({'font.size': 14})
+import timeit
 import copy
 import os
 import sys
@@ -34,8 +35,8 @@ np.random.seed(1)  # For reproducibility
 distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
 ad_algorithm = 'xgboost' # 'rf' or 'xgboost'
-prediction_algorithm = 'xgboost' # 'ar' or  'xgboost'
-stage = 'prediction' # 'clustering', 'ad' or 'prediction'
+prediction_algorithm = 'ar' # 'ar' or  'xgboost'
+stage = 'all' # 'clustering', 'ad', 'prediction' or 'all' 
 if stage == 'clustering': percentages =  [0, 5, 10, 20]
 else: percentages = [5, 10, 20]
 windows = [5, 10, 15, 20, 30, 60, 120]
@@ -57,6 +58,8 @@ if precomputed == '2':  # Load file with precomputed values
         file = h5py.File(name='research_and_results/03_timecomp_' + ad_algorithm+'.h5', mode='r')
     elif stage == 'prediction':
         file = h5py.File(name='research_and_results/03_timecomp_prediction_' + prediction_algorithm+'.h5', mode='r')
+    elif stage == 'all':
+        file = h5py.File(name='research_and_results/03_timecomp_time_' + prediction_algorithm+'.h5', mode='r')
     OK_vec = np.array(file.get('OK_vec'))
     file.close()
 
@@ -70,13 +73,16 @@ else:  # or run the computations
     field_bits = np.array([6, 8, 38, 42, 50, 60, 61, 89, 116, 128, 137, 143, 145, 148])  # range of fields
     measure1 = []
     measure2 = []
+    if stage == 'all': measure3 = []
     slides=np.zeros((len(windows),len(filename)))
     for file_num in range(len(filename)):
         measure1.append([]) # First index - for a filename
         measure2.append([])
+        if stage == 'all': measure3.append([])
         for percentage_num in range(len(percentages)):
             measure1[file_num].append([]) # Second index - for percentage of damaged messages
             measure2[file_num].append([])
+            if stage == 'all': measure3[file_num].append([])
         # Load the data from the right file
         file = h5py.File(name='data/' + filename[file_num], mode='r')
         data_original = Data(file)
@@ -92,9 +98,11 @@ else:  # or run the computations
             for percentage_num in range(len(percentages)):        
                 measure1[file_num][percentage_num].append([]) # Third index - for window
                 measure2[file_num][percentage_num].append([])
+                if stage == 'all': measure3[file_num][percentage_num].append([])
                 if windows[window_num] > overall_time: 
                     measure1[file_num][percentage_num][window_num].append(0)
                     measure2[file_num][percentage_num][window_num].append(0)
+                    if stage == 'all': measure3[file_num][percentage_num][window_num].append(0)
             if windows[window_num] <= overall_time: 
                 start = 0
                 stop = start + windows[window_num]
@@ -128,6 +136,7 @@ else:  # or run the computations
                                 MMSI_corr[message_idx] = MMSI_0
                                 message_decoded_corr[message_idx,:] = message_decoded_0
                             # Preprocess data
+                            if stage == 'all': tic = timeit.default_timer()
                             _, MMSI_vec = count_number(data.MMSI)                
                             K, MMSI_corr_vec = count_number(MMSI_corr)  # Count number of groups/ships
                             Xcorr, _, _ = data.standardize(Xraw_corr) 
@@ -136,6 +145,7 @@ else:  # or run the computations
                                 idx_corr, _ = clustering.run_kmeans(X=Xcorr,K=K)
                             elif clustering_algorithm == 'DBSCAN':
                                 idx_corr, K = clustering.run_DBSCAN(X=Xcorr,distance=distance)
+                            if stage == 'all': toc1 = timeit.default_timer() - tic
                             # Run anomaly detection if needed 
                             if stage != 'clustering':
                                 ad = AnomalyDetection(ad_algorithm=ad_algorithm)
@@ -148,7 +158,8 @@ else:  # or run the computations
                                     idx=idx_corr,
                                     message_decoded=message_decoded_corr,
                                     timestamp=data.timestamp)
-                            if stage == 'prediction': # Perform prediction if needed
+                                if stage == 'all': toc2 = timeit.default_timer() - tic
+                            if stage == 'prediction' or stage == 'all': # Perform prediction if needed
                                 prediction = Prediction(prediction_algorithm=prediction_algorithm)
                                 message_decoded_new, idx_new = prediction.find_and_reconstruct_data(
                                     message_decoded=message_decoded_corr, 
@@ -157,6 +168,7 @@ else:  # or run the computations
                                     timestamp=data.timestamp,
                                     outliers=ad.outliers,
                                     if_bits=False)
+                                if stage == 'all': toc3 = timeit.default_timer() - tic
                             # Compute quality measures
                             if stage == 'clustering':
                                 if count_number(idx_corr)[0]<Xcorr.shape[0]:
@@ -193,6 +205,10 @@ else:  # or run the computations
                                             field=field))
                                 measure1[file_num][percentage_num][window_num].append(np.mean(mae_pred))
                                 measure2[file_num][percentage_num][window_num].append(np.mean(mae_ad))
+                            elif stage == 'all':
+                                measure1[file_num][percentage_num][window_num].append(toc1)
+                                measure2[file_num][percentage_num][window_num].append(toc2)
+                                measure3[file_num][percentage_num][window_num].append(toc3)
                         slides[window_num,file_num] = slides[window_num,file_num]+1
                     # Slide the time window
                     if windows[window_num] == 5: 
@@ -203,41 +219,60 @@ else:  # or run the computations
                         stop = stop + np.ceil(windows[window_num]/2)
 
     # Compute final results                              
-    OK_vec = np.zeros((len(percentages), len(windows), 2)) # For computed quality measures for each time window length
+    OK_vec = np.zeros((len(percentages), len(windows), 3 if stage=='all' else 2)) # For computed quality measures for each time window length
     cum_slides = np.sum(slides, axis=1).reshape(len(windows),-1)
-    cum_measures =  np.zeros((2,len(percentages),len(windows),len(filename)))
+    cum_measures =  np.zeros((3 if stage=='all' else 2, len(percentages), len(windows), len(filename)))
     for percentage_num in range(len(percentages)):
         for window_num in range(len(windows)):
             for file_num in range(len(filename)):
                 cum_measures[0,percentage_num,window_num,file_num] = np.sum(measure1[file_num][percentage_num][window_num])
                 cum_measures[1,percentage_num,window_num,file_num] = np.sum(measure2[file_num][percentage_num][window_num])
+                if stage=='all': cum_measures[2,percentage_num,window_num,file_num] = np.sum(measure3[file_num][percentage_num][window_num])
             if cum_slides[window_num]:
                 OK_vec[percentage_num,window_num,0] = np.sum(cum_measures[0,percentage_num,window_num,:])/cum_slides[window_num] 
-                OK_vec[percentage_num,window_num,1] = np.sum(cum_measures[1,percentage_num,window_num,:])/cum_slides[window_num]     
+                OK_vec[percentage_num,window_num,1] = np.sum(cum_measures[1,percentage_num,window_num,:])/cum_slides[window_num] 
+                if stage=='all':  OK_vec[percentage_num,window_num,2] = np.sum(cum_measures[2,percentage_num,window_num,:])/cum_slides[window_num]
 
 
 # Visualize
 print(" Complete.")
-fig, ax = plt.subplots(nrows=2)
-for i in range(2):
+if stage != 'all':
+    fig, ax = plt.subplots(nrows=2)
+    for i in range(2):
+        legend = []
+        for percentage_num in range(len(percentages)):
+            ax[i].plot(windows,OK_vec[percentage_num,:,i])
+            legend.append(str(percentages[percentage_num])+"% messages damaged")
+        ax[i].set_xlabel("Time frame length [min]")
+        ax[i].spines['top'].set_visible(False)
+        ax[i].spines['right'].set_visible(False)
+    if stage == 'clustering': 
+        ax[0].set_ylabel("Silhouette")
+        ax[1].set_ylabel("Correctness coefficient")
+    elif stage == 'ad': 
+        ax[0].set_ylabel("F1 - messages")
+        ax[1].set_ylabel("F1 - fields")
+    elif stage  == 'prediction':
+        ax[0].set_ylabel("SMAE - pure prediction")
+        ax[1].set_ylabel("SMAE - with anomaly detection ")
+    fig.legend(legend, loc=9)
+    fig.show()
+else:
+    fig, ax = plt.subplots()
     legend = []
-    for percentage_num in range(len(percentages)):
-        ax[i].plot(windows,OK_vec[percentage_num,:,i])
-        legend.append(str(percentages[percentage_num])+"% messages damaged")
-    ax[i].set_xlabel("Time frame length [min]")
-    ax[i].spines['top'].set_visible(False)
-    ax[i].spines['right'].set_visible(False)
-if stage == 'clustering': 
-    ax[0].set_ylabel("Silhouette")
-    ax[1].set_ylabel("Correctness coefficient")
-elif stage == 'ad': 
-    ax[0].set_ylabel("F1 - messages")
-    ax[1].set_ylabel("F1 - fields")
-elif stage  == 'prediction':
-    ax[0].set_ylabel("SMAE - pure prediction")
-    ax[1].set_ylabel("SMAE - with anomaly detection ")
-fig.legend(legend, loc=9)
-fig.show()
+    stages = {0:"clustering", 1:"anomaly detection", 2:"prediction"}
+    linestyles = {0:"-", 1:"--", 2:":"}
+    colors = {0:'b', 1:'r', 2:'g'}
+    for i in range(3):
+        for percentage_num in range(len(percentages)):
+            ax.plot(windows,OK_vec[percentage_num,:,i], linestyle=linestyles[i], color=colors[percentage_num])
+            legend.append(str(percentages[percentage_num])+"% messages damaged, "+stages[i])
+    ax.set_xlabel("Time frame length [min]")
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.set_ylabel("Average elapsed time [s]")
+    fig.legend(legend, loc=9)
+    fig.show()
 
 # Save the results
 if precomputed == '2':
@@ -256,5 +291,9 @@ else:
         if os.path.exists('research_and_results/03_timecomp_prediction_'+prediction_algorithm+'.h5'):
             os.remove('research_and_results/03_timecomp_prediction_'+prediction_algorithm+'.h5')
         file = h5py.File('research_and_results/03_timecomp_prediction_'+prediction_algorithm+'.h5', mode='a')
+    elif stage == 'all':
+        if os.path.exists('research_and_results/03_timecomp_time_'+prediction_algorithm+'.h5'):
+            os.remove('research_and_results/03_timecomp_time_'+prediction_algorithm+'.h5')
+        file = h5py.File('research_and_results/03_timecomp_time_'+prediction_algorithm+'.h5', mode='a')
     file.create_dataset('OK_vec', data=OK_vec)
     file.close()
