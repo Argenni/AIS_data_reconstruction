@@ -230,7 +230,6 @@ class Prediction:
                     y_pred = []
                     y_true = []
                     for trajectory in range(len(variables[1][field_num])):
-                        #pred = self._predict_ar(variables[0][field_num][trajectory], param, self.fields[field_num])
                         pred = self._validate_prediction(
                             pred=self._predict_ar(variables[0][field_num][trajectory], param, self.fields[field_num]),
                             field=self.fields[field_num])
@@ -241,8 +240,10 @@ class Prediction:
         print(" Complete. ")
         fig, ax = plt.subplots()
         ax.plot(params, mae_train, color='k')
+        ax.scatter(params, mae_train, color='k', s=6)
         if self._prediction_algorithm == 'xgboost': 
             ax.plot(params, mae_val, color='b')
+            ax.scatter(params, mae_val, color='b', s=6)
             ax.legend(["Training set", "Validation set"])
         ax.set_title("SMAE vs " + hyperparameter)
         ax.set_xlabel(hyperparameter)

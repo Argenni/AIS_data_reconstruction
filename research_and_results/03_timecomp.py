@@ -35,7 +35,7 @@ np.random.seed(1)  # For reproducibility
 distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
 ad_algorithm = 'xgboost' # 'rf' or 'xgboost'
-prediction_algorithm = 'ar' # 'ar' or  'xgboost'
+prediction_algorithm = 'xgboost' # 'ar' or  'xgboost'
 stage = 'all' # 'clustering', 'ad', 'prediction' or 'all' 
 if stage == 'clustering': percentages =  [0, 5, 10, 20]
 else: percentages = [5, 10, 20]
@@ -236,12 +236,14 @@ else:  # or run the computations
 
 # Visualize
 print(" Complete.")
+colors = {0:'b', 1:'r', 2:'g', 3:'k'}
 if stage != 'all':
     fig, ax = plt.subplots(nrows=2)
     for i in range(2):
         legend = []
         for percentage_num in range(len(percentages)):
-            ax[i].plot(windows,OK_vec[percentage_num,:,i])
+            ax[i].plot(windows,OK_vec[percentage_num,:,i], color=colors[percentage_num])
+            ax[i].scatter(windows,OK_vec[percentage_num,:,i], color=colors[percentage_num], s=6)
             legend.append(str(percentages[percentage_num])+"% messages damaged")
         ax[i].set_xlabel("Time frame length [min]")
         ax[i].spines['top'].set_visible(False)
@@ -262,10 +264,10 @@ else:
     legend = []
     stages = {0:"clustering", 1:"anomaly detection", 2:"prediction"}
     linestyles = {0:"-", 1:"--", 2:":"}
-    colors = {0:'b', 1:'r', 2:'g'}
     for i in range(3):
         for percentage_num in range(len(percentages)):
             ax.plot(windows,OK_vec[percentage_num,:,i], linestyle=linestyles[i], color=colors[percentage_num])
+            ax.scatter(windows,OK_vec[percentage_num,:,i], color=colors[percentage_num], s=6)
             legend.append(str(percentages[percentage_num])+"% messages damaged, "+stages[i])
     ax.set_xlabel("Time frame length [min]")
     ax.spines['top'].set_visible(False)

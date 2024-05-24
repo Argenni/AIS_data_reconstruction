@@ -39,7 +39,7 @@ distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
 ad_algorithm = 'xgboost' # 'rf', 'xgboost' or 'threshold' (only for 1-element-cluster anomaly detection) 
 prediction_algorithm = 'xgboost' # 'ar' or 'xgboost'
-stage = 'prediction' # 'clustering', 'ad_1element', 'ad_multielement' or 'prediction'
+stage = 'clustering' # 'clustering', 'ad_1element', 'ad_multielement' or 'prediction'
 num_metrics = {'clustering':2, 'ad_1element':5, 'ad_multielement':4, 'prediction':1}
 num_bits = {'clustering':10, 'ad_1element':2, 'ad_multielement':2, 'prediction':7}
 num_experiment = {'clustering':50, 'ad_1element':100, 'ad_multielement':100, 'prediction':50}
@@ -324,8 +324,9 @@ print(" Complete.")
 if stage=='clustering': 
     fig, ax = plt.subplots()
     ax.plot(np.arange(OK_vec.shape[1])+1, OK_vec[0,:,0], color='r')
+    ax.scatter(np.arange(OK_vec.shape[1])+1, OK_vec[0,:,0], color='r', s=6)
     ax.plot(np.arange(OK_vec.shape[1])+1, OK_vec[0,:,1], color='b')
-    #ax.set_title("Percentage of correctly assigned messages vs amount of damaged bits")
+    ax.scatter(np.arange(OK_vec.shape[1])+1, OK_vec[0,:,1], color='b', s=6)
     ax.set_xlabel("Amount of damaged bits")
     ax.set_ylabel("Percentage of correctly assigned messages [%]")
     ax.legend(["DBSCAN", "k-means"])

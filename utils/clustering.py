@@ -32,7 +32,7 @@ class Clustering:
         Arguments: 
         - X - numpy array with dataset to cluster, shape=(num_message, num_features (115)),
         - K - scalar, int, desired number of clusters,
-        - optimize - (optional) string, name of k-means hyperparameter to optimize ('K), 
+        - optimize - (optional) string, name of k-means hyperparameter to optimize ('K'), 
             default=None (no optimization), 
         - MMSI (optional) - list of MMSI identifiers from each AIS message, len=num_messages
             (for hyperparameter tuning; only required if optimize!=None). \n\n
@@ -82,16 +82,19 @@ class Clustering:
         ax[0].plot(Ks[0:K-1], np.ones((K-1))*silhouettes[K-2], color='r', linestyle='dashed')
         ax[0].vlines(x=K, ymin=min(silhouettes), ymax=silhouettes[K-2], color='r', linestyle='dashed')
         ax[0].plot(Ks, silhouettes, color='k')
+        ax[0].scatter(Ks, silhouettes, color='k', s=6)
         ax[0].set_title("Average silhouette vs K")
         ax[0].set_xlabel("Number of clusters")
         ax[0].set_ylabel("Average silhouette")
         ax[1].plot(Ks[0:K-1], np.ones((K-1))*CCs[K-2], color='r', linestyle='dashed')
         ax[1].vlines(x=K, ymin=min(CCs), ymax=CCs[K-2], color='r', linestyle='dashed')
         ax[1].plot(Ks, CCs, color='k')
+        ax[1].scatter(Ks, CCs, color='k', s=6)
         ax[1].set_title("Correctness coeff. vs K")
         ax[1].set_xlabel("Number of clusters")
         ax[1].set_ylabel("Correctness coeff.")
         ax[2].plot(Ks, costs, color='k')
+        ax[2].scatter(Ks, costs, color='k', s=6)
         ax[2].set_title("Average cost vs K")
         ax[2].set_xlabel("Number of clusters")
         ax[2].set_ylabel("Average cost")
@@ -165,14 +168,17 @@ class Clustering:
         # Plot
         fig, ax = plt.subplots(ncols=3)
         ax[0].plot(params, silhouettes, color='k')
+        ax[0].scatter(params, silhouettes, color='k', s=6)
         ax[0].set_title("Average silhouettes vs " + hyperparameter)
         ax[0].set_xlabel(hyperparameter)
         ax[0].set_ylabel("Average silhouette")
         ax[1].plot(params, CCs, color='k')
+        ax[1].scatter(params, CCs, color='k', s=6)
         ax[1].set_title("CC vs " + hyperparameter)
         ax[1].set_xlabel(hyperparameter)
         ax[1].set_ylabel("CC")
         ax[2].plot(params, clusters, color='k')
+        ax[2].scatter(params, clusters, color='k', s=6)
         ax[2].plot(params, np.ones((len(params)))*MMSIs, color='r')
         ax[2].set_title("No. clusters vs " + hyperparameter)
         ax[2].set_xlabel(hyperparameter)
