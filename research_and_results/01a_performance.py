@@ -39,7 +39,7 @@ distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
 ad_algorithm = 'xgboost' # 'rf', 'xgboost' or 'threshold' (only for 1-element-cluster anomaly detection) 
 prediction_algorithm = 'xgboost' # 'ar' or 'xgboost'
-stage = 'clustering' # 'clustering', 'ad_1element', 'ad_multielement' or 'prediction'
+stage = 'prediction' # 'clustering', 'ad_1element', 'ad_multielement' or 'prediction'
 num_metrics = {'clustering':2, 'ad_1element':5, 'ad_multielement':4, 'prediction':1}
 num_bits = {'clustering':10, 'ad_1element':2, 'ad_multielement':2, 'prediction':7}
 num_experiment = {'clustering':50, 'ad_1element':100, 'ad_multielement':100, 'prediction':50}
@@ -297,6 +297,7 @@ else:  # or run the computations
                 elif stage=='prediction':
                     OK_vec[file_num, num_bit, 0, i] = calculate_SMAE(pred, data.message_decoded[message_idx,field], field)
                     if np.mean(data.message_decoded[np.array(data.MMSI)==data.MMSI[message_idx],5]) > 0.1 and visualized==False:
+                        plt.rcParams.update({'font.size': 28})
                         fig, ax = plt.subplots()
                         indices = np.zeros_like(data.MMSI)
                         indices[message_idx] = 1

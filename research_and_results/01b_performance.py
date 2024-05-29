@@ -21,10 +21,8 @@ print("\n----------- AIS data reconstruction performance - given percentage of d
 # Important imports
 import numpy as np
 import h5py
-import matplotlib.pyplot as plt
 from sklearn.metrics import silhouette_score, precision_score, recall_score
 from sklearn.neighbors import LocalOutlierFactor
-plt.rcParams.update({'font.size': 16})
 import copy
 import os
 import sys
@@ -41,7 +39,7 @@ distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
 ad_algorithm = 'xgboost' # 'rf', 'xgboost' or 'LOF'
 prediction_algorithm = 'xgboost' # 'ar' or 'xgboost'
-stage = 'prediction' # 'clustering' or 'ad'
+stage = 'prediction' # 'clustering', 'ad' or 'prediction'
 num_metrics = {'clustering':5, 'ad':4, 'prediction':2}
 num_experiments = {'clustering':1, 'ad':10, 'prediction':10}
 if stage == 'clustering': percentages = [0]

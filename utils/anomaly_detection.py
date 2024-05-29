@@ -10,7 +10,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import f1_score
 from scipy import signal
 import matplotlib.pyplot as plt
-plt.rcParams.update({'font.size': 16})
+plt.rcParams.update({'font.size': 24})
 import h5py
 import copy
 import pickle

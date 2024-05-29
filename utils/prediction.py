@@ -6,7 +6,7 @@ import numpy as np
 from xgboost import XGBRegressor
 import statsmodels.api as sm
 import matplotlib.pyplot as plt
-plt.rcParams.update({'font.size': 16})
+plt.rcParams.update({'font.size': 24})
 import copy
 import h5py
 import pickle

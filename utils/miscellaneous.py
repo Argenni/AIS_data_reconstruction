@@ -4,6 +4,7 @@ Functions and classes used in miscellaneous stages of AIS message reconstruction
 
 import numpy as np
 import matplotlib.pyplot as plt
+plt.rcParams.update({'font.size': 26})
 import datetime
 import copy
 
