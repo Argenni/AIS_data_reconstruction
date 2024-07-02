@@ -17,6 +17,7 @@ print("\n----------- AIS data reconstruction performance - statistical tests ---
 import numpy as np
 import h5py
 from sklearn.metrics import silhouette_score
+from scipy.stats import wilcoxon
 import copy
 import os
 import sys
@@ -168,9 +169,15 @@ else:  # or run the computations
 
     # Perform true test
     OK_vec = np.zeros((len(filename), len(percentages), 2))
-    # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    # to do 
-    # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    for file_num in len(filename):
+        for percentage_num in len(percentages):
+            test = wilcoxon(
+                x=OK_vec1[file_num, percentage_num, 0, :],
+                y=OK_vec1[file_num, percentage_num, 1, :],
+                alternative='less'
+            )
+            OK_vec[file_num, percentage_num, 0] = test.statistic
+            OK_vec[file_num, percentage_num, 1] = test.pvalue
 
 # Visualisation
 print(" Complete.")
