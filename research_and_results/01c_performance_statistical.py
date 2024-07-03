@@ -31,7 +31,7 @@ from utils.miscellaneous import count_number, Corruption
 # ----------------------------!!! EDIT HERE !!! ---------------------------------  
 np.random.seed(1)  # For reproducibility
 distance = 'euclidean'
-stage = 'prediction' # 'clustering', 'ad' or 'prediction'
+stage = 'ad' # 'clustering', 'ad' or 'prediction'
 num_metrics = 2
 num_experiments = 10
 percentages = [5, 10]
@@ -52,13 +52,14 @@ if precomputed == '2':  # Load file with precomputed values
     elif stage == 'ad': file = h5py.File(name='research_and_results/01c_performance_ad.h5', mode='r')
     elif stage == 'prediction': file = h5py.File(name='research_and_results/01c_performance_prediction.h5', mode='r')
     OK_vec = np.array(file.get('OK_vec'))
+    OK_vec1 = np.array(file.get('measurements'))
     file.close()
 
 else:  # or run the computations
     filename = ['Gdansk.h5', 'Baltic.h5', 'Gibraltar.h5']
     bits = np.array(np.arange(8,42).tolist() + np.arange(50,60).tolist() + np.arange(61,128).tolist() + np.arange(143,145).tolist())
     field_bits = np.array([6, 8, 38, 42, 50, 60, 61, 89, 116, 128, 137, 143, 145, 148])  # range of fields
-    OK_vec1 = np.zeros((len(filename), len(percentages), 2, num_experiments[stage]))
+    OK_vec1 = np.zeros((len(filename), len(percentages), 2, num_experiments))
     for file_num in range(len(filename)):
         print(" Analysing " + str(file_num+1) + ". dataset...")
         file = h5py.File(name='data/' + filename[file_num], mode='r')
@@ -73,7 +74,7 @@ else:  # or run the computations
         # Damage selected messages 
         for percentage_num in range(len(percentages)):
             np.random.seed(1)
-            for i in range(num_experiments[stage]):  # For each of the randomly chosen AIS messages
+            for i in range(num_experiments):  # For each of the randomly chosen AIS messages
                 Xraw_corr = copy.deepcopy(data.Xraw)
                 MMSI_corr = copy.deepcopy(data.MMSI)
                 message_decoded_corr = copy.deepcopy(data.message_decoded)
@@ -145,8 +146,8 @@ else:  # or run the computations
                         OK_vec1[file_num, percentage_num, 0, i] = np.mean(f1)
                         
                     if stage == 'prediction':
-                        prediction_algorithm = ['ar', 'xgboost']
-                        for alg_num in range(2):
+                        prediction_algorithm = ['xgboost', 'ar']
+                        for alg_num in range(len(prediction_algorithm)):
                             prediction = Prediction(prediction_algorithm=prediction_algorithm[alg_num])
                             message_decoded_new, idx_new = prediction.find_and_reconstruct_data(
                                 message_decoded=message_decoded_corr, 
@@ -169,12 +170,12 @@ else:  # or run the computations
 
     # Perform true test
     OK_vec = np.zeros((len(filename), len(percentages), 2))
-    for file_num in len(filename):
-        for percentage_num in len(percentages):
+    for file_num in range(len(filename)):
+        for percentage_num in range(len(percentages)):
             test = wilcoxon(
-                x=OK_vec1[file_num, percentage_num, 0, :],
-                y=OK_vec1[file_num, percentage_num, 1, :],
-                alternative='less'
+                x=OK_vec1[file_num, percentage_num, 1, :],
+                y=OK_vec1[file_num, percentage_num, 0, :],
+                alternative='greater'
             )
             OK_vec[file_num, percentage_num, 0] = test.statistic
             OK_vec[file_num, percentage_num, 1] = test.pvalue
@@ -182,19 +183,19 @@ else:  # or run the computations
 # Visualisation
 print(" Complete.")
 print(" With 5% messages damaged:")
-print(" - Gdansk - statistic: " + str(round(OK_vec[0,0,0]),4) + ", pvalue: " + str(round(OK_vec[0,0,1]),4) + ", null hypothesis " 
-      + "proven" if OK_vec[0,0,1]>significance else "rejected")
-print(" - Baltic - statistic: " + str(round(OK_vec[1,0,0]),4) + ", pvalue: " + str(round(OK_vec[1,0,1]),4) + ", null hypothesis " 
-      + "proven" if OK_vec[1,0,1]>significance else "rejected")
-print(" - Gibral - statistic: " + str(round(OK_vec[2,0,0]),4) + ", pvalue: " + str(round(OK_vec[2,0,1]),4) + ", null hypothesis " 
-      + "proven" if OK_vec[2,0,1]>significance else "rejected")
+print(" - Gdansk - statistic: " + str(round(OK_vec[0,0,0],4)) + ", pvalue: " + str(round(OK_vec[0,0,1],4)) + ", null hypothesis " 
+      + ("proven" if OK_vec[0,0,1]>significance else "rejected"))
+print(" - Baltic - statistic: " + str(round(OK_vec[1,0,0],4)) + ", pvalue: " + str(round(OK_vec[1,0,1],4)) + ", null hypothesis " 
+      + ("proven" if OK_vec[1,0,1]>significance else "rejected"))
+print(" - Gibral - statistic: " + str(round(OK_vec[2,0,0],4)) + ", pvalue: " + str(round(OK_vec[2,0,1],4)) + ", null hypothesis " 
+      + ("proven" if OK_vec[2,0,1]>significance else "rejected"))
 print(" With 10% messages damaged:")
-print(" - Gdansk - statistic: " + str(round(OK_vec[0,1,0]),4) + ", pvalue: " + str(round(OK_vec[0,1,1]),4) + ", null hypothesis " 
-      + "proven" if OK_vec[0,1,1]>significance else "rejected")
-print(" - Baltic - statistic: " + str(round(OK_vec[1,1,0]),4) + ", pvalue: " + str(round(OK_vec[1,1,1]),4) + ", null hypothesis " 
-      + "proven" if OK_vec[1,1,1]>significance else "rejected")
-print(" - Gibral - statistic: " + str(round(OK_vec[2,1,0]),4) + ", pvalue: " + str(round(OK_vec[2,1,1]),4) + ", null hypothesis " 
-      + "proven" if OK_vec[2,1,1]>significance else "rejected")
+print(" - Gdansk - statistic: " + str(round(OK_vec[0,1,0],4)) + ", pvalue: " + str(round(OK_vec[0,1,1],4)) + ", null hypothesis " 
+      + ("proven" if OK_vec[0,1,1]>significance else "rejected"))
+print(" - Baltic - statistic: " + str(round(OK_vec[1,1,0],4)) + ", pvalue: " + str(round(OK_vec[1,1,1],4)) + ", null hypothesis " 
+      + ("proven" if OK_vec[1,1,1]>significance else "rejected"))
+print(" - Gibral - statistic: " + str(round(OK_vec[2,1,0],4)) + ", pvalue: " + str(round(OK_vec[2,1,1],4)) + ", null hypothesis " 
+      + ("proven" if OK_vec[2,1,1]>significance else "rejected"))
 
 
 # Save results
@@ -215,4 +216,5 @@ else:
             os.remove('research_and_results/01c_performance_prediction.h5')
         file = h5py.File('research_and_results/01c_performance_prediction.h5', mode='a')
     file.create_dataset('OK_vec', data=OK_vec)
+    file.create_dataset('measurements', data=OK_vec1)
     file.close()
