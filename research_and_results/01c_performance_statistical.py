@@ -16,7 +16,7 @@ print("\n----------- AIS data reconstruction performance - statistical tests ---
 # Important imports
 import numpy as np
 import h5py
-from sklearn.metrics import silhouette_score
+from sklearn.metrics import silhouette_score, f1_score
 from scipy.stats import wilcoxon
 import copy
 import os
@@ -31,7 +31,7 @@ from utils.miscellaneous import count_number, Corruption
 # ----------------------------!!! EDIT HERE !!! ---------------------------------  
 np.random.seed(1)  # For reproducibility
 distance = 'euclidean'
-stage = 'ad' # 'clustering', 'ad' or 'prediction'
+stage = 'prediction' # 'clustering', 'ad_mess', 'ad_field' or 'prediction'
 num_metrics = 2
 num_experiments = 10
 percentages = [5, 10]
@@ -48,9 +48,7 @@ while precomputed != '1' and precomputed != '2':
 # Load data
 print(" Importing files... ")
 if precomputed == '2':  # Load file with precomputed values
-    if stage == 'clustering': file = h5py.File(name='research_and_results/01c_performance_clustering.h5', mode='r')
-    elif stage == 'ad': file = h5py.File(name='research_and_results/01c_performance_ad.h5', mode='r')
-    elif stage == 'prediction': file = h5py.File(name='research_and_results/01c_performance_prediction.h5', mode='r')
+    file = h5py.File(name='research_and_results/01c_performance_'+stage+'.h5', mode='r')
     OK_vec = np.array(file.get('OK_vec'))
     OK_vec1 = np.array(file.get('measurements'))
     file.close()
@@ -120,14 +118,18 @@ else:  # or run the computations
                         idx=idx_corr,
                         message_decoded=message_decoded_corr,
                         timestamp=data.timestamp)
-
-                    if stage == 'ad':
+                    if stage=='ad_mess' or stage=='ad_field':
                         # Compute results of anomaly detection - XGBoost
-                        f1 = []
-                        for n in range(num_messages):
-                            ad_metrics = calculate_ad_metrics(fields[n], ad.outliers[messages[n]][2])
-                            f1.append(ad_metrics["f1"])
-                        OK_vec1[file_num, percentage_num, 1, i] = np.mean(f1)
+                        if stage=='ad_field':
+                            f1 = []
+                            for n in range(num_messages):
+                                ad_metrics = calculate_ad_metrics(fields[n], ad.outliers[messages[n]][2])
+                                f1.append(ad_metrics["f1"])
+                            OK_vec1[file_num, percentage_num, 1, i] = np.mean(f1)
+                        elif stage=='ad_mess':
+                            pred = np.array([ad.outliers[n][0] for n in range(len(ad.outliers))], dtype=int)
+                            true = np.array(corruption.indices_corrupted, dtype=int)
+                            OK_vec1[file_num, percentage_num, 1, i] = f1_score(true, pred) 
                         # Compute results of anomaly detection - RF
                         ad2 = AnomalyDetection(ad_algorithm='rf')
                         ad2.detect_in_1element_clusters(
@@ -139,12 +141,16 @@ else:  # or run the computations
                             idx=idx_corr,
                             message_decoded=message_decoded_corr,
                             timestamp=data.timestamp)
-                        f1 = []
-                        for n in range(num_messages):
-                            ad_metrics = calculate_ad_metrics(fields[n], ad2.outliers[messages[n]][2])
-                            f1.append(ad_metrics["f1"])
-                        OK_vec1[file_num, percentage_num, 0, i] = np.mean(f1)
-                        
+                        if stage=='ad_field':
+                            f1 = []
+                            for n in range(num_messages):
+                                ad_metrics = calculate_ad_metrics(fields[n], ad2.outliers[messages[n]][2])
+                                f1.append(ad_metrics["f1"])
+                            OK_vec1[file_num, percentage_num, 0, i] = np.mean(f1)
+                        elif stage=='ad_mess':
+                            pred = np.array([ad2.outliers[n][0] for n in range(len(ad2.outliers))], dtype=int)
+                            true = np.array(corruption.indices_corrupted, dtype=int)
+                            OK_vec1[file_num, percentage_num, 0, i] = f1_score(true, pred)
                     if stage == 'prediction':
                         prediction_algorithm = ['xgboost', 'ar']
                         for alg_num in range(len(prediction_algorithm)):
@@ -203,18 +209,9 @@ if precomputed == '2':
     input("Press Enter to exit...")
 else:
     input("Press Enter to save and exit...")
-    if stage == 'clustering':
-        if os.path.exists('research_and_results/01c_performance_clustering.h5'):
-            os.remove('research_and_results/01c_performance_clustering.h5')
-        file = h5py.File('research_and_results/01c_performance_clustering.h5', mode='a')
-    elif stage == 'ad':
-        if os.path.exists('research_and_results/01c_performance_ad.h5'):
-            os.remove('research_and_results/01c_performance_ad.h5')
-        file = h5py.File('research_and_results/01c_performance_ad.h5', mode='a')
-    elif stage == 'prediction':
-        if os.path.exists('research_and_results/01c_performance_prediction.h5'):
-            os.remove('research_and_results/01c_performance_prediction.h5')
-        file = h5py.File('research_and_results/01c_performance_prediction.h5', mode='a')
+    if os.path.exists('research_and_results/01c_performance_'+stage+'.h5'):
+        os.remove('research_and_results/01c_performance_'+stage+'.h5')
+    file = h5py.File('research_and_results/01c_performance_'+stage+'.h5', mode='a')
     file.create_dataset('OK_vec', data=OK_vec)
     file.create_dataset('measurements', data=OK_vec1)
     file.close()
