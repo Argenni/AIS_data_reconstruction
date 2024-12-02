@@ -21,7 +21,8 @@ print("\n----------- AIS data reconstruction performance - one damaged message a
 import numpy as np
 import h5py
 import matplotlib.pyplot as plt
-plt.rcParams.update({'font.size': 16})
+params = {'axes.labelsize': 16,'axes.titlesize':16, 'font.size': 16, 'legend.fontsize': 12, 'xtick.labelsize': 14, 'ytick.labelsize': 14}
+plt.rcParams.update(params)
 from scipy import signal
 import copy
 import os
@@ -35,6 +36,7 @@ from utils.miscellaneous import count_number, Corruption
 
 # ----------------------------!!! EDIT HERE !!! ---------------------------------  
 np.random.seed(1)  # For reproducibility
+language = 'pl' # 'pl' or 'eng' - for graphics only
 distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
 ad_algorithm = 'xgboost' # 'rf', 'xgboost' or 'threshold' (only for 1-element-cluster anomaly detection) 
@@ -43,7 +45,7 @@ stage = 'prediction' # 'clustering', 'ad_1element', 'ad_multielement' or 'predic
 num_metrics = {'clustering':2, 'ad_1element':5, 'ad_multielement':4, 'prediction':1}
 num_bits = {'clustering':10, 'ad_1element':2, 'ad_multielement':2, 'prediction':7}
 num_experiment = {'clustering':50, 'ad_1element':100, 'ad_multielement':100, 'prediction':50}
-if_corrupt_location = True
+if_corrupt_location = False
 # --------------------------------------------------------------------------------
 if ad_algorithm=='threshold' and stage!='ad_1element': ad_algorithm = 'xgboost' 
 
@@ -60,6 +62,7 @@ if precomputed == '2':  # Load file with precomputed values
     if stage == 'clustering': file = h5py.File(name='research_and_results/01a_performance_clustering.h5', mode='r')
     elif stage == 'ad_1element': file = h5py.File(name='research_and_results/01a_performance_1element_' + ad_algorithm + '.h5', mode='r')
     elif stage == 'ad_multielement': file = h5py.File(name='research_and_results/01a_performance_multielement_' + ad_algorithm+ '.h5', mode='r')
+    elif stage == 'prediction': file = h5py.File(name='research_and_results/01a_performance_prediction_'+prediction_algorithm+'.h5', mode='r')
     OK_vec = np.array(file.get('OK_vec'))
     file.close()
 
@@ -261,9 +264,12 @@ else:  # or run the computations
                     ax1.scatter(data.Xraw[indices,0],data.Xraw[indices,1], color='b') # plot points from the given cluster
                     ax1.scatter(data.Xraw[message_idx,0],data.Xraw[message_idx,1], color='r') # plot the given point
                     ax1.scatter(data.Xraw[message_idx,0],data.Xraw[message_idx,1], color='r', s=10000, facecolors='none',) # plot a circle around given point
-                    ax1.set_xlabel("Longitude")
-                    ax1.set_ylabel("Latitide")
-                    ax1.legend(["All other messages", "Messages from the chosen message cluster", "Chosen message"])
+                    if language=='eng': ax1.set_xlabel("Longitude")
+                    elif language=='pl': ax1.set_xlabel("Długość geograficzna")
+                    if language=='eng': ax1.set_ylabel("Latitide")
+                    elif language=='pl': ax1.set_ylabel("Szerokość geograficzna")
+                    if language=='eng': ax1.legend(["All other messages", "Messages from the chosen message cluster", "Chosen message"])
+                    elif language=='pl': ax1.legend(["Pozostałe wiadomości", "Wiadomości z wybranej grupy", "Wylosowana wiadomość"])
                     fig1.show()
                     fig2, ax2 = plt.subplots()
                     if stage=='clustering': 
@@ -272,16 +278,20 @@ else:  # or run the computations
                         ax2.scatter(Xraw_corr[indices,0],Xraw_corr[indices,1], color='b') # plot points from the given cluster
                         ax2.scatter(Xraw_corr[message_idx,0],Xraw_corr[message_idx,1], color='r') # plot the given point
                         ax2.scatter(Xraw_corr[message_idx,0],Xraw_corr[message_idx,1], color='r', s=10000, facecolors='none') # circle the given point
-                        ax2.legend(["All other messages", "Messages from the damaged message cluster", "Damaged message"])
+                        if language=='eng': ax2.legend(["All other messages", "Messages from the chosen message cluster", "Chosen message"])
+                        elif language=='pl': ax2.legend(["Pozostałe wiadomości", "Wiadomości z wybranej grupy", "Wylosowana wiadomość"])
                     elif stage=='prediction':
                         ax2.scatter(message_decoded_new[:,7], message_decoded_new[:,8], color='k') # plot all points
                         indices = np.array(data.MMSI) == data.MMSI[message_idx]
                         ax2.scatter(message_decoded_new[indices,7], message_decoded_new[indices,8], color='b') # plot points from the given cluster
                         ax2.scatter(message_decoded_new[message_idx,7], message_decoded_new[message_idx,8], color='r') # plot the given point
                         ax2.scatter(message_decoded_new[message_idx,7], message_decoded_new[message_idx,8], color='r', s=10000, facecolors='none') # circle the given point
-                        ax2.legend(["All other messages", "Messages from the predicted message cluster", "Predicted message"])
-                    ax2.set_xlabel("Longitude")
-                    ax2.set_ylabel("Latitide")
+                        if language=='eng': ax2.legend(["All other messages", "Messages from the predicted message cluster", "Predicted message"])
+                        elif language=='pl': ax2.legend(["Pozostałe wiadomości", "Wiadomości z wybranej grupy", "Zrekonstruowana wiadomość"])
+                    if language=='eng': ax2.set_xlabel("Longitude")
+                    elif language=='pl': ax2.set_xlabel("Długość geograficzna")
+                    if language=='eng': ax2.set_ylabel("Latitide")
+                    elif language=='pl': ax2.set_ylabel("Szerokość geograficzna")
                     fig2.show()
 
                 # Compute results
@@ -297,7 +307,6 @@ else:  # or run the computations
                 elif stage=='prediction':
                     OK_vec[file_num, num_bit, 0, i] = calculate_SMAE(pred, data.message_decoded[message_idx,field], field)
                     if np.mean(data.message_decoded[np.array(data.MMSI)==data.MMSI[message_idx],5]) > 0.1 and visualized==False:
-                        plt.rcParams.update({'font.size': 28})
                         fig, ax = plt.subplots()
                         indices = np.zeros_like(data.MMSI)
                         indices[message_idx] = 1
@@ -311,9 +320,12 @@ else:  # or run the computations
                         ax.scatter(range(indices.shape[0]), message_new, color='r') # predicted value
                         ax.scatter(range(indices.shape[0]), message_original, color='b', s=10000, facecolors='none') # circle the original point
                         ax.scatter(range(indices.shape[0]), message_new, color='r', s=10000, facecolors='none') # circle the predicted point
-                        ax.set_xlabel("No. value")
-                        ax.set_ylabel("Consecutive field values - "+field_names[field])
-                        ax.legend(["All values from the given field", "Original value", "Predicted value"])
+                        if language=='eng': ax.set_xlabel("No. value")
+                        elif language=='pl': ax.set_xlabel("Numer porządkowy")
+                        if language=='eng': ax.set_ylabel("Consecutive field values - "+field_names[field])
+                        elif language=='pl': ax.set_ylabel("Kolejne wartości pola "+field_names[field])
+                        if language=='eng': ax.legend(["All values from the given field", "Original value", "Predicted value"])
+                        elif language=='pl': ax.legend(["Wartości z pozostałych wiadomości", "Wartość wylosowana (prawdziwa)", "Wartość zrekonstruowana"])
                         fig.show()
                         visualized = True
     if stage=='prediction': OK_vec = np.mean(OK_vec, axis=3)
@@ -328,8 +340,12 @@ if stage=='clustering':
     ax.scatter(np.arange(OK_vec.shape[1])+1, OK_vec[0,:,0], color='r', s=6)
     ax.plot(np.arange(OK_vec.shape[1])+1, OK_vec[0,:,1], color='b')
     ax.scatter(np.arange(OK_vec.shape[1])+1, OK_vec[0,:,1], color='b', s=6)
-    ax.set_xlabel("Amount of damaged bits")
-    ax.set_ylabel("Percentage of correctly assigned messages [%]")
+    if language=='eng': ax.set_xlabel("Amount of damaged bits")
+    elif language=='pl': ax.set_xlabel("Liczba uszkodzonych bitów")
+    if language=='eng': ax.set_ylabel("Percentage of correctly assigned messages [%]")
+    elif language=='pl': ax.set_ylabel("Procent poprawnie przypisanych wiadomości")
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
     ax.legend(["DBSCAN", "k-means"])
     fig.show()
 elif stage == 'ad_1element' or stage == 'ad_multielement':

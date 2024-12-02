@@ -15,7 +15,8 @@ print("\n---- Hyperparameter tuning - anomaly detection stage - wavelet --------
 import numpy as np
 import h5py
 import matplotlib.pyplot as plt
-plt.rcParams.update({'font.size': 16})
+params = {'axes.labelsize': 16,'axes.titlesize':16, 'font.size': 16, 'legend.fontsize': 12, 'xtick.labelsize': 14, 'ytick.labelsize': 14}
+plt.rcParams.update(params)
 from scipy import signal
 import copy
 import os
@@ -28,6 +29,7 @@ from utils.miscellaneous import count_number, Corruption
 
 # ----------------------------!!! EDIT HERE !!! ---------------------------------  
 np.random.seed(1)  # For reproducibility
+language = 'pl' # 'pl' or 'eng' - for graphics only
 filename = ['Gdansk.h5', 'Baltic.h5', 'Gibraltar.h5']
 distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
@@ -128,30 +130,48 @@ x = np.arange(len(filename))
 ax[0].bar(x-0.2,OK_vec[0,0,:], width=0.3)
 ax[0].bar(x+0.2,OK_vec[1,0,:], width=0.3)
 ax[0].set_title("Random Forest")
-ax[0].set_xlabel("Number of a dataset")
-ax[0].set_ylabel("Average F1 score [%]")
+if language=='eng':
+    ax[0].set_xlabel("Number of a dataset")
+    ax[0].set_ylabel("Average F1 score [%]")
+    ax[0].legend(["Morlet wavelet", "Ricker wavelet"])
+elif language=='pl':
+    ax[0].set_xlabel("Numer zestawu danych")
+    ax[0].set_ylabel("Średni wynik F1 [%]")
+    ax[0].legend(["Falka Morleta", "Falka Rickera"])
 ax[0].set_xticks(x)
 ax[0].set_xticklabels(titles)
-ax[0].legend(["Morlet wavelet", "Ricker wavelet"])
 ax[1].bar(x-0.2,OK_vec[0,1,:], width=0.3)
 ax[1].bar(x+0.2,OK_vec[1,1,:], width=0.3)
 ax[1].set_title("XGBoost")
-ax[1].set_xlabel("Number of a dataset")
-ax[1].set_ylabel("Average F1 score [%]")
+if language=='eng':
+    ax[1].set_xlabel("Number of a dataset")
+    ax[1].set_ylabel("Average F1 score [%]")
+    ax[1].legend(["Morlet wavelet", "Ricker wavelet"])
+elif language=='pl':
+    ax[1].set_xlabel("Numer zestawu danych")
+    ax[1].set_ylabel("Średni wynik F1 [%]")
+    ax[1].legend(["Falka Morleta", "Falka Rickera"])
 ax[1].set_xticks(x)
 ax[1].set_xticklabels(titles)
-ax[1].legend(["Morlet wavelet", "Ricker wavelet"])
 fig.show()
 
 fig2, ax2 = plt.subplots(ncols=2, sharey=True)
 ax2[0].plot(signal.morlet2(100,5))
-ax2[0].set_title("Sample Morlet wavelet")
-ax2[0].set_xlabel("Sample")
-ax2[0].set_ylabel("Value")
 ax2[1].plot(signal.ricker(100,5))
-ax2[1].set_title("Sample Ricker wavelet")
-ax2[1].set_xlabel("Sample")
-ax2[1].set_ylabel("Value")
+if language=='eng':
+    ax2[0].set_title("Sample Morlet wavelet")
+    ax2[0].set_xlabel("Sample")
+    ax2[0].set_ylabel("Value")
+    ax2[1].set_title("Sample Ricker wavelet")
+    ax2[1].set_xlabel("Sample")
+    ax2[1].set_ylabel("Value")
+elif language=='pl':
+    ax2[0].set_title("Przykładowy przebieg falki Morleta")
+    ax2[0].set_xlabel("Numer porządkowy")
+    ax2[0].set_ylabel("Wartość")
+    ax2[1].set_title("Przykładowy przebieg falki Rickera")
+    ax2[1].set_xlabel("Numer porządkowy")
+    ax2[1].set_ylabel("Wartość")
 fig2.show()
 
 

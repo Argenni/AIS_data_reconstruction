@@ -40,10 +40,11 @@ from utils.miscellaneous import count_number, visualize_trajectories, TimeWindow
 # ----------------------------!!! EDIT HERE !!! --------------------------------- 
 # Specify some important configuration
 np.random.seed(1) #For reproducibility
+language = 'pl' # 'pl' or 'eng' - for graphics only
 filename = 'Gdansk.h5' # Gdansk.h5, Gibraltar.h5 or Baltic.h5
 distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
-ad_algorithm = 'xgboost' # 'rf' or 'xgboost'
+ad_algorithm = 'rf' # 'rf' or 'xgboost'
 prediction_algorithm = 'xgboost' # 'ar' or 'xgboost'
 wavelet = 'morlet' # 'morlet' or 'ricker'
 #--------------------------------------------------------------------------------
@@ -66,7 +67,8 @@ visualize_trajectories(
     X=data.Xraw,
     MMSI=data.MMSI,
     MMSI_vec=MMSI_vec,
-    goal='data_visualization')
+    goal='data_visualization',
+    language=language)
 data.X_train, mu_train, sigma_train = data.standardize(data.Xraw_train)
 data.X_val, mu_val, sigma_val = data.standardize(data.Xraw_val)
 data.X, mu, sigma = data.standardize(data.Xraw)
@@ -75,7 +77,7 @@ print(" Complete.")
 
 # -------------------------- Stage 1 - Clustering -------------------------
 print("\n----------- Part 1 - Clustering ---------- ")
-clustering = Clustering(verbose=True)
+clustering = Clustering(language=language, verbose=True)
 if clustering_algorithm == 'kmeans':
     idx, centroids = clustering.run_kmeans(X=data.X, K=K, optimize=None, MMSI=data.MMSI)
 elif clustering_algorithm == 'DBSCAN':
@@ -86,7 +88,8 @@ visualize_trajectories(
     X=data.Xraw,
     MMSI=idx,
     MMSI_vec=range(-1, np.max(idx)+1),
-    goal='clustering')
+    goal='clustering',
+    language=language)
 
 
 # ------------------------- Stage 2 - Anomaly detection --------------------- 
@@ -95,7 +98,8 @@ ad = AnomalyDetection(
     verbose=True,
     optimize=None, # 'max_depth', 'n_estimators', 'k', 'max_depth2', 'n_estimators2', None
     ad_algorithm=ad_algorithm,
-    wavelet=wavelet)
+    wavelet=wavelet,
+    language=language)
 ad.detect_in_1element_clusters(
     idx=idx,
     idx_vec=range(-1, np.max(idx)+1),
@@ -110,7 +114,8 @@ visualize_trajectories(
     X=data.Xraw,
     MMSI=np.array(ad.outliers, dtype=object)[:,0].tolist(),
     MMSI_vec=[0,1],
-    goal='anomaly_detection')
+    goal='anomaly_detection',
+    language=language)
 
 
 # ------------------------- Stage 3 - Prediction --------------------- 
@@ -132,6 +137,7 @@ visualize_trajectories(
     MMSI=message_decoded_new[:,2],
     MMSI_vec=count_number(message_decoded_new[:,2])[1],
     goal='prediction',
+    language=language,
     reconstructed_idx=reconstructed_idx)
 
 

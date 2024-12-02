@@ -4,7 +4,8 @@ Functions and classes used in miscellaneous stages of AIS message reconstruction
 
 import numpy as np
 import matplotlib.pyplot as plt
-plt.rcParams.update({'font.size': 26})
+params = {'axes.labelsize': 16,'axes.titlesize':16, 'font.size': 16, 'legend.fontsize': 12, 'xtick.labelsize': 14, 'ytick.labelsize': 14}
+plt.rcParams.update(params)
 import datetime
 import copy
 
@@ -28,7 +29,7 @@ def count_number(X):
     return quantity, vec
 
 
-def visualize_trajectories(X, MMSI, MMSI_vec, goal, reconstructed_idx=[]):
+def visualize_trajectories(X, MMSI, MMSI_vec, goal, language='eng', reconstructed_idx=[]):
     """
     Displays every trajectory/cluster/outlier. \n
     Arguments:
@@ -36,6 +37,7 @@ def visualize_trajectories(X, MMSI, MMSI_vec, goal, reconstructed_idx=[]):
     - MMSI - list of MMSI identifier from each AIS message, len=num_messages,
     - MMSI_vec - list of uniqe items in MMSI,
     - goal - string, the purpose of visualization: 'data_visualization', 'clustering' or 'anomaly_detection',
+    - language - string, 'pl' for Polish or 'eng' for English (only for graphics text translation)
     - reconstructed_idx - (optional) list of indices of messages that had at least one field reconstructed
         (for stage='prediction' only), default=[].
     """
@@ -45,17 +47,28 @@ def visualize_trajectories(X, MMSI, MMSI_vec, goal, reconstructed_idx=[]):
         indices = np.array(MMSI)==i
         plt.scatter(X[indices,0],X[indices,1])
     if goal == 'data_visualization':
-        plt.title("Trajectory visualization")
+        if language=='eng': plt.title("Trajectory visualization")
+        elif language=='pl': plt.title("Wizualizacja trajektorii")
     elif goal == 'clustering':
-        plt.title("Clustering results")
+        if language=='eng': plt.title("Clustering results")
+        elif language=='pl': plt.title("Rezultat grupowania")
     elif goal == 'anomaly_detection':
-        plt.title("Outliers found")
-        plt.legend(["Regular datapoints", "Detected outliers"])
+        if language=='eng': 
+            plt.title("Outliers found")
+            plt.legend(["Regular datapoints", "Detected outliers"])
+        elif language=='pl': 
+            plt.title("Wykryte wyjątki")
+            plt.legend(["Pozostałe wiadomości", "Wykryte wyjątki"])
     elif goal == 'prediction':
         plt.scatter(X[reconstructed_idx,0],X[reconstructed_idx,1],s=500, facecolors='none', color='r')
-        plt.title("Datapoints after reconstruction")
-    plt.xlabel("Longitude")
-    plt.ylabel("Latitude")
+        if language=='eng': plt.title("Datapoints after reconstruction")
+        elif language=='pl': plt.title("Trajektorie po rekonstrukcji")
+    if language=='eng': 
+        plt.xlabel("Longitude")
+        plt.ylabel("Latitude")
+    elif language=='pl':
+        plt.xlabel("Długość geograficzna")
+        plt.ylabel("Szerokość geograficzna")   
     plt.show(block=False)
 
 

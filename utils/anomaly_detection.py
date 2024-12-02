@@ -10,7 +10,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import f1_score
 from scipy import signal
 import matplotlib.pyplot as plt
-plt.rcParams.update({'font.size': 24})
+params = {'axes.labelsize': 16,'axes.titlesize':16, 'font.size': 16, 'legend.fontsize': 12, 'xtick.labelsize': 14, 'ytick.labelsize': 14}
+plt.rcParams.update(params)
 import h5py
 import copy
 import pickle
@@ -44,8 +45,9 @@ class AnomalyDetection:
     _ad_algorithm = [] # 'rf' or 'xgboost'
     _wavelet = [] # 'morlet' or 'ricker'
     _verbose = []
+    _language = [] # 'pl' or 'eng' - for graphics only
 
-    def __init__(self, verbose=False, optimize=None, ad_algorithm='xgboost', wavelet='morlet'):
+    def __init__(self, verbose=False, optimize=None, ad_algorithm='xgboost', wavelet='morlet', language='eng'):
         """
         Class initialization (class object creation). Arguments: \n
         - verbose (optional) - Boolean, whether to print running logs or not, default=False,
@@ -54,12 +56,14 @@ class AnomalyDetection:
         - ad_algorithm (optional) - string, which anomaly detection classifier to use:
             'rf' or 'xgboost', default='xgboost',
         - wavelet (optional) - string, which wavelet to use while computing cwt in standalone clusters analysis:
-            'morlet' or 'ricker' (as available in SciPy), default='morlet'.
+            'morlet' or 'ricker' (as available in SciPy), default='morlet',
+        - language - string, 'pl' for Polish or 'eng' for English (only for graphics text translation).
         """
         # Initialize models and necessary variables
         self._ad_algorithm = ad_algorithm
         self._wavelet = wavelet
         self._verbose = verbose
+        self._language = language
         if os.path.exists('utils/anomaly_detection_files/1element_'+wavelet+'_classifier_'+ad_algorithm+'.h5'):
             # If there is a file with the trained 1-element-cluster field classifier saved, load it
             self._1element_classifier = pickle.load(open('utils/anomaly_detection_files/1element_'+wavelet+'_classifier_'+ad_algorithm+'.h5', 'rb'))

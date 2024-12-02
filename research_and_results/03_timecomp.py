@@ -18,7 +18,8 @@ import numpy as np
 import h5py
 import matplotlib.pyplot as plt
 from sklearn.metrics import f1_score, silhouette_score
-plt.rcParams.update({'font.size': 14})
+params = {'axes.labelsize': 16,'axes.titlesize':16, 'font.size': 16, 'legend.fontsize': 12, 'xtick.labelsize': 14, 'ytick.labelsize': 14}
+plt.rcParams.update(params)
 import timeit
 import copy
 import os
@@ -32,6 +33,7 @@ from utils.miscellaneous import count_number, Corruption, TimeWindow
 
 # ----------------------------!!! EDIT HERE !!! ---------------------------------  
 np.random.seed(1)  # For reproducibility
+language = 'pl' # 'pl' or 'eng' - for graphics only
 distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
 ad_algorithm = 'xgboost' # 'rf' or 'xgboost'
@@ -244,35 +246,45 @@ if stage != 'all':
         for percentage_num in range(len(percentages)):
             ax[i].plot(windows,OK_vec[percentage_num,:,i], color=colors[percentage_num])
             ax[i].scatter(windows,OK_vec[percentage_num,:,i], color=colors[percentage_num], s=6)
-            legend.append(str(percentages[percentage_num])+"% messages damaged")
-        ax[i].set_xlabel("Time frame length [min]")
+            if language=='eng': legend.append(str(percentages[percentage_num])+"% messages damaged")
+            elif language=='pl': legend.append(str(percentages[percentage_num])+"% uszkodzonych wiadomości")
+        if language=='eng': ax[i].set_xlabel("Time frame length [min]")
+        elif language=='pl': ax[i].set_xlabel("Czas obserwacji [min]")
         ax[i].spines['top'].set_visible(False)
         ax[i].spines['right'].set_visible(False)
     if stage == 'clustering': 
         ax[0].set_ylabel("Silhouette")
-        ax[1].set_ylabel("Correctness coefficient")
+        ax[1].set_ylabel("CC")
     elif stage == 'ad': 
-        ax[0].set_ylabel("F1 - messages")
-        ax[1].set_ylabel("F1 - fields")
+        if language=='eng': ax[0].set_ylabel("F1 - messages")
+        elif language=='pl': ax[0].set_ylabel("F1 dla wiadomości")
+        if language=='eng': ax[1].set_ylabel("F1 - fields")
+        elif language=='pl': ax[1].set_ylabel("F1 dla pól")
     elif stage  == 'prediction':
-        ax[0].set_ylabel("SMAE - pure prediction")
-        ax[1].set_ylabel("SMAE - with anomaly detection ")
+        if language=='eng': ax[0].set_ylabel("SMAE - pure prediction")
+        elif language=='pl': ax[0].set_ylabel("SMAE - tylko etap predykcji")
+        if language=='eng': ax[1].set_ylabel("SMAE - with anomaly detection")
+        elif language=='pl':ax[1].set_ylabel("SMAE - cały proces rekonstrukcji")
     fig.legend(legend, loc=9)
     fig.show()
 else:
     fig, ax = plt.subplots()
     legend = []
-    stages = {0:"clustering", 1:"anomaly detection", 2:"prediction"}
+    if language=='eng': stages = {0:"clustering", 1:"anomaly detection", 2:"prediction"}
+    elif language=='pl': stages = {0:"grupowanie", 1:"wykrywanie wyjątków", 2:"predykcja"}
     linestyles = {0:"-", 1:"--", 2:":"}
     for i in range(3):
         for percentage_num in range(len(percentages)):
             ax.plot(windows,OK_vec[percentage_num,:,i], linestyle=linestyles[i], color=colors[percentage_num])
             ax.scatter(windows,OK_vec[percentage_num,:,i], color=colors[percentage_num], s=6)
-            legend.append(str(percentages[percentage_num])+"% messages damaged, "+stages[i])
-    ax.set_xlabel("Time frame length [min]")
+            if language=='eng': legend.append(str(percentages[percentage_num])+"% messages damaged, "+stages[i])
+            elif language=='pl': legend.append(str(percentages[percentage_num])+"% uszkodzonych wiadomości, "+stages[i])
+    if language=='eng': ax.set_xlabel("Time frame length [min]")
+    elif language=='pl': ax.set_xlabel("Czas obserwacji [min]")
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
-    ax.set_ylabel("Average elapsed time [s]")
+    if language=='eng': ax.set_ylabel("Average elapsed time [s]")
+    elif language=='pl': ax.set_ylabel("Średni czas wykonania [s]")
     fig.legend(legend, loc=9)
     fig.show()
 

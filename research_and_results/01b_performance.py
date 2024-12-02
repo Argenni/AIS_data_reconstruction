@@ -35,11 +35,12 @@ from utils.miscellaneous import count_number, visualize_trajectories, Corruption
 
 # ----------------------------!!! EDIT HERE !!! ---------------------------------  
 np.random.seed(1)  # For reproducibility
+language = 'pl' # 'pl' or 'eng' - for graphics only
 distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
 ad_algorithm = 'xgboost' # 'rf', 'xgboost' or 'LOF'
 prediction_algorithm = 'xgboost' # 'ar' or 'xgboost'
-stage = 'prediction' # 'clustering', 'ad' or 'prediction'
+stage = 'clustering' # 'clustering', 'ad' or 'prediction'
 num_metrics = {'clustering':5, 'ad':4, 'prediction':2}
 num_experiments = {'clustering':1, 'ad':10, 'prediction':10}
 if stage == 'clustering': percentages = [0]
@@ -200,12 +201,14 @@ else:  # or run the computations
                 X=data.Xraw,
                 MMSI=data.MMSI,
                 MMSI_vec=MMSI_vec,
-                goal='data_visualization')
+                goal='data_visualization',
+                language=language)
             visualize_trajectories(
                 X=data.Xraw,
                 MMSI=idx,
                 MMSI_vec=range(-1, np.max(idx)+1),
-                goal='clustering')
+                goal='clustering',
+                language=language)
             # Compute results of clustering
             OK_vec[file_num, 0, 0, 0] = K
             OK_vec[file_num, 0, 1, 0] = silhouette_score(data.X, idx)

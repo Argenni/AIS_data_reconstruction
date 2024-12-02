@@ -10,13 +10,14 @@ Creates 02_bitwise_.h5 file, with OK_vec with average:
  - if anomaly detection: recall of detecting messages and fields, precision of detecting fields,
  - if prediction: SMAE of damaged dataset, pure prediction and prediction after anomaly detection.
 """
-print("\n----------- The impact of the position of damagedd bit on AIS message reconstruction  --------- ")
+print("\n----------- The impact of the position of damaged bit on AIS message reconstruction  --------- ")
 
 # Important imports
 import numpy as np
 import h5py
 import matplotlib.pyplot as plt
-plt.rcParams.update({'font.size': 16})
+params = {'axes.labelsize': 16,'axes.titlesize':16, 'font.size': 16, 'legend.fontsize': 12, 'xtick.labelsize': 14, 'ytick.labelsize': 14}
+plt.rcParams.update(params)
 import copy
 import os
 import sys
@@ -29,6 +30,7 @@ from utils.miscellaneous import count_number, Corruption
 
 # ----------------------------!!! EDIT HERE !!! ---------------------------------  
 np.random.seed(1)  # For reproducibility
+language = 'pl' # 'pl' or 'eng' - for graphics only
 distance = 'euclidean'
 stage = 'prediction' # 'clustering', 'ad' or 'prediction'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
@@ -180,27 +182,39 @@ else:  # or run the computations on the original data
 
 # Visualization
 print(" Complete.")
-if stage == 'clustering': 
-    titles = {
+if stage == 'clustering':
+    if language=='eng': titles = {
         '0':"Correctly assigned messages [%]", 
         '1':"Messages forming standalone clusters [%]", 
-        '2':"Correctly assigned messages after correction [%]"}
+        '2':"Correctly assigned messages after correction [%]"}  
+    elif language=='pl': titles = {
+        '0':"Wiadomości poprawnie przypisane [%]", 
+        '1':"Wiadomości tworzące jednoelementowe grupy [%]", 
+        '2':"Wiadomości poprawnie przypisane po klasyfikacji [%]"} 
     print(" Correctly assigned messages: " + str(round(np.mean(OK_vec[0,:]),2)) + "%")
     print(" Messages forming standalone clusters: " + str(round(np.mean(OK_vec[1,:]),2)) + "%")
     print(" Correctly assigned messages after correction: " + str(round(np.mean(OK_vec[2,:]),2)) + "%")
 elif stage == 'ad': 
-    titles = {
+    if language=='eng':  titles = {
     '0':"Correctly detected damaged messages - recall [%]", 
     '1':"Correctly detected damaged fields - recall [%]", 
     '2':"Correctly detected damaged fields - precision [%]"}
+    elif language=='pl':  titles = {
+    '0':"Poprawnie wykryte uszkodzone wiadomości - czułość [%]", 
+    '1':"Poprawnie wykryte uszkodzone pola - czułość  [%]", 
+    '2':"Poprawnie wykryte uszkodzone pola - precyzja [%]"}
     print(" Recall (message): " + str(round(np.mean(OK_vec[0,mask==1]),2)) + "%")
     print(" Recall (field): " + str(round(np.mean(OK_vec[1,mask==1]),2)) + "%")
     print(" Precision (field): " + str(round(np.mean(OK_vec[2,mask==1]),2)) + "%")
 elif stage == 'prediction': 
-    titles = {
+    if language=='eng': titles = {
     '0':"SMAE (orignal vs damaged field value)", 
     '1':"SMAE (pure prediction, no anomaly detection)",
     '2':"SMAE (prediction after anomaly detection)"}
+    elif language=='pl': titles = {
+    '0':"SMAE po uszkodzeniu", 
+    '1':"SMAE po etapie predykcji",
+    '2':"SMAE po całym procesie rekonstrukcji"}
     print(" SMAE (original vs damaged): " + str(round(np.mean(OK_vec[0,mask==1]),6)))
     print(" SMAE (pure prediction): " + str(round(np.mean(OK_vec[1,mask==1]),6)))
     print(" SMAE (for anomalies): " + str(round(np.mean(OK_vec[2,mask==1]),6)))
@@ -231,7 +245,8 @@ for i in range(OK_vec.shape[0]):
     ax[i].bar(bits, temp)
     box = ax[i].get_position()
     ax[i].set_position([box.x0, box.y0, box.width * 0.85, box.height])
-ax[i].set_xlabel("Index of a damaged bit")
+if language=='eng': ax[i].set_xlabel("Index of a damaged bit")
+elif language=='pl': ax[i].set_xlabel("Lokalizacja (indeks) uszkodzonego bitu")
 fig.legend([
             "Message type","Repeat indicator","MMSI","Navigational status", 
             "Rate of turns","Speed over ground","Position accuracy","Longitude", 

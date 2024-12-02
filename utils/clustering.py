@@ -6,6 +6,8 @@ from sklearn.cluster import KMeans, DBSCAN
 from sklearn.metrics import silhouette_score
 import numpy as np
 import matplotlib.pyplot as plt
+params = {'axes.labelsize': 16,'axes.titlesize':16, 'font.size': 16, 'legend.fontsize': 12, 'xtick.labelsize': 14, 'ytick.labelsize': 14}
+plt.rcParams.update(params)
 import sys
 sys.path.append('.')
 from utils.miscellaneous import count_number
@@ -17,12 +19,15 @@ class Clustering:
     """
     _epsilon = 3.16
     _minpts = 1
+    _language = [] # 'pl' or 'eng' - for graphics only
     _verbose = []
 
-    def __init__(self, verbose=False):
+    def __init__(self, language='eng', verbose=False):
         """
         Class initialization (class object creation). \n
-        Argument: verbose (optional) - Boolean, whether to print running logs or not, default=False
+        Arguments: 
+        - language - string, 'pl' for Polish or 'eng' for English (only for graphics text translation),
+        - verbose (optional) - Boolean, whether to print running logs or not, default=False
         """
         self._verbose = verbose
 
@@ -83,21 +88,25 @@ class Clustering:
         ax[0].vlines(x=K, ymin=min(silhouettes), ymax=silhouettes[K-2], color='r', linestyle='dashed')
         ax[0].plot(Ks, silhouettes, color='k')
         ax[0].scatter(Ks, silhouettes, color='k', s=6)
-        ax[0].set_title("Average silhouette vs K")
-        ax[0].set_xlabel("Number of clusters")
-        ax[0].set_ylabel("Average silhouette")
+        ax[0].set_xlabel("K")
+        ax[0].set_ylabel("Silhouette")
+        ax[0].spines['top'].set_visible(False)
+        ax[0].spines['right'].set_visible(False)
         ax[1].plot(Ks[0:K-1], np.ones((K-1))*CCs[K-2], color='r', linestyle='dashed')
         ax[1].vlines(x=K, ymin=min(CCs), ymax=CCs[K-2], color='r', linestyle='dashed')
         ax[1].plot(Ks, CCs, color='k')
         ax[1].scatter(Ks, CCs, color='k', s=6)
-        ax[1].set_title("Correctness coeff. vs K")
-        ax[1].set_xlabel("Number of clusters")
-        ax[1].set_ylabel("Correctness coeff.")
+        ax[1].set_xlabel("K")
+        ax[1].set_ylabel("CC")
+        ax[1].spines['top'].set_visible(False)
+        ax[1].spines['right'].set_visible(False)
         ax[2].plot(Ks, costs, color='k')
         ax[2].scatter(Ks, costs, color='k', s=6)
-        ax[2].set_title("Average cost vs K")
-        ax[2].set_xlabel("Number of clusters")
-        ax[2].set_ylabel("Average cost")
+        ax[2].set_xlabel("K")
+        if self._language == 'eng': ax[2].set_ylabel("Average cost")
+        elif self._language == 'pl': ax[2].set_ylabel("Średni koszt")
+        ax[2].spines['top'].set_visible(False)
+        ax[2].spines['right'].set_visible(False)
         fig.show()
         # Save the optimal value
         Knew = int(input(" Choose the optimal K: "))
@@ -169,20 +178,24 @@ class Clustering:
         fig, ax = plt.subplots(ncols=3)
         ax[0].plot(params, silhouettes, color='k')
         ax[0].scatter(params, silhouettes, color='k', s=6)
-        ax[0].set_title("Average silhouettes vs " + hyperparameter)
         ax[0].set_xlabel(hyperparameter)
-        ax[0].set_ylabel("Average silhouette")
+        ax[0].set_ylabel("Silhouette")
+        ax[0].spines['top'].set_visible(False)
+        ax[0].spines['right'].set_visible(False)
         ax[1].plot(params, CCs, color='k')
         ax[1].scatter(params, CCs, color='k', s=6)
-        ax[1].set_title("CC vs " + hyperparameter)
         ax[1].set_xlabel(hyperparameter)
         ax[1].set_ylabel("CC")
+        ax[1].spines['top'].set_visible(False)
+        ax[1].spines['right'].set_visible(False)
         ax[2].plot(params, clusters, color='k')
         ax[2].scatter(params, clusters, color='k', s=6)
         ax[2].plot(params, np.ones((len(params)))*MMSIs, color='r')
-        ax[2].set_title("No. clusters vs " + hyperparameter)
         ax[2].set_xlabel(hyperparameter)
-        ax[2].set_ylabel("No. clusters")
+        if self._language=='eng': ax[2].set_ylabel("No. clusters")
+        elif self._language=='pl': ax[2].set_ylabel("Liczba grup")
+        ax[2].spines['top'].set_visible(False)
+        ax[2].spines['right'].set_visible(False)
         fig.show()
         # Save the optimal value
         if hyperparameter=='epsilon': self._epsilon = np.round(np.sqrt(float(input(" Choose the optimal epsilon: "))),2)

@@ -14,7 +14,8 @@ print("\n----------- The importance of each stage on AIS data reconstruction ---
 import numpy as np
 import h5py
 import matplotlib.pyplot as plt
-plt.rcParams.update({'font.size': 16})
+params = {'axes.labelsize': 16,'axes.titlesize':16, 'font.size': 16, 'legend.fontsize': 12, 'xtick.labelsize': 14, 'ytick.labelsize': 14}
+plt.rcParams.update(params)
 import copy
 import os
 import sys
@@ -27,6 +28,7 @@ from utils.miscellaneous import count_number, Corruption
 
 # ----------------------------!!! EDIT HERE !!! ---------------------------------  
 np.random.seed(1)  # For reproducibility
+language = 'pl' # 'pl' or 'eng' - for graphics only
 distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
 ad_algorithm = 'xgboost' # 'rf' or 'xgboost'
@@ -189,21 +191,25 @@ ax[0].bar(x-0.05,OK_vec[:,0,1], width=0.08)
 ax[0].bar(x+0.05,OK_vec[:,0,2], width=0.08)
 ax[0].bar(x+0.15,OK_vec[:,0,3], width=0.08)
 ax[0].set_title("VAR")
-ax[0].set_xlabel("Number of a dataset")
+if language=='eng': ax[0].set_xlabel("Number of a dataset")
+elif language=='pl': ax[0].set_xlabel("Numer zestawu danych")
 ax[0].set_ylabel("SMAE")
 ax[0].set_xticks(x)
 ax[0].set_xticklabels(titles)
-ax[0].legend(["Ideal clustering", "Ideal anomaly detection", "Ideal prediction", "No ideal stage"])
+if language=='eng': ax[0].legend(["Ideal clustering", "Ideal anomaly detection", "Ideal prediction", "No ideal stage"])
+elif language=='pl': ax[0].legend(["Idealne wyniki grupowania", "Idealne wyniki wykrywania wyjątków", "Idealne wyniki predykcji", "Brak idealnych wyników"])
 ax[1].bar(x-0.15,OK_vec[:,1,0], width=0.08)
 ax[1].bar(x-0.05,OK_vec[:,1,1], width=0.08)
 ax[1].bar(x+0.05,OK_vec[:,1,2], width=0.08)
 ax[1].bar(x+0.15,OK_vec[:,1,3], width=0.08)
 ax[1].set_title("XGBoost")
-ax[1].set_xlabel("Number of a dataset")
+if language=='eng': ax[1].set_xlabel("Number of a dataset")
+elif language=='pl': ax[1].set_xlabel("Numer zestawu danych")
 ax[1].set_ylabel("SMAE")
 ax[1].set_xticks(x)
 ax[1].set_xticklabels(titles)
-ax[1].legend(["Ideal clustering", "Ideal anomaly detection", "Ideal prediction", "No ideal stage"])
+if language=='eng': ax[1].legend(["Ideal clustering", "Ideal anomaly detection", "Ideal prediction", "No ideal stage"])
+elif language=='pl': ax[1].legend(["Idealne wyniki grupowania", "Idealne wyniki wykrywania wyjątków", "Idealne wyniki predykcji", "Brak idealnych wyników"])
 fig.show()
 
 # Save results
