@@ -123,7 +123,8 @@ print("\n----------- Part 3 - Prediction ---------- ")
 prediction = Prediction(
     verbose=True,
     optimize=None, # 'lags', 'max_depth' or 'n_estimators'
-    prediction_algorithm=prediction_algorithm)
+    prediction_algorithm=prediction_algorithm,
+    language=language)
 message_bits_new, message_decoded_new, idx_new =  prediction.find_and_reconstruct_data(
     message_decoded=data.message_decoded, 
     message_bits=data.message_bits,

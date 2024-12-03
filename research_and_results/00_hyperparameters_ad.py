@@ -135,7 +135,7 @@ if language=='eng':
     ax[0].set_ylabel("Average F1 score [%]")
     ax[0].legend(["Morlet wavelet", "Ricker wavelet"])
 elif language=='pl':
-    ax[0].set_xlabel("Numer zestawu danych")
+    ax[0].set_xlabel("Numer zbioru danych")
     ax[0].set_ylabel("Średni wynik F1 [%]")
     ax[0].legend(["Falka Morleta", "Falka Rickera"])
 ax[0].set_xticks(x)
@@ -148,7 +148,7 @@ if language=='eng':
     ax[1].set_ylabel("Average F1 score [%]")
     ax[1].legend(["Morlet wavelet", "Ricker wavelet"])
 elif language=='pl':
-    ax[1].set_xlabel("Numer zestawu danych")
+    ax[1].set_xlabel("Numer zbioru danych")
     ax[1].set_ylabel("Średni wynik F1 [%]")
     ax[1].legend(["Falka Morleta", "Falka Rickera"])
 ax[1].set_xticks(x)

@@ -6,7 +6,8 @@ import numpy as np
 from xgboost import XGBRegressor
 import statsmodels.api as sm
 import matplotlib.pyplot as plt
-plt.rcParams.update({'font.size': 24})
+params = {'axes.labelsize': 16,'axes.titlesize':16, 'font.size': 16, 'legend.fontsize': 12, 'xtick.labelsize': 14, 'ytick.labelsize': 14}
+plt.rcParams.update(params)
 import copy
 import h5py
 import pickle
@@ -30,19 +31,22 @@ class Prediction:
     _max_depth = 15
     _num_estimators = 20
     _lags = 1
+    _language = [] # 'pl' or 'eng' - for graphics only
     _verbose = []
     
-    def __init__(self, verbose=False, optimize=None, prediction_algorithm='xgboost'):
+    def __init__(self, verbose=False, optimize=None, prediction_algorithm='xgboost', language='eng'):
         """
         Class initialization (class object creation). Arguments:
         - verbose (optional) - Boolean, whether to print running logs or not, default=False,
         - optimize (optional) - string, name of regressor hyperparameter to optimize, 
             'max_depth', 'n_estimators' (for xgboost), 'lags' (for autoregression), default=None (no optimization),
         - prediction_algorithm (optional) - string deciding which model to use, 'xgboost' or 'ar', default='xgboost'.
+        - language - string, 'pl' for Polish or 'eng' for English (only for graphics text translation).
         """
         # Initialize models and necessary variables
         self._prediction_algorithm = prediction_algorithm
         self._verbose = verbose
+        self._language = language
         if self._prediction_algorithm == 'xgboost':
             if os.path.exists('utils/prediction_files/regressor_'+prediction_algorithm+'.h5'):
                 # If there is a file with the trained regressor saved, load it
@@ -244,8 +248,8 @@ class Prediction:
         if self._prediction_algorithm == 'xgboost': 
             ax.plot(params, mae_val, color='b')
             ax.scatter(params, mae_val, color='b', s=6)
-            ax.legend(["Training set", "Validation set"])
-        ax.set_title("SMAE vs " + hyperparameter)
+            if self._language == 'eng': ax.legend(["Training set", "Validation set"])
+            elif self._language == 'pl': ax.legend(["Zbiór treningowy", "Zbiór walidacyjny"])
         ax.set_xlabel(hyperparameter)
         ax.set_ylabel("SMAE") 
         fig.show()

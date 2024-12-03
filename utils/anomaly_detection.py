@@ -317,10 +317,13 @@ class AnomalyDetection:
         ax.plot(params, accuracy_val, color='b')
         ax.scatter(params, accuracy_train, color='k', s=6)
         ax.scatter(params, accuracy_val, color='b', s=6)
-        ax.set_title("Average accuracy vs " + hyperparameter)
         ax.set_xlabel(hyperparameter)
-        ax.set_ylabel("Average accuracy")
-        ax.legend(["Training set", "Validation set"])
+        if self._language == 'eng':
+            ax.set_ylabel("Average accuracy")
+            ax.legend(["Training set", "Validation set"])
+        elif self._language == 'pl':
+            ax.set_ylabel("Średnia dokładność")
+            ax.legend(["Zbiór treningowy", "Zbiór walidacyjny"])
         fig.show()
         # Retrain the model
         if hyperparameter == 'max_depth':
@@ -385,9 +388,9 @@ class AnomalyDetection:
         fig, ax = plt.subplots()
         ax.plot(params, accuracy, color='k')
         ax.scatter(params, accuracy, color='k', s=6)
-        ax.set_title("Average accuracy vs k")
         ax.set_xlabel("k")
-        ax.set_ylabel("Average accuracy")
+        if self._language == 'eng': ax.set_ylabel("Average accuracy")
+        elif self._language == 'pl': ax.set_ylabel("Średnia dokładność")
         fig.show()
         # Save the optimal k value
         self._k = int(input("Choose the optimal k: "))
@@ -739,11 +742,15 @@ class AnomalyDetection:
         ax.scatter(params, accuracy_val, color='b', s=6)
         ax.scatter(params, accuracy_train_course, color='r', s=6)
         ax.scatter(params, accuracy_val_course, color='g', s=6)
-        ax.set_title("Average f1 vs " + hyperparameter)
         ax.set_xlabel(hyperparameter)
-        ax.set_ylabel("Average f1")
-        ax.legend(["Training set - fields 5,7,8", "Validation set - fields 5,7,8",
+        if self._language == 'eng':   
+            ax.set_ylabel("Average f1")
+            ax.legend(["Training set - fields 5,7,8", "Validation set - fields 5,7,8",
                    "Training set - field 9", "Validation set - field 9" ])
+        elif self._language == 'pl':   
+            ax.set_ylabel("Średnia wartość F1")
+            ax.legend(["Zbiór treningowy - pola 5,7,8", "Zbiór walidacyjny - pola 5,7,8",
+                   "Zbiór treningowy - pole 9", "Zbiór walidacyjny - pole 9" ])
         fig.show()
         # Retrain the model
         if hyperparameter == 'max_depth':
