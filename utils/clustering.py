@@ -30,6 +30,7 @@ class Clustering:
         - verbose (optional) - Boolean, whether to print running logs or not, default=False
         """
         self._verbose = verbose
+        self._language = language
 
     def run_kmeans(self, X, K, optimize=None, MMSI=[]):
         """

@@ -44,7 +44,7 @@ language = 'pl' # 'pl' or 'eng' - for graphics only
 filename = 'Gdansk.h5' # Gdansk.h5, Gibraltar.h5 or Baltic.h5
 distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
-ad_algorithm = 'rf' # 'rf' or 'xgboost'
+ad_algorithm = 'xgboost' # 'rf' or 'xgboost'
 prediction_algorithm = 'xgboost' # 'ar' or 'xgboost'
 wavelet = 'morlet' # 'morlet' or 'ricker'
 #--------------------------------------------------------------------------------

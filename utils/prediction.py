@@ -252,6 +252,8 @@ class Prediction:
             elif self._language == 'pl': ax.legend(["Zbiór treningowy", "Zbiór walidacyjny"])
         ax.set_xlabel(hyperparameter)
         ax.set_ylabel("SMAE") 
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
         fig.show()
         # Save results
         if hyperparameter == 'max_depth': self._max_depth = int(input("Choose the optimal max_depth: "))

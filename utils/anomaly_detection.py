@@ -324,6 +324,8 @@ class AnomalyDetection:
         elif self._language == 'pl':
             ax.set_ylabel("Średnia dokładność")
             ax.legend(["Zbiór treningowy", "Zbiór walidacyjny"])
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
         fig.show()
         # Retrain the model
         if hyperparameter == 'max_depth':
@@ -391,6 +393,8 @@ class AnomalyDetection:
         ax.set_xlabel("k")
         if self._language == 'eng': ax.set_ylabel("Average accuracy")
         elif self._language == 'pl': ax.set_ylabel("Średnia dokładność")
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
         fig.show()
         # Save the optimal k value
         self._k = int(input("Choose the optimal k: "))
@@ -751,6 +755,8 @@ class AnomalyDetection:
             ax.set_ylabel("Średnia wartość F1")
             ax.legend(["Zbiór treningowy - pola 5,7,8", "Zbiór walidacyjny - pola 5,7,8",
                    "Zbiór treningowy - pole 9", "Zbiór walidacyjny - pole 9" ])
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
         fig.show()
         # Retrain the model
         if hyperparameter == 'max_depth':
