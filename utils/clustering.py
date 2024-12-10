@@ -209,7 +209,7 @@ def calculate_CC(idx, MMSI, MMSI_vec, if_all=False):
     1. each cluster consists of messages from one vessel (CHC),
     2. messages from one vessel are not divided between several clusters (VHC). \n
     Arguments:
-    - idx - list of indices of clusters assigned to each message, len=num_messages,
+    - idx - numpy array of indices of clusters assigned to each message, shape[0]=num_messages,
     - MMSI - list of MMSI identifiers from each AIS message, len=num_messages,
     - MMSI_vec - list of unique MMSIs in MMSI list,
     - if_all (optional) - Boolean, whether to return also VHC and CHC (default=False). \n
