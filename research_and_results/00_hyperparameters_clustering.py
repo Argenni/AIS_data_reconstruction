@@ -26,6 +26,12 @@ language = 'pl' # 'pl' or 'eng' - for graphics only
 clustering_algorithm = 'kmeans'  # 'kmeans' or 'DBSCAN'
 # --------------------------------------------------------------------------------
 
+# Import the dataset
+file = h5py.File(name='data/Gdansk.h5', mode='r')
+data = Data(file)
+file.close()
+K, _ = count_number(data.MMSI)  # Count number of groups/ships
+
 # Decide what to do
 precomputed = 'start'
 while precomputed != '1' and precomputed != '2':
@@ -39,62 +45,62 @@ if precomputed == '2':  # Load file with precomputed values
     file = h5py.File(
         name='research_and_results/00_hyperparameters_clustering_'+clustering_algorithm+'.h5', mode='r')
     OK_vec = np.array(file.get('OK_vec'))
+    titles = np.array(file.get('titles'))
     file.close()
 
 else:  # or run the computations on the original data
-    metrics = ['euclidean', 'manhattan', 'chebyshev', 'hamming']
-    num_algorithms = 1 if clustering_algorithm == 'DBSCAN' else 2 # k-means and k-medoids for 'kmeans'
-    num_experiments = 2 # standardisation on/off
+    distance_metrics_official = ['euclidean', 'manhattan', 'chebyshev']
+    if language == 'eng':
+        experiments = ['standardisation on', 'standardisation off']
+        metrics = ['euclidean', 'manhattan', 'chebyshev', 'hamming']
+    elif language == 'pl':
+        experiments = ['standaryzacja', 'bez standaryzacji']
+        metrics = ['euklidesowa', 'Manhattan', 'Czebyszewa', 'Hamminga']
+    algorithms = ['DBSCAN, '] if clustering_algorithm == 'DBSCAN' else [', k-means, ', ', k-medoids, ']
     num_quality_metrics = 3 if clustering_algorithm == 'DBSCAN' else 2  # silhouette and CC, for DBSCAN additionally number of clusters
-    OK_vec = np.zeros((num_algorithms, len(metrics), num_experiments, num_quality_metrics))
+    OK_vec = np.zeros((len(algorithms), len(metrics), len(experiments), num_quality_metrics))
+    titles = np.empty((len(algorithms), len(metrics), len(experiments)), dtype=object)
 
-    # Import the dataset
-    file = h5py.File(name='data/Gdansk.h5', mode='r')
-    data = Data(file)
-    file.close()
-    K, _ = count_number(data.MMSI)  # Count number of groups/ships
-
-    for algorithm in range(num_algorithms):
-        if clustering_algorithm=='kmeans' and algorithm==1: 
-            initial_index_medoids=np.random.choice(np.arange(len(data.MMSI)),K)
+    print("Analysing...")
+    for num_algorithm, algorithm in enumerate(algorithms):
+        if clustering_algorithm=='kmeans' and algorithm==', k-medoids, ': 
+            initial_index_medoids=np.random.choice(np.arange(len(data.MMSI)), K)
         for num_metric, metric in enumerate(metrics):
-            for experiment in range(num_experiments):
+            for num_experiment, experiment in enumerate(experiments):
+                if clustering_algorithm=='kmeans': title = metric + algorithm + experiment
+                else: title = metric + ", " + experiment     
+                titles[num_algorithm, num_metric, num_experiment] = title
                 # Do nothing for Hamming and standardization setup
-                if metric=='hamming' and experiment==0: 
-                    OK_vec[algorithm, num_metric, experiment, 0] = None
-                    OK_vec[algorithm, num_metric, experiment, 1] = None
-                    if clustering_algorithm=='DBSCAN': OK_vec[algorithm, num_metric, experiment, 2] = None
-                else:
-                    exper = ['std on', 'std off']
-                    if clustering_algorithm=='kmeans':
-                        algs = ['k-means, ', 'k-medoids, '] 
-                        print("Analysing "+metric+" metric for "+algs[algorithm]+exper[experiment])
-                    elif clustering_algorithm=='DBSCAN':
-                        print("Analysing "+metric+" metric for DBSCAN, "+exper[experiment])
+                if (metric=='hamming' or metric=='Hamminga') and (experiment=='standardisation on' or experiment=='standaryzacja'): 
+                    OK_vec[num_algorithm, num_metric, num_experiment, 0] = None
+                    OK_vec[num_algorithm, num_metric, num_experiment, 1] = None
+                    if clustering_algorithm=='DBSCAN': OK_vec[num_algorithm, num_metric, num_experiment, 2] = None
+                else: 
                     # Prepare data for clustering
-                    if metric == 'hamming':
+                    print(title)
+                    if metric == 'hamming' or metric == 'Hamminga':
                         dist_metric = 'euclidean'
                         data_ = data.message_bits
                     else: 
-                        dist_metric = metric
-                        if experiment==0: data_= data.standardize(data.Xraw)[0]
+                        dist_metric = distance_metrics_official[metrics.index(metric)]
+                        if experiment=='standaryzacja' or experiment=='standardisation on': data_= data.standardize(data.Xraw)[0]
                         else: data_ = copy.deepcopy(data.Xraw)
 
                     # Perform actual clustering
                     if clustering_algorithm == 'kmeans':  
-                        if algorithm==0: # 0 -> k-means
+                        if algorithm == ', k-means, ':
                             initial_centers = random_center_initializer(data=data_, amount_centers=K, random_state=0).initialize()
                             km_model = kmeans(
                                 data=data_, 
                                 initial_centers=initial_centers, 
                                 tolerance=0.001,
-                                metric=distance_metric(metrics.index(dist_metric)+1),
+                                metric=distance_metric(distance_metrics_official.index(dist_metric)+1),
                                 itermax=100)
-                        else: # 1 -> k-medoids
+                        else: # k-medoids
                             km_model = kmedoids(
                                 data=data_,
                                 initial_index_medoids=initial_index_medoids, 
-                                metric= distance_metric(metrics.index(dist_metric)+1))
+                                metric= distance_metric(distance_metrics_official.index(dist_metric)+1))
                         km_model.process()
                         clusters = km_model.get_clusters()
                         type_repr = km_model.get_cluster_encoding()
@@ -103,7 +109,7 @@ else:  # or run the computations on the original data
                         idx = encoder.get_clusters()
 
                     elif clustering_algorithm == 'DBSCAN':
-                        if metric == 'euclidean': epsilon = 3.16
+                        if metric == 'euclidean' or metric == 'euklidesowa': epsilon = 3.16
                         # !!!!!!!!!!!!!!!!!!!!!!!!!!!!
                         else: epsilon = 3.16 # Choose optimal epsilon
                         # !!!!!!!!!!!!!!!!!!!!!!!!!!!! 
@@ -112,15 +118,60 @@ else:  # or run the computations on the original data
                             min_samples = 1, 
                             metric = dist_metric).fit(data_)
                         idx = DBSCAN_model.labels_
-                        K = count_number(idx)[0]
-                        OK_vec[algorithm, num_metric, experiment, 2] = K
+                        K_new = count_number(idx)[0]
+                        OK_vec[num_algorithm, num_metric, num_experiment, 2] = K_new
 
                     # Compute quality measures
-                    if K==1: OK_vec[algorithm, num_metric, experiment, 0] = 0
-                    elif K==len(idx): OK_vec[algorithm, num_metric, experiment, 0] = 1
-                    else: OK_vec[algorithm, num_metric, experiment, 0] = silhouette_score(data_, idx)
+                    if K==1: OK_vec[num_algorithm, num_metric, num_experiment, 0] = 0
+                    elif K==len(idx): OK_vec[num_algorithm, num_metric, num_experiment, 0] = 1
+                    else: OK_vec[num_algorithm, num_metric, num_experiment, 0] = silhouette_score(data_, idx)
                     MMSI_vec = count_number(data.MMSI)[1]
-                    OK_vec[algorithm, num_metric, experiment, 1] = calculate_CC(np.array(idx), data.MMSI, MMSI_vec)
+                    OK_vec[num_algorithm, num_metric, num_experiment, 1] = calculate_CC(np.array(idx), data.MMSI, MMSI_vec)
+
+
+# Visualize
+titles_flat = titles.ravel()
+ind_to_del = np.where(titles_flat==titles_flat[-2])[0][0]
+titles_flat = np.concatenate((titles_flat[0:ind_to_del], titles_flat[ind_to_del+1:titles_flat.shape[0]+1]))
+if clustering_algorithm == 'kmeans': titles_flat = np.concatenate((titles_flat[0:6], titles_flat[7:titles_flat.shape[0]+1]))
+
+silh_flat = OK_vec[:,:,:,0].ravel()
+silh_flat = np.concatenate((silh_flat[0:ind_to_del], silh_flat[ind_to_del+1:silh_flat.shape[0]+1]))
+if clustering_algorithm == 'kmeans': silh_flat = np.concatenate((silh_flat[0:6], silh_flat[7:silh_flat.shape[0]+1]))
+indices_silh = np.flip(np.argsort(silh_flat))
+fig, ax = plt.subplots()
+ax.bar(titles_flat[indices_silh], silh_flat[indices_silh], width=0.4)
+ax.tick_params(axis='x', labelrotation=90)
+ax.set_ylabel("Silhouette")
+box = ax.get_position()
+ax.set_position([box.x0, box.y0+box.height*0.5, box.width, box.height*0.5])
+fig.show()
+
+cc_flat = OK_vec[:,:,:,1].ravel()
+cc_flat = np.concatenate((cc_flat[0:ind_to_del], cc_flat[ind_to_del+1:cc_flat.shape[0]+1]))
+if clustering_algorithm == 'kmeans': cc_flat = np.concatenate((cc_flat[0:6], cc_flat[7:cc_flat.shape[0]+1]))
+indices_cc = np.flip(np.argsort(cc_flat))
+fig, ax = plt.subplots()
+ax.bar(titles_flat[indices_cc], cc_flat[indices_cc], width=0.4)
+ax.tick_params(axis='x', labelrotation=90)
+ax.set_ylabel("CC")
+box = ax.get_position()
+ax.set_position([box.x0, box.y0+box.height*0.5, box.width, box.height*0.5])
+fig.show()
+
+if clustering_algorithm == 'DBSCAN':
+    K_flat = OK_vec[:,:,:,2].ravel()
+    K_flat = np.concatenate((K_flat[0:ind_to_del], K_flat[ind_to_del+1:K_flat.shape[0]+1]))
+    indices_K = np.flip(np.argsort(K_flat))
+    fig, ax = plt.subplots()
+    ax.bar(titles_flat[indices_K], K_flat[indices_K], width=0.4)
+    ax.plot(np.ones_like(K_flat)*K, color='r')
+    ax.tick_params(axis='x', labelrotation=90)
+    if language=='pl': ax.set_ylabel("Liczba grup")
+    elif language=='eng': ax.set_ylabel("Number of clusters")
+    box = ax.get_position()
+    ax.set_position([box.x0, box.y0+box.height*0.5, box.width, box.height*0.5])
+    fig.show()
 
 
 # Save results
@@ -132,4 +183,5 @@ else:
         os.remove('research_and_results/00_hyperparameters_clustering_'+clustering_algorithm+'.h5')
     File = h5py.File('research_and_results/00_hyperparameters_clustering_'+clustering_algorithm+'.h5', mode='a')
     File.create_dataset('OK_vec', data=OK_vec)
+    File.create_dataset('titles', data=titles)
     File.close()
