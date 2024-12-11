@@ -79,7 +79,7 @@ else:  # or run the computations on the original data
                     # Prepare data for clustering
                     print(title)
                     if metric == 'hamming' or metric == 'Hamminga':
-                        dist_metric = 'euclidean'
+                        dist_metric = 'manhattan'
                         data_ = data.message_bits
                     else: 
                         dist_metric = distance_metrics_official[metrics.index(metric)]
@@ -87,6 +87,7 @@ else:  # or run the computations on the original data
                         else: data_ = copy.deepcopy(data.Xraw)
 
                     # Perform actual clustering
+                    metric_idx = 0 if dist_metric=='euclidean' else distance_metrics_official.index(dist_metric)+1
                     if clustering_algorithm == 'kmeans':  
                         if algorithm == ', k-means, ':
                             initial_centers = random_center_initializer(data=data_, amount_centers=K, random_state=0).initialize()
@@ -94,25 +95,47 @@ else:  # or run the computations on the original data
                                 data=data_, 
                                 initial_centers=initial_centers, 
                                 tolerance=0.001,
-                                metric=distance_metric(distance_metrics_official.index(dist_metric)+1),
+                                metric=distance_metric(metric_idx),
                                 itermax=100)
                         else: # k-medoids
                             km_model = kmedoids(
                                 data=data_,
                                 initial_index_medoids=initial_index_medoids, 
-                                metric= distance_metric(distance_metrics_official.index(dist_metric)+1))
+                                metric= distance_metric(metric_idx))
                         km_model.process()
                         clusters = km_model.get_clusters()
                         type_repr = km_model.get_cluster_encoding()
                         encoder = cluster_encoder(type_repr, clusters, data_)
                         encoder.set_encoding(type_encoding.CLUSTER_INDEX_LABELING)
                         idx = encoder.get_clusters()
+                        K_new = K
 
                     elif clustering_algorithm == 'DBSCAN':
-                        if metric == 'euclidean' or metric == 'euklidesowa': epsilon = 3.16
-                        # !!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                        else: epsilon = 3.16 # Choose optimal epsilon
-                        # !!!!!!!!!!!!!!!!!!!!!!!!!!!! 
+                        if (metric=='euclidean' or metric=='euklidesowa')and(experiment=='standardisation on' or experiment=='standaryzacja'): epsilon = 3.16
+                        # ----------------------------
+                        else: # Choose optimal epsilon
+                            silhouettes = []
+                            CCs = []
+                            clusters = []
+                            if experiment=='standardisation off' or experiment=='bez standaryzacji': params=[1,5,10,20,50,100,200,500]
+                            else: params=[1,2,5,10,20,50,100]
+                            if metric=='Hamminga' or metric=='hamming': params=[0.1, 0.5, 1, 10, 20, 50] #params=[0.0001, 0.0002, 0.0005, 0.001, 0.002, 0.005, 0.01]
+                            for param in params:
+                                DBSCAN_model = DBSCAN(
+                                    eps = np.sqrt(param) if (metric=='euclidean' or metric=='euklidesowa') else param,
+                                    min_samples=1, 
+                                    metric=dist_metric).fit(data_)
+                                idx = DBSCAN_model.labels_
+                                K_param = count_number(idx)[0]
+                                clusters.append(abs(K_param-K)/K)
+                                if K_param==1 or K_param==len(idx): silhouettes.append(0)
+                                else: silhouettes.append(silhouette_score(data_,idx))
+                                MMSI_vec = count_number(data.MMSI)[1]
+                                CCs.append(calculate_CC(idx, data.MMSI, MMSI_vec))
+                            epsilon = (params[np.argmax(silhouettes)] + params[np.argmax(CCs)] + params[np.argmin(clusters)])/3
+                            print("Epsilon: " + str(epsilon))
+                            if metric=='euclidean' or metric=='euklidesowa': epsilon = np.sqrt(epsilon)
+                        # ----------------------------
                         DBSCAN_model = DBSCAN(
                             eps = epsilon, 
                             min_samples = 1, 
@@ -122,8 +145,7 @@ else:  # or run the computations on the original data
                         OK_vec[num_algorithm, num_metric, num_experiment, 2] = K_new
 
                     # Compute quality measures
-                    if K==1: OK_vec[num_algorithm, num_metric, num_experiment, 0] = 0
-                    elif K==len(idx): OK_vec[num_algorithm, num_metric, num_experiment, 0] = 1
+                    if K_new==1 or K_new==len(idx): OK_vec[num_algorithm, num_metric, num_experiment, 0] = 0
                     else: OK_vec[num_algorithm, num_metric, num_experiment, 0] = silhouette_score(data_, idx)
                     MMSI_vec = count_number(data.MMSI)[1]
                     OK_vec[num_algorithm, num_metric, num_experiment, 1] = calculate_CC(np.array(idx), data.MMSI, MMSI_vec)
@@ -131,13 +153,12 @@ else:  # or run the computations on the original data
 
 # Visualize
 titles_flat = titles.ravel()
-ind_to_del = np.where(titles_flat==titles_flat[-2])[0][0]
-titles_flat = np.concatenate((titles_flat[0:ind_to_del], titles_flat[ind_to_del+1:titles_flat.shape[0]+1]))
-if clustering_algorithm == 'kmeans': titles_flat = np.concatenate((titles_flat[0:6], titles_flat[7:titles_flat.shape[0]+1]))
+titles_flat = np.delete(titles_flat, -2)
+if clustering_algorithm == 'kmeans': titles_flat = np.delete(titles_flat, 6)
 
 silh_flat = OK_vec[:,:,:,0].ravel()
-silh_flat = np.concatenate((silh_flat[0:ind_to_del], silh_flat[ind_to_del+1:silh_flat.shape[0]+1]))
-if clustering_algorithm == 'kmeans': silh_flat = np.concatenate((silh_flat[0:6], silh_flat[7:silh_flat.shape[0]+1]))
+silh_flat = np.delete(silh_flat, -2)
+if clustering_algorithm == 'kmeans': silh_flat = np.delete(silh_flat, 6)
 indices_silh = np.flip(np.argsort(silh_flat))
 fig, ax = plt.subplots()
 ax.bar(titles_flat[indices_silh], silh_flat[indices_silh], width=0.4)
@@ -148,8 +169,8 @@ ax.set_position([box.x0, box.y0+box.height*0.5, box.width, box.height*0.5])
 fig.show()
 
 cc_flat = OK_vec[:,:,:,1].ravel()
-cc_flat = np.concatenate((cc_flat[0:ind_to_del], cc_flat[ind_to_del+1:cc_flat.shape[0]+1]))
-if clustering_algorithm == 'kmeans': cc_flat = np.concatenate((cc_flat[0:6], cc_flat[7:cc_flat.shape[0]+1]))
+cc_flat = np.delete(cc_flat, -2)
+if clustering_algorithm == 'kmeans': cc_flat = np.delete(cc_flat, 6)
 indices_cc = np.flip(np.argsort(cc_flat))
 fig, ax = plt.subplots()
 ax.bar(titles_flat[indices_cc], cc_flat[indices_cc], width=0.4)
@@ -161,7 +182,7 @@ fig.show()
 
 if clustering_algorithm == 'DBSCAN':
     K_flat = OK_vec[:,:,:,2].ravel()
-    K_flat = np.concatenate((K_flat[0:ind_to_del], K_flat[ind_to_del+1:K_flat.shape[0]+1]))
+    K_flat = np.delete(K_flat, -2)
     indices_K = np.flip(np.argsort(K_flat))
     fig, ax = plt.subplots()
     ax.bar(titles_flat[indices_K], K_flat[indices_K], width=0.4)
