@@ -1,10 +1,21 @@
+"""
+Compare the performace of different distance metric on clustering stage. \n
+Requires: Gdansk.h5 files with the following datasets (created by data_.py):
+ - message_bits - numpy array of AIS messages in binary form (1 column = 1 bit), shape=(num_messages, num_bits (168)),
+ - X - numpy array, AIS feature vectors (w/o normalization), shape=(num_messages, num_features (115)),
+ - MMSI - list of MMSI identifier from each AIS message, len=num_messages.
+Creates 00_hyperparameters_clustering_.h5 file, with OK_vec with silhouette/CC/number of clusters.
+    (for each algorithm, metric and standardisation on/off).
+"""
+print("\n---- Hyperparameter tuning - clustering stage - distance metric -------- ")
+
+
 # Important imports
 import numpy as np
 import h5py
 from pyclustering.cluster.kmeans import kmeans
 from pyclustering.cluster.kmedoids import kmedoids
 from pyclustering.utils.metric import distance_metric
-from pyclustering.cluster.center_initializer import random_center_initializer
 from pyclustering.cluster.encoder import type_encoding
 from pyclustering.cluster.encoder import cluster_encoder
 from sklearn.cluster import DBSCAN
@@ -23,7 +34,7 @@ from utils.miscellaneous import count_number
 # ----------------------------!!! EDIT HERE !!! ---------------------------------  
 np.random.seed(1)  # For reproducibility
 language = 'pl' # 'pl' or 'eng' - for graphics only
-clustering_algorithm = 'kmeans'  # 'kmeans' or 'DBSCAN'
+clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
 # --------------------------------------------------------------------------------
 
 # Import the dataset
@@ -61,10 +72,8 @@ else:  # or run the computations on the original data
     OK_vec = np.zeros((len(algorithms), len(metrics), len(experiments), num_quality_metrics))
     titles = np.empty((len(algorithms), len(metrics), len(experiments)), dtype=object)
 
-    print("Analysing...")
+    print(" Analysing...")
     for num_algorithm, algorithm in enumerate(algorithms):
-        if clustering_algorithm=='kmeans' and algorithm==', k-medoids, ': 
-            initial_index_medoids=np.random.choice(np.arange(len(data.MMSI)), K)
         for num_metric, metric in enumerate(metrics):
             for num_experiment, experiment in enumerate(experiments):
                 if clustering_algorithm=='kmeans': title = metric + algorithm + experiment
@@ -87,28 +96,31 @@ else:  # or run the computations on the original data
                         else: data_ = copy.deepcopy(data.Xraw)
 
                     # Perform actual clustering
-                    metric_idx = 0 if dist_metric=='euclidean' else distance_metrics_official.index(dist_metric)+1
+                    metric_idx = distance_metrics_official.index(dist_metric)+1
+                    np.random.seed(0)
+                    initial_centers=np.random.choice(np.arange(len(data.MMSI)), K)
+                    if algorithm==', k-means, ': initial_centers = data_[initial_centers,:]
                     if clustering_algorithm == 'kmeans':  
                         if algorithm == ', k-means, ':
-                            initial_centers = random_center_initializer(data=data_, amount_centers=K, random_state=0).initialize()
                             km_model = kmeans(
                                 data=data_, 
                                 initial_centers=initial_centers, 
                                 tolerance=0.001,
                                 metric=distance_metric(metric_idx),
-                                itermax=100)
+                                itermax=200)
                         else: # k-medoids
                             km_model = kmedoids(
                                 data=data_,
-                                initial_index_medoids=initial_index_medoids, 
-                                metric= distance_metric(metric_idx))
+                                initial_index_medoids=initial_centers, 
+                                tolerance=0.001,
+                                metric= distance_metric(metric_idx),
+                                itermax=200)
                         km_model.process()
                         clusters = km_model.get_clusters()
                         type_repr = km_model.get_cluster_encoding()
                         encoder = cluster_encoder(type_repr, clusters, data_)
                         encoder.set_encoding(type_encoding.CLUSTER_INDEX_LABELING)
                         idx = encoder.get_clusters()
-                        K_new = K
 
                     elif clustering_algorithm == 'DBSCAN':
                         if (metric=='euclidean' or metric=='euklidesowa')and(experiment=='standardisation on' or experiment=='standaryzacja'): epsilon = 3.16
@@ -141,10 +153,10 @@ else:  # or run the computations on the original data
                             min_samples = 1, 
                             metric = dist_metric).fit(data_)
                         idx = DBSCAN_model.labels_
-                        K_new = count_number(idx)[0]
                         OK_vec[num_algorithm, num_metric, num_experiment, 2] = K_new
 
                     # Compute quality measures
+                    K_new = count_number(idx)[0]
                     if K_new==1 or K_new==len(idx): OK_vec[num_algorithm, num_metric, num_experiment, 0] = 0
                     else: OK_vec[num_algorithm, num_metric, num_experiment, 0] = silhouette_score(data_, idx)
                     MMSI_vec = count_number(data.MMSI)[1]
