@@ -79,9 +79,17 @@ print(" Complete.")
 print("\n----------- Part 1 - Clustering ---------- ")
 clustering = Clustering(language=language, verbose=True)
 if clustering_algorithm == 'kmeans':
-    idx, centroids = clustering.run_kmeans(X=data.X, K=K, optimize=None, MMSI=data.MMSI)
+    idx, centroids = clustering.run_kmeans(
+        X=data.X, 
+        K=K, 
+        optimize=None, # 'K' or None
+        MMSI=data.MMSI)
 elif clustering_algorithm == 'DBSCAN':
-    idx, K = clustering.run_DBSCAN(X=data.X, distance=distance, optimize=None, MMSI=data.MMSI)
+    idx, K = clustering.run_DBSCAN(
+        X=data.X, 
+        distance=distance, 
+        optimize=None, # 'epsilon', 'minpts' or None
+        MMSI=data.MMSI)
 silhouette = silhouette_score(data.X,idx)
 print("Average silhouette: " + str(round(silhouette,2)))
 visualize_trajectories(

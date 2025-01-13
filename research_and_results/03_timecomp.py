@@ -38,7 +38,7 @@ distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
 ad_algorithm = 'xgboost' # 'rf' or 'xgboost'
 prediction_algorithm = 'xgboost' # 'ar' or  'xgboost'
-stage = 'all' # 'clustering', 'ad', 'prediction' or 'all' 
+stage = 'clustering' # 'clustering', 'ad', 'prediction' or 'all' 
 if stage == 'clustering': percentages =  [0, 5, 10, 20]
 else: percentages = [5, 10, 20]
 windows = [5, 10, 15, 20, 30, 60, 120]
@@ -173,9 +173,9 @@ else:  # or run the computations
                                 if stage == 'all': toc3 = timeit.default_timer() - tic
                             # Compute quality measures
                             if stage == 'clustering':
-                                if count_number(idx_corr)[0]<Xcorr.shape[0]:
-                                    measure1[file_num][percentage_num][window_num].append(silhouette_score(Xcorr, idx_corr))
-                                else: measure1[file_num][percentage_num][window_num].append(1)
+                                K_new = count_number(idx_corr)[0]
+                                if K_new==1 or K_new==len(idx_corr): measure1[file_num][percentage_num][window_num].append(0)
+                                else: measure1[file_num][percentage_num][window_num].append(silhouette_score(Xcorr, idx_corr)) 
                                 measure2[file_num][percentage_num][window_num].append(calculate_CC(idx_corr, data.MMSI, MMSI_vec))
                             elif stage == 'ad':
                                 pred = np.array([ad.outliers[n][0] for n in range(len(ad.outliers))], dtype=int)

@@ -194,7 +194,7 @@ else:  # or run the computations
         clustering = Clustering()
         K, MMSI_vec = count_number(data.MMSI)
         if clustering_algorithm == 'kmeans': idx, _ = clustering.run_kmeans(X=data.X, K=K)
-        elif clustering_algorithm == 'DBSCAN': idx, K = clustering.run_DBSCAN(X=data.X, distance=distance)
+        elif clustering_algorithm == 'DBSCAN': idx, _ = clustering.run_DBSCAN(X=data.X, distance=distance)
 
         if stage == 'clustering':
             visualize_trajectories(
@@ -210,8 +210,10 @@ else:  # or run the computations
                 goal='clustering',
                 language=language)
             # Compute results of clustering
-            OK_vec[file_num, 0, 0, 0] = K
-            OK_vec[file_num, 0, 1, 0] = silhouette_score(data.X, idx)
+            K_new = count_number(idx)[0]
+            OK_vec[file_num, 0, 0, 0] = K_new
+            if K_new==1 or K_new==len(idx): OK_vec[file_num, 0, 1, 0] = 0
+            else: OK_vec[file_num, 0, 1, 0] = silhouette_score(data.X, idx)
             CC, CHC, VHC = calculate_CC(
                 idx=idx, 
                 MMSI=data.MMSI,

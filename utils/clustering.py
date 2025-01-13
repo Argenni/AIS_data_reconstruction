@@ -78,7 +78,8 @@ class Clustering:
             kmeans_model = KMeans(n_clusters=K_0, n_init=10, max_iter=100, tol=0.001, random_state=0).fit(X)
             idx = kmeans_model.labels_
             centroids = kmeans_model.cluster_centers_
-            if K==len(idx): silhouettes.append(1)
+            K_new = count_number(idx)[0]
+            if K_new==len(idx) or K_new==1: silhouettes.append(0)
             else: silhouettes.append(silhouette_score(X,idx))
             CCs.append(calculate_CC(idx, MMSI, count_number(MMSI)[1]))
             cost = [math.dist(X[i,:],centroids[idx[i]]) for i in range(len(idx))]
@@ -170,8 +171,7 @@ class Clustering:
             idx = DBSCAN_model.labels_
             K = count_number(idx)[0]
             clusters.append(K)
-            if K==1: silhouettes.append(0)
-            elif K==len(idx): silhouettes.append(1)
+            if K==1 or K==len(idx): silhouettes.append(0)
             else: silhouettes.append(silhouette_score(X,idx))
             MMSIs, MMSI_vec = count_number(MMSI)
             CCs.append(calculate_CC(idx, MMSI, MMSI_vec))
