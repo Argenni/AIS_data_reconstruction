@@ -9,7 +9,7 @@ with the following datasets:
  - message_decoded - numpy array, AIS messages decoded from binary to decimal, shape=(num_mesages, num_fields (14)),
  - X - numpy array, AIS feature vectors (w/o normalization), shape=(num_messages, num_features (115)),
  - MMSI - list of MMSI identifiers from each AIS message, len=num_messages,
- - timestamp - list of strings with timestamp of each message, len  um_messages. \n
+ - timestamp - list of strings with timestamp of each message, len=num_messages. \n
 Creates:
  - idx - list of indices of clusters assigned to each message, len=num_messages (clustering.txt),
  - outliers - numpy array with anomaly detection information, shape=(num_messages, 3) (anomaly_detection.txt)
@@ -27,12 +27,11 @@ print("\n----------- Initialization ---------- ")
 # Important imports
 import numpy as np
 import h5py
-from sklearn.metrics import silhouette_score
 import sys
 import os
 sys.path.append('.')
 from utils.initialization import Data
-from utils.clustering import Clustering
+from utils.clustering import Clustering, calculate_silhouette
 from utils.anomaly_detection import AnomalyDetection
 from utils.prediction import Prediction
 from utils.miscellaneous import count_number, visualize_trajectories, TimeWindow
@@ -90,7 +89,7 @@ elif clustering_algorithm == 'DBSCAN':
         distance=distance, 
         optimize=None, # 'epsilon', 'minpts' or None
         MMSI=data.MMSI)
-silhouette = silhouette_score(data.X,idx)
+silhouette = calculate_silhouette(X=data.X, idx=idx)
 print("Average silhouette: " + str(round(silhouette,2)))
 visualize_trajectories(
     X=data.Xraw,

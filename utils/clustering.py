@@ -79,8 +79,7 @@ class Clustering:
             idx = kmeans_model.labels_
             centroids = kmeans_model.cluster_centers_
             K_new = count_number(idx)[0]
-            if K_new==len(idx) or K_new==1: silhouettes.append(0)
-            else: silhouettes.append(silhouette_score(X,idx))
+            silhouettes.append(calculate_silhouette(X,idx))
             CCs.append(calculate_CC(idx, MMSI, count_number(MMSI)[1]))
             cost = [math.dist(X[i,:],centroids[idx[i]]) for i in range(len(idx))]
             costs.append(np.mean(cost))
@@ -171,8 +170,7 @@ class Clustering:
             idx = DBSCAN_model.labels_
             K = count_number(idx)[0]
             clusters.append(K)
-            if K==1 or K==len(idx): silhouettes.append(0)
-            else: silhouettes.append(silhouette_score(X,idx))
+            silhouettes.append(calculate_silhouette(X,idx))
             MMSIs, MMSI_vec = count_number(MMSI)
             CCs.append(calculate_CC(idx, MMSI, MMSI_vec))
         # Plot
@@ -203,13 +201,31 @@ class Clustering:
         elif hyperparameter=='minpts': self._minpts = int(input(" Choose the optimal minpts: "))
 
 
+def calculate_silhouette(X, idx):
+    """
+    Calculates silhouette coefficient - measure of clustering quality. Arguments:
+    - X - clustered data, numpy array, shape=(num_messages, num_features),
+    - idx - list of indices of clusters assigned to each message, len=num_messages. \n
+    Returns: silhouette - scalar, float, computed mean silhouette value.
+    """
+    K_new = count_number(idx)[0]
+    if K_new==1 or K_new==len(idx):
+        silhouette = 0 # undefined in ths scenario
+    else:
+        silhouette = silhouette_score(
+            X=X,
+            labels=idx
+        )
+    return silhouette
+
+
 def calculate_CC(idx, MMSI, MMSI_vec, if_all=False):
     """
     Calculates correctness coefficient - indicator of to what extent: \n
     1. each cluster consists of messages from one vessel (CHC),
     2. messages from one vessel are not divided between several clusters (VHC). \n
     Arguments:
-    - idx - numpy array of indices of clusters assigned to each message, shape[0]=num_messages,
+    - idx - list of indices of clusters assigned to each message, len=num_messages,
     - MMSI - list of MMSI identifiers from each AIS message, len=num_messages,
     - MMSI_vec - list of unique MMSIs in MMSI list,
     - if_all (optional) - Boolean, whether to return also VHC and CHC (default=False). \n

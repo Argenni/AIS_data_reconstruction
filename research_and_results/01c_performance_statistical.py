@@ -16,14 +16,14 @@ print("\n----------- AIS data reconstruction performance - statistical tests ---
 # Important imports
 import numpy as np
 import h5py
-from sklearn.metrics import silhouette_score, f1_score
+from sklearn.metrics import f1_score
 from scipy.stats import wilcoxon
 import copy
 import os
 import sys
 sys.path.append('.')
 from utils.initialization import Data, decode # pylint: disable=import-error
-from utils.clustering import Clustering, calculate_CC
+from utils.clustering import Clustering, calculate_silhouette, calculate_CC
 from utils.anomaly_detection import AnomalyDetection, calculate_ad_metrics
 from utils.prediction import Prediction, calculate_SMAE
 from utils.miscellaneous import count_number, Corruption
@@ -31,7 +31,7 @@ from utils.miscellaneous import count_number, Corruption
 # ----------------------------!!! EDIT HERE !!! ---------------------------------  
 np.random.seed(1)  # For reproducibility
 distance = 'euclidean'
-stage = 'clustering' # 'clustering', 'ad' or 'prediction'
+stage = 'prediction' # 'clustering', 'ad' or 'prediction'
 num_metrics = 2
 num_experiments = 10
 percentages = [5, 10]
@@ -108,10 +108,10 @@ else:  # or run the computations
                 idx_corr, K_DBSCAN = clustering.run_DBSCAN(X=X_corr, distance=distance) # default clustering - DBSCAN
 
                 if stage=='clustering':
-                    measurements[file_num, percentage_num, 1, i] = silhouette_score(X_corr, idx_corr)
+                    measurements[file_num, percentage_num, 1, i] = calculate_silhouette(X_corr, idx_corr)
                     measurements2[file_num, percentage_num, 1, i] = calculate_CC(idx_corr, data.MMSI, MMSI_vec)
                     idx_corr, _ = clustering.run_kmeans(X=X_corr, K=K_kmeans) # perform also k-means clustering
-                    measurements[file_num, percentage_num, 0, i] = silhouette_score(X_corr, idx_corr)
+                    measurements[file_num, percentage_num, 0, i] = calculate_silhouette(X_corr, idx_corr)
                     measurements2[file_num, percentage_num, 0, i] = calculate_CC(idx_corr, data.MMSI, MMSI_vec)
                     
                 else:

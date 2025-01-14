@@ -19,7 +19,6 @@ from pyclustering.utils.metric import distance_metric
 from pyclustering.cluster.encoder import type_encoding
 from pyclustering.cluster.encoder import cluster_encoder
 from sklearn.cluster import DBSCAN
-from sklearn.metrics import silhouette_score
 import matplotlib.pyplot as plt
 params = {'axes.labelsize': 16,'axes.titlesize':16, 'font.size': 16, 'legend.fontsize': 12, 'xtick.labelsize': 14, 'ytick.labelsize': 14}
 plt.rcParams.update(params)
@@ -28,7 +27,7 @@ import os
 import sys
 sys.path.append('.')
 from utils.initialization import Data # pylint: disable=import-error
-from utils.clustering import calculate_CC
+from utils.clustering import calculate_silhouette, calculate_CC
 from utils.miscellaneous import count_number
 
 # ----------------------------!!! EDIT HERE !!! ---------------------------------  
@@ -140,8 +139,7 @@ else:  # or run the computations on the original data
                                 idx = DBSCAN_model.labels_
                                 K_param = count_number(idx)[0]
                                 clusters.append(abs(K_param-K)/K)
-                                if K_param==1 or K_param==len(idx): silhouettes.append(0)
-                                else: silhouettes.append(silhouette_score(data_,idx))
+                                silhouettes.append(calculate_silhouette(X=data_,idx=idx))
                                 MMSI_vec = count_number(data.MMSI)[1]
                                 CCs.append(calculate_CC(idx, data.MMSI, MMSI_vec))
                             epsilon = (params[np.argmax(silhouettes)] + params[np.argmax(CCs)] + params[np.argmin(clusters)])/3
@@ -153,15 +151,13 @@ else:  # or run the computations on the original data
                             min_samples = 1, 
                             metric = dist_metric).fit(data_)
                         idx = DBSCAN_model.labels_
-                        OK_vec[num_algorithm, num_metric, num_experiment, 2] = K_new
 
                     # Compute quality measures
                     K_new = count_number(idx)[0]
-                    if K_new==1 or K_new==len(idx): OK_vec[num_algorithm, num_metric, num_experiment, 0] = 0
-                    else: OK_vec[num_algorithm, num_metric, num_experiment, 0] = silhouette_score(data_, idx)
+                    OK_vec[num_algorithm, num_metric, num_experiment, 0] = calculate_silhouette(X=data_, idx=idx)
                     MMSI_vec = count_number(data.MMSI)[1]
                     OK_vec[num_algorithm, num_metric, num_experiment, 1] = calculate_CC(np.array(idx), data.MMSI, MMSI_vec)
-
+                    if clustering_algorithm=='DBSCAN': OK_vec[num_algorithm, num_metric, num_experiment, 2] = K_new
 
 # Visualize
 titles_flat = titles.ravel()

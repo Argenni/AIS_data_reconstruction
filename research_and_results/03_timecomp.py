@@ -17,7 +17,7 @@ print("\n----------- The impact of observation time on AIS message reconstructio
 import numpy as np
 import h5py
 import matplotlib.pyplot as plt
-from sklearn.metrics import f1_score, silhouette_score
+from sklearn.metrics import f1_score
 params = {'axes.labelsize': 16,'axes.titlesize':16, 'font.size': 16, 'legend.fontsize': 12, 'xtick.labelsize': 14, 'ytick.labelsize': 14}
 plt.rcParams.update(params)
 import timeit
@@ -26,7 +26,7 @@ import os
 import sys
 sys.path.append('.')
 from utils.initialization import Data, decode # pylint: disable=import-error
-from utils.clustering import Clustering, calculate_CC
+from utils.clustering import Clustering, calculate_silhouette, calculate_CC
 from utils.anomaly_detection import AnomalyDetection, calculate_ad_metrics
 from utils.prediction import Prediction, calculate_SMAE
 from utils.miscellaneous import count_number, Corruption, TimeWindow
@@ -35,10 +35,10 @@ from utils.miscellaneous import count_number, Corruption, TimeWindow
 np.random.seed(1)  # For reproducibility
 language = 'pl' # 'pl' or 'eng' - for graphics only
 distance = 'euclidean'
-clustering_algorithm = 'kmeans'  # 'kmeans' or 'DBSCAN'
+clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
 ad_algorithm = 'xgboost' # 'rf' or 'xgboost'
 prediction_algorithm = 'xgboost' # 'ar' or  'xgboost'
-stage = 'clustering' # 'clustering', 'ad', 'prediction' or 'all' 
+stage = 'all' # 'clustering', 'ad', 'prediction' or 'all' 
 if stage == 'clustering': percentages =  [0, 5, 10, 20]
 else: percentages = [5, 10, 20]
 windows = [5, 10, 15, 20, 30, 60, 120]
@@ -173,9 +173,7 @@ else:  # or run the computations
                                 if stage == 'all': toc3 = timeit.default_timer() - tic
                             # Compute quality measures
                             if stage == 'clustering':
-                                K_new = count_number(idx_corr)[0]
-                                if K_new==1 or K_new==len(idx_corr): measure1[file_num][percentage_num][window_num].append(0)
-                                else: measure1[file_num][percentage_num][window_num].append(silhouette_score(Xcorr, idx_corr)) 
+                                measure1[file_num][percentage_num][window_num].append(calculate_silhouette(Xcorr, idx_corr)) 
                                 measure2[file_num][percentage_num][window_num].append(calculate_CC(idx_corr, data.MMSI, MMSI_vec))
                             elif stage == 'ad':
                                 pred = np.array([ad.outliers[n][0] for n in range(len(ad.outliers))], dtype=int)

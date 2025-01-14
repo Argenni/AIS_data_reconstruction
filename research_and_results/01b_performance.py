@@ -21,14 +21,14 @@ print("\n----------- AIS data reconstruction performance - given percentage of d
 # Important imports
 import numpy as np
 import h5py
-from sklearn.metrics import silhouette_score, precision_score, recall_score
+from sklearn.metrics import precision_score, recall_score
 from sklearn.neighbors import LocalOutlierFactor
 import copy
 import os
 import sys
 sys.path.append('.')
 from utils.initialization import Data, decode # pylint: disable=import-error
-from utils.clustering import Clustering, calculate_CC
+from utils.clustering import Clustering, calculate_silhouette, calculate_CC
 from utils.anomaly_detection import AnomalyDetection, calculate_ad_metrics
 from utils.prediction import Prediction, calculate_SMAE
 from utils.miscellaneous import count_number, visualize_trajectories, Corruption
@@ -40,7 +40,7 @@ distance = 'euclidean'
 clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
 ad_algorithm = 'xgboost' # 'rf', 'xgboost' or 'LOF'
 prediction_algorithm = 'xgboost' # 'ar' or 'xgboost'
-stage = 'clustering' # 'clustering', 'ad' or 'prediction'
+stage = 'prediction' # 'clustering', 'ad' or 'prediction'
 num_metrics = {'clustering':5, 'ad':4, 'prediction':2}
 num_experiments = {'clustering':1, 'ad':10, 'prediction':10}
 if stage == 'clustering': percentages = [0]
@@ -212,8 +212,7 @@ else:  # or run the computations
             # Compute results of clustering
             K_new = count_number(idx)[0]
             OK_vec[file_num, 0, 0, 0] = K_new
-            if K_new==1 or K_new==len(idx): OK_vec[file_num, 0, 1, 0] = 0
-            else: OK_vec[file_num, 0, 1, 0] = silhouette_score(data.X, idx)
+            OK_vec[file_num, 0, 1, 0] = calculate_silhouette(X=data.X, idx=idx)
             CC, CHC, VHC = calculate_CC(
                 idx=idx, 
                 MMSI=data.MMSI,
