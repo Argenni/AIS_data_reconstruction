@@ -35,7 +35,7 @@ from utils.miscellaneous import count_number, Corruption, TimeWindow
 np.random.seed(1)  # For reproducibility
 language = 'pl' # 'pl' or 'eng' - for graphics only
 distance = 'euclidean'
-clustering_algorithm = 'DBSCAN'  # 'kmeans' or 'DBSCAN'
+clustering_algorithm = 'kmeans'  # 'kmeans' or 'DBSCAN'
 ad_algorithm = 'xgboost' # 'rf' or 'xgboost'
 prediction_algorithm = 'xgboost' # 'ar' or  'xgboost'
 stage = 'clustering' # 'clustering', 'ad', 'prediction' or 'all' 
